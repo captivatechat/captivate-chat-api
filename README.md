@@ -43,8 +43,11 @@ import { CaptivateChatAPI } from 'captivate-chat-api';
 // Replace with your actual API key
 const apiKey = 'your-api-key';
 
+
+let env = 'dev';
+
 // Create an instance of the CaptivateChatAPI
-const captivateChatAPI = new CaptivateChatAPI(apiKey);
+const captivateChatAPI = new CaptivateChatAPI(apiKey,env); //Environment is either 'dev' or 'prod'
 
 // Connect to WebSocket
 captivateChatAPI.connect()
@@ -95,7 +98,7 @@ Returns a `Conversation` instance.
 ```javascript
 captivateChatAPI.createConversation('user-id', { name: 'John Doe' })
   .then(conversation => {
-    console.log('Conversation started with ID:', conversation.id);
+    console.log('Conversation started with ID:', conversation.getConversationId());
   })
   .catch(err => {
     console.error('Error creating conversation:', err);
