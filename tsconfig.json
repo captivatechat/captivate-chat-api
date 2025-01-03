@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "declaration": true,
     "target": "ES6",
     "module": "commonjs", // Use commonjs if you're working with Node.js
     "esModuleInterop": true,
