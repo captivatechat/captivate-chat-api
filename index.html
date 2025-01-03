@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Captivate Chat API Documentation</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f7f7f7;
+            color: #333;
+        }
+
+        header {
+            background: #4CAF50;
+            color: #fff;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        main {
+            padding: 1.5rem;
+        }
+
+        section {
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        pre {
+            background: #eee;
+            padding: 1rem;
+            overflow-x: auto;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+
+        code {
+            color: #d63384;
+        }
+
+        footer {
+            text-align: center;
+            padding: 1rem;
+            background: #4CAF50;
+            color: #fff;
+            position: fixed;
+            width: 100%;
+            bottom: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>Captivate Chat API Documentation</h1>
+    </header>
+
+    <main>
+        <!-- Introduction -->
+        <section>
+            <h2>Introduction</h2>
+            <p>This documentation explains the functionalities of the Captivate Chat API and provides examples for
+                integrating it into your project.</p>
+        </section>
+
+        <!-- Script Embedding -->
+        <section>
+            <h2>Embedding the Script</h2>
+            <p>Include the Captivate Chat API script in your HTML file:</p>
+            <pre><code>&lt;script src="dist/captivate-chat-api.js"&gt;&lt;/script&gt;</code></pre>
+        </section>
+
+        <!-- Initialization -->
+        <section>
+            <h2>Library Initialization</h2>
+            <p>Initialize the Captivate Chat API with your API key and environment:</p>
+            <pre><code>
+const captivateAPI = new CaptivateChatAPI(apiKey, environment);
+await captivateAPI.connect();
+      </code></pre>
+            <ul>
+                <li><strong>apiKey</strong>: Your API key.</li>
+                <li><strong>environment</strong>: 'dev' or 'prod' depending on your environment.</li>
+            </ul>
+        </section>
+
+        <!-- Creating a Conversation -->
+        <section>
+            <h2>Create a Conversation</h2>
+            <p>Start a new conversation with the following method:</p>
+            <pre><code>
+      const conversation = await captivateAPI.createConversation(userId, userBasicInfo, userData, mode);
+        </code></pre>
+            <p><strong>Parameters:</strong></p>
+            <ul>
+                <li><strong>userId</strong>: A unique identifier for the user (e.g., <code>"user123"</code>).</li>
+                <li><strong>userBasicInfo</strong>: User details (optional). Example:
+                    <pre><code>
+      {
+        firstName: "John",
+        email: "john.doe@example.com"
+      }
+            </code></pre>
+                </li>
+                <li><strong>userData</strong>: Additional user data like preferences (optional). Example:
+                    <pre><code>
+      {
+        preferences: { theme: "dark" }
+      }
+            </code></pre>
+                </li>
+                <li><strong>mode</strong>: Conversation mode: <code>'bot-first'</code> or <code>'user-first'</code>.
+                </li>
+            </ul>
+
+            <h3>Conversation Modes: Bot-First vs. User-First</h3>
+            <p>In a conversation, you can define the starting point by choosing whether the bot or the user initiates
+                the interaction. This is controlled by two modes: <strong>bot-first</strong> and
+                <strong>user-first</strong>.
+            </p>
+
+            <h4>Bot-First Mode</h4>
+            <p>In <strong>bot-first</strong> mode, the conversation begins with a message or action from the bot. This
+                is the default setting, meaning if no parameter is specified, the bot will initiate the conversation.
+            </p>
+            <p>Example: The bot might start by greeting the user or presenting options for interaction, such as buttons
+                or cards. The user responds based on the options or prompts provided by the bot.</p>
+
+
+            <pre><code>
+        // Bot-First Mode (default)
+        const conversation = await captivateAPI.createConversation(userId, userBasicInfo, userData, 'bot-first');
+        </code></pre>
+
+            <h4>User-First Mode</h4>
+            <p>In <strong>user-first</strong> mode, the conversation starts with the user’s input. This mode can be used
+                when the bot waits for the user to send a message first before responding. The bot listens for any
+                incoming message from the user and responds accordingly.</p>
+            <p>Example: This is useful in scenarios where the user has specific needs or queries they want to address,
+                and the bot waits for the user’s prompt to begin the interaction.</p>
+            <pre><code>
+        // User-First Mode
+        const conversation = await captivateAPI.createConversation(userId, userBasicInfo, userData, 'user-first');
+        </code></pre>
+
+            <h4>Default Behavior</h4>
+            <p>The default conversation mode is <strong>bot-first</strong>, meaning the bot will automatically initiate
+                the conversation unless you specify otherwise. This ensures that the bot can start guiding the user
+                through the interaction immediately without requiring input from the user first.</p>
+
+            <p>Choosing the appropriate mode depends on your application’s needs and how you want to manage the user
+                interaction flow. For example, <strong>bot-first</strong> can be used for guided experiences where the
+                bot leads, while <strong>user-first</strong> can be used for more open-ended conversations where the
+                user has more control.</p>
+        </section>
+
+
+
+        <!-- Retrieve an Existing Conversation -->
+        <section>
+            <h2>Retrieve an Existing Conversation</h2>
+            <p>Retrieve a conversation by its ID:</p>
+            <pre><code>
+const conversation = await captivateAPI.getConversation(conversationId);
+      </code></pre>
+            <ul>
+                <li><strong>conversationId</strong>: The unique identifier of the conversation.</li>
+            </ul>
+        </section>
+
+        <!-- Sending Messages -->
+        <section>
+            <h2>Send a Message</h2>
+            <p>Send a message to the bot using:</p>
+            <pre><code>
+await conversation.sendMessage('Hello, how can I help you?');
+      </code></pre>
+            <ul>
+                <li><strong>messageContent</strong>: The text of the message to send.</li>
+            </ul>
+        </section>
+
+        <!-- Handling Messages -->
+        <section>
+            <h2>Handle Messages</h2>
+            <p>Listen for bot or agent responses using the <code>onMessage</code> method:</p>
+            <pre><code>
+      conversation.onMessage((message, type) => {
+        if (type === 'human_agent') {
+          console.log('Human Agent says:', message);
+        } else if (type === 'ai_agent') {
+          console.log('AI Agent says:', message);
+        } else {
+          console.log('Unknown message type:', message);
+        }
+      });
+        </code></pre>
+            <p><strong>Message Format:</strong></p>
+            <pre><code>
+      [{
+        // Current supported types
+        "type": "text || buttons || cards || html || md || files || any",
+        
+        // Sent only when type is "text"
+        "text": "bot text message",
+        
+        // Sent only when type is "buttons"
+        "buttons": {
+          "type": "buttons",
+          "buttons": [
+            {
+              "title": "Button 1",
+              "url": "https://example.com/1"
+            },
+            {
+              "title": "Button 2",
+              "url": "https://example.com/2"
+            }
+          ]
+        },
+        
+        // Sent only when type is "cards"
+        "cards": {
+          "type": "cards",
+          "cards": [
+            {
+              "text": "Card 1 Title",
+              "description": "This is a description of the first card.",
+              "image_url": "https://example.com/image1.jpg",
+              "link": "https://example.com/card1"
+            },
+            {
+              "text": "Card 2 Title",
+              "description": "This is a description of the second card.",
+              "image_url": "https://example.com/image2.jpg",
+              "link": "https://example.com/card2"
+            }
+          ]
+        },
+        
+        // Sent only when type is "html"
+        "html": {
+          "type": "html",
+          "html": "<p>This is an <strong>HTML</strong> message.</p>"
+        },
+        
+        // Sent only when type is "md"
+        "md": {
+          "type": "md",
+          "md": "**Markdown** message with *italic* and `code`."
+        },
+        
+        // Sent only when type is "files"
+        "files": {
+          "type": "files",
+          "files": [
+            {
+              "type": "image",
+              "url": "https://example.com/image.jpg",
+              "mimetype": "image/jpeg",
+              "filename": null
+            },
+            {
+              "type": "document",
+              "url": "https://example.com/example.pdf",
+              "mimetype": "application/pdf",
+              "filename": "example.pdf"
+            },
+            {
+              "type": "audio",
+              "url": "https://example.com/audio.mp3",
+              "mimetype": "audio/mpeg",
+              "filename": "audio.mp3"
+            }
+          ]
+        },
+        
+        // Sent only when type is "any"
+        "any": {
+          "type": "any",
+          "customField": "Custom value here",
+          "anotherField": "Another custom value"
+        }
+      }]
+        </code></pre>
+            <p><strong>Explanation:</strong></p>
+            <ul>
+                <li><strong>text</strong>: Simple text message sent by the bot.</li>
+                <li><strong>buttons</strong>: Interactive buttons with a title and URL that the user can click to
+                    navigate to a different page.</li>
+                <li><strong>cards</strong>: An array of cards, each containing text, description, image URL, and a link.
+                </li>
+                <li><strong>html</strong>: The message content formatted in HTML. For example, you can use HTML tags
+                    like <code>&lt;p&gt;</code>, <code>&lt;strong&gt;</code>, etc.</li>
+                <li><strong>md</strong>: The message content formatted in Markdown. Supports bold, italic, and code
+                    formatting.</li>
+                <li><strong>files</strong>: A file message that includes the file type (image, document, audio, etc.),
+                    the URL to access the file, the MIME type, and an optional filename.</li>
+                <li><strong>any</strong>: A generic message type that can contain any custom fields as needed by your
+                    application.</li>
+            </ul>
+            <p><strong>Note:</strong> Technically, there is no limit to the message types. The <code>type</code> field
+                can be virtually any value defined by the AI developers, allowing for custom message types and flexible
+                communication formats based on the application's needs.</p>
+        </section>
+        <!-- Set Metadata Section -->
+        <section>
+            <h2>Set Metadata</h2>
+            <p>Set metadata for the conversation using the <code>setMetadata</code> method:</p>
+            <pre><code>
+const metadata = { sessionId: 'session-1234', userRole: 'customer' };
+conversation.setMetadata(metadata);
+    </code></pre>
+            <p><strong>Parameters:</strong></p>
+            <ul>
+                <li><strong>metadata</strong>: Key-value pairs of metadata for the conversation (e.g., session ID, user
+                    role).</li>
+            </ul>
+        </section>
+
+        <!-- Send Action Section -->
+        <section>
+            <h2>Send an Action</h2>
+            <p>Send an action (e.g., button click, custom event) using the <code>sendAction</code> method:</p>
+            <pre><code>
+const actionId = 'action-xyz';
+conversation.sendAction(actionId, { buttonClicked: true });
+    </code></pre>
+            <p><strong>Parameters:</strong></p>
+            <ul>
+                <li><strong>actionId</strong>: The ID of the action to trigger (e.g., button click, event).</li>
+                <li><strong>data</strong>: Additional data related to the action (optional).</li>
+            </ul>
+        </section>
+
+        <!-- Receive Action Section -->
+        <section>
+            <h2>Handle Actions with onActionReceived</h2>
+            <p>Listen for actions received in the conversation using the <code>onActionReceived</code> method:</p>
+            <pre><code>
+          conversation.onActionReceived((actionId, data) => {
+            console.log(`Action received: ${actionId}`, data);
+          });
+            </code></pre>
+            <p><strong>Parameters:</strong></p>
+            <ul>
+                <li><strong>actionId</strong>: The ID of the action that was received (e.g., a finished back process
+                    task or custom
+                    event).</li>
+                <li><strong>data</strong>: The data associated with the action (optional, depends on the action type).
+                </li>
+            </ul>
+            <p><strong>Example:</strong></p>
+            <pre><code>
+          conversation.onActionReceived((actionId, data) => {
+            if (actionId === 'pdf-parsing-done') {
+              console.log('Backend task PDF parsing is done!', data);
+            } else {
+              console.log(`Action received with ID: ${actionId}`, data);
+            }
+          });
+            </code></pre>
+        </section>
+
+        <!-- Get Transcript Section -->
+        <section>
+            <h2>Get Transcript</h2>
+            <p>Get the full transcript of the conversation using the <code>getTranscript</code> method:</p>
+            <pre><code>
+const transcript = await conversation.getTranscript();
+console.log('Full Transcript:', transcript);
+    </code></pre>
+            <p>This will provide the entire history of messages exchanged in the conversation.</p>
+
+            <h3>Transcript Schema:</h3>
+            <p>The transcript is returned as an array of message objects. Each object can contain the following fields:
+            </p>
+
+            <h4>1. Basic Fields:</h4>
+            <ul>
+                <li><strong>from</strong> (string): The sender of the message. Possible values: <code>user</code>,
+                    <code>bot</code>.
+                </li>
+                <li><strong>channelName</strong> (string): The name of the communication channel (e.g., 'Goldenfred GPT
+                    Socket').</li>
+                <li><strong>chatbotName</strong> (string): The name of the chatbot involved in the conversation.</li>
+            </ul>
+
+            <h4>2. Messages (Optional):</h4>
+            <ul>
+                <li><strong>messages</strong> (object): Contains the following subfields:
+                    <ul>
+                        <li><strong>idChat</strong> (string): Unique identifier for the chat session.</li>
+                        <li><strong>messages</strong> (array): List of message strings.</li>
+                        <li><strong>metadata</strong> (object): Metadata related to the session (e.g., session ID, user
+                            role).</li>
+                        <li><strong>actions</strong> (array): List of actions taken by the user or bot (optional).</li>
+                        <li><strong>cid</strong> (string|null): A unique identifier for the conversation, may be null.
+                        </li>
+                        <li><strong>userData</strong> (object): Optional data about the user (e.g., preferences,
+                            language).</li>
+                    </ul>
+                </li>
+            </ul>
+
+            <h4>3. Actions (Optional):</h4>
+            <ul>
+                <li><strong>actions</strong> (array): List of actions, each containing:
+                    <ul>
+                        <li><strong>actionType</strong> (string): Type of action (e.g., <code>click</code>,
+                            <code>type</code>).
+                        </li>
+                        <li><strong>details</strong> (string): Additional details about the action (e.g., which button
+                            was clicked).</li>
+                    </ul>
+                </li>
+            </ul>
+
+            <h3>Example Transcript Entry:</h3>
+            <pre><code>
+{
+  "from": "user",
+  "channelName": "Goldenfred GPT Socket",
+  "chatbotName": "GPT Goldenfred"
+}
+    </code></pre>
+            <p>This entry represents a message from the user in the "Goldenfred GPT Socket" channel.</p>
+
+            <h3>Example Transcript Entry with Messages:</h3>
+            <pre><code>
+{
+  "from": "bot",
+  "messages": {
+    "idChat": "index_lance_b73fcd8d-ce8c-4dc6-9fa6-6b990430652f",
+    "messages": ["Hello, how can I assist you?"],
+    "metadata": {
+      "sessionId": "session-1234",
+      "userRole": "customer"
+    },
+    "actions": [],
+    "cid": null,
+    "userData": {
+      "preferences": {
+        "language": "en"
+      }
+    }
+  },
+  "channelName": "Goldenfred GPT Socket",
+  "chatbotName": "GPT Goldenfred"
+}
+    </code></pre>
+            <p>This entry includes a bot message, metadata (session ID, user role), and user data (language
+                preferences).</p>
+
+            <h3>Example Transcript Entry with Actions:</h3>
+            <pre><code>
+{
+  "from": "user",
+  "actions": [
+    {
+      "actionType": "click",
+      "details": "Button A clicked"
+    }
+  ],
+  "channelName": "Goldenfred GPT Socket",
+  "chatbotName": "GPT Goldenfred"
+}
+    </code></pre>
+            <p>This entry shows a user action, specifically a click on "Button A".</p>
+
+
+
+            <h3>Purpose:</h3>
+            <p>The <code>getTranscript</code> function is used for retrieving the entire conversation history, useful
+                for:</p>
+            <ul>
+                <li>Storing conversations for analysis or audits.</li>
+                <li>Processing messages and actions during a conversation.</li>
+                <li>Displaying message logs for users or administrators.</li>
+            </ul>
+
+            <h3>Summary:</h3>
+            <p>The <code>getTranscript</code> function returns an array of message objects representing the entire
+                conversation between the user and the bot. Each message contains relevant information, including the
+                sender, content, metadata, actions, and other details that help in understanding the context and
+                interactions.</p>
+        </section>
+
+    </main>
+
+    <footer>
+        &copy; 2025 Captivate Chat. All rights reserved.
+    </footer>
+
+</body>
+
+</html>

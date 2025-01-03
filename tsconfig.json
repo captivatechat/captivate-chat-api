@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "module": "commonjs", // Use commonjs if you're working with Node.js
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "./dist",
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "jsx": "react", // If you're using React JSX, or "react-jsx" for newer versions
+    "isolatedModules": true
+  },
+  "ts-node": {
+    "esm": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ], // Include all TypeScript and TSX files
+  "exclude": [
+    "node_modules"
+  ]
+}
