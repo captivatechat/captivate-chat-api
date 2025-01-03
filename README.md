@@ -1,127 +1,105 @@
+# captivate-chat-api
 
-# Captivate Chat API
+WebSocket-based chat API for real-time conversations with support for bot and human agents.
 
-This repository contains the `CaptivateChatAPI` wrapper that allows you to manage conversations through WebSocket connections in a variety of environments, including browser-based React/React Native projects as well as Node.js environments. It is designed to be simple to use while allowing flexibility in the way messages and conversations are handled.
-
-## Features
-
-- **WebSocket-based Communication**: Connects to the Captivate Chat WebSocket server.
-- **Conversation Management**: Create, manage, and retrieve conversations.
-- **Browser & Node.js Support**: Automatically determines the appropriate WebSocket implementation for different environments.
-- **Flexible Modes**: Supports both 'bot-first' and 'user-first' conversation initiation.
-- **Built for React & React Native**: Works seamlessly in both React and React Native projects.
-  
 ## Installation
-
-You can install the package via npm or yarn.
-
-### npm
 
 ```bash
 npm install captivate-chat-api
 ```
 
-### yarn
-
-```bash
-yarn add captivate-chat-api
-```
-
 ## Usage
 
-### Importing the API
+### Basic Setup
 
-```javascript
-import { CaptivateChatAPI } from 'captivate-chat-api';
-```
-
-### Example Usage
-
-```javascript
+```typescript
 import { CaptivateChatAPI } from 'captivate-chat-api';
 
-// Replace with your actual API key
-const apiKey = 'your-api-key';
-
-
-let env = 'dev';
-
-// Create an instance of the CaptivateChatAPI
-const captivateChatAPI = new CaptivateChatAPI(apiKey,env); //Environment is either 'dev' or 'prod'
-
-// Connect to WebSocket
-captivateChatAPI.connect()
-  .then(() => {
-    console.log('Connected to CaptivateChat API!');
-  })
-  .catch(err => {
-    console.error('Error connecting to CaptivateChat API:', err);
-  });
-
-// Create a new conversation
-captivateChatAPI.createConversation('user-id', { name: 'John Doe' })
-  .then(conversation => {
-    console.log('Conversation started with ID:', conversation.id);
-  })
-  .catch(err => {
-    console.error('Error creating conversation:', err);
-  });
+const api = new CaptivateChatAPI('YOUR_API_KEY');
+await api.connect();
 ```
 
-### Methods
+### Create a Conversation
 
-#### `connect()`
+```typescript
+// Basic conversation
+const conversation = await api.createConversation('user123');
 
-Establishes a WebSocket connection to the Captivate Chat server.
-
-```javascript
-captivateChatAPI.connect()
-  .then(() => {
-    console.log('Connected');
-  })
-  .catch(err => {
-    console.error('Error connecting:', err);
-  });
+// With user info
+const conversation = await api.createConversation(
+  'user123',
+  {
+    name: 'John Doe',
+    email: 'john@example.com'
+  },
+  {
+    customField: 'value'
+  }
+);
 ```
 
-#### `createConversation(userId, userBasicInfo, userData, autoConversationStart)`
+### Send Messages
 
-Starts a new conversation. You can specify whether the conversation should be bot-first or user-first.
+```typescript
+// Send a message
+await conversation.sendMessage('Hello!');
 
-- **userId**: Unique identifier for the user.
-- **userBasicInfo**: An object containing basic user information (e.g., name, email).
-- **userData**: Additional optional user data.
-- **autoConversationStart**: Can be either `'bot-first'` or `'user-first'`.
-
-Returns a `Conversation` instance.
-
-```javascript
-captivateChatAPI.createConversation('user-id', { name: 'John Doe' })
-  .then(conversation => {
-    console.log('Conversation started with ID:', conversation.getConversationId());
-  })
-  .catch(err => {
-    console.error('Error creating conversation:', err);
-  });
+// Listen for responses
+conversation.onMessage((message, type) => {
+  console.log(`${type}: ${message}`);
+});
 ```
 
-#### `getConversation(conversationId)`
+### Handle Events
 
-Retrieves an existing conversation by its ID. If the conversation does not exist, a new one will be created.
+```typescript
+// Listen for errors
+conversation.onError((error) => {
+  console.error('Error:', error);
+});
 
-```javascript
-const conversation = captivateChatAPI.getConversation('existing-conversation-id');
+// Listen for updates
+conversation.onConversationUpdate((update) => {
+  console.log('Update:', update);
+});
+
+// Handle actions
+conversation.onActionReceived((id, data) => {
+  console.log(`Action ${id}:`, data);
+});
 ```
 
-## Supported Environments
+### Get Conversation History
 
-- **Browser**: React, React Native (using `react-native-websocket`)
-- **Node.js**: Native WebSocket support or `ws` library for server-side environments.
+```typescript
+const transcript = await conversation.getTranscript();
+```
 
-## Contributing
+### Development Mode
 
-We welcome contributions! Please fork the repository, make your changes, and submit a pull request. Ensure that your code follows the existing style and includes tests where applicable.
+```typescript
+const api = new CaptivateChatAPI('YOUR_API_KEY', 'dev');
+```
 
-## License
+## Environment Support
+- Browser
+- Node.js
+- React Native
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## API Reference
+
+### CaptivateChatAPI
+- `constructor(apiKey: string, mode: 'prod' | 'dev' = 'prod')`
+- `connect(): Promise<void>`
+- `createConversation(userId: string, userBasicInfo?: object, userData?: object, autoConversationStart?: 'bot-first' | 'user-first'): Promise<Conversation>`
+- `getConversation(conversationId: string): Conversation`
+
+### Conversation
+- `sendMessage(content: string): Promise<void>`
+- `setMetadata(metadata: object): Promise<void>`
+- `sendAction(actionId: string, data?: object): Promise<void>`
+- `getTranscript(): Promise<object[]>`
+- `onMessage(callback: (message: string, type: string) => void): void`
+- `onError(callback: (error: any) => void): void`
+- `onConversationUpdate(callback: (update: any) => void): void`
+- `onActionReceived(callback: (id: string, data: any) => void): void`
