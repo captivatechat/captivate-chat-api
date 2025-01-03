@@ -8,7 +8,7 @@ async function sleep(ms: number): Promise<void> {
 
 async function test() {
     try {
-        const apiKey: string = '4f9069aa-41cb-11ee-a60d-325096b39f47';  // Replace with your actual API key
+        const apiKey: string = 'test apikey';  // Replace with your actual API key
         const captivateAPI: CaptivateChatAPI = new CaptivateChatAPI(apiKey);  // Specify 'dev' or 'prod' mode
         // Connect to the WebSocket
         await captivateAPI.connect();

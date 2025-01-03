@@ -1,5 +1,5 @@
 {
-  "name": "y",
+  "name": "captivate-chat-api",
   "version": "1.0.0",
   "description": "This is a wrapper for captivate chat api socket custom channel",
   "main": "src/api/index.ts",
@@ -9,7 +9,7 @@
     "dev": "nodemon",
     "start": "ts-node src/index.ts"
   },
-  "author": "",
+  "author": "Lance Del Valle",
   "license": "ISC",
   "dependencies": {
     "ws": "^8.18.0",
@@ -27,7 +27,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/captivate-chat-api.git"
+    "url": "git+https://github.com/ldv112/captivate-chat-api.git"
   },
   "keywords": [
     "captivate",
