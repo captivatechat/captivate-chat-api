@@ -162,6 +162,43 @@ export class Conversation {
   }
 
   /**
+ * Requests metadata for the conversation.
+ * @returns A promise that resolves to the conversation metadata.
+ */
+  public async getMetadata(): Promise<object> {
+    return new Promise((resolve, reject) => {
+      const metadataRequest = {
+        action: 'sendMessage',
+        event: {
+          event_type: 'metadata_request',
+          event_payload: {
+            conversation_id: this.conversationId,
+          },
+        },
+      };
+      console.log(metadataRequest);
+      this.socket.send(JSON.stringify(metadataRequest));
+
+      const onMessage = (payload: any) => {
+        console.log(payload);
+        if (payload.conversation_id === this.conversationId) {
+          this.removeListener('conversation_metadata', onMessage);
+          resolve(payload.content);
+        }
+      };
+
+      this.addListener('conversation_metadata', onMessage);
+
+      setTimeout(() => {
+        this.removeListener('conversation_metadata', onMessage);
+        reject(new Error('Timeout: No response for metadata request'));
+      }, 10000);
+    });
+  }
+
+
+
+  /**
    * Sends a payload to the WebSocket.
    * @param eventType - The type of event being sent.
    * @param payload - The payload data to include with the event.

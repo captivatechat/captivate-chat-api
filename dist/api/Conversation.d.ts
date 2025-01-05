@@ -62,6 +62,11 @@ export declare class Conversation {
      */
     getTranscript(): Promise<object[]>;
     /**
+   * Requests metadata for the conversation.
+   * @returns A promise that resolves to the conversation metadata.
+   */
+    getMetadata(): Promise<object>;
+    /**
      * Sends a payload to the WebSocket.
      * @param eventType - The type of event being sent.
      * @param payload - The payload data to include with the event.
