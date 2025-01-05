@@ -176,7 +176,6 @@ export class Conversation {
           },
         },
       };
-      console.log(metadataRequest);
       this.socket.send(JSON.stringify(metadataRequest));
 
       const onMessage = (payload: any) => {
