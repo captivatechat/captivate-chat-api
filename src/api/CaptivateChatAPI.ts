@@ -192,4 +192,47 @@ export class CaptivateChatAPI {
     return conversation;
   }
 
+  /**
+  * Retrieves user conversations based on their userId.
+  * @param userId - The unique identifier for the user.
+  * @returns A promise resolving to the list of conversation ids.
+  */
+  public async getUserConversations(userId: string): Promise<object[]> {
+    return new Promise((resolve, reject) => {
+      try {
+        this._send({
+          action: 'sendMessage',
+          event: {
+            event_type: 'get_user_conversations',
+            event_payload: {
+              userId,
+            },
+          },
+        });
+
+        const onMessage = (event: MessageEvent) => {
+          try {
+            const message = JSON.parse(event.data.toString());
+            if (message.event?.event_type === 'user_conversations') {
+              this.socket?.removeEventListener('message', onMessage);
+              resolve(message.event.event_payload.conversations);
+            }
+          } catch (err) {
+            console.error('Error processing message:', err);
+            reject(err);
+          }
+        };
+
+        this.socket?.addEventListener('message', onMessage);
+
+        setTimeout(() => {
+          this.socket?.removeEventListener('message', onMessage);
+          reject(new Error('Timeout: No response for getUserConversations'));
+        }, 10000);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
 }

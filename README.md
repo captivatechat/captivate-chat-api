@@ -1,8 +1,11 @@
+
 # captivate-chat-api
 
 WebSocket-based chat API for real-time conversations with support for bot and human agents.
 
 ## Installation
+
+Install the package using npm:
 
 ```bash
 npm install captivate-chat-api
@@ -12,94 +15,209 @@ npm install captivate-chat-api
 
 ### Basic Setup
 
+Import and initialize the API client:
+
 ```typescript
 import { CaptivateChatAPI } from 'captivate-chat-api';
 
 const api = new CaptivateChatAPI('YOUR_API_KEY');
+
+// Connect to the WebSocket server
 await api.connect();
 ```
 
 ### Create a Conversation
 
-```typescript
-// Basic conversation
-const conversation = await api.createConversation('user123');
+Create a new conversation with the following options:
 
-// With user info
-const conversation = await api.createConversation(
-  'user123',
-  {
-    name: 'John Doe',
-    email: 'john@example.com'
-  },
-  {
-    customField: 'value'
-  }
-);
-```
+1. Basic setup with just a user ID:
+   ```typescript
+   const conversation = await api.createConversation('user123');
+   ```
 
-### Send Messages
+2. Include user information and custom data:
+   ```typescript
+   const conversation = await api.createConversation(
+     'user123',
+     {
+       name: 'John Doe',
+       email: 'john@example.com'
+     },
+     {
+       customField: 'value'
+     },
+     'user-first' // Start the conversation with user-first or bot-first mode
+   );
+   ```
 
-```typescript
-// Send a message
-await conversation.sendMessage('Hello!');
+### Send and Receive Messages
 
-// Listen for responses
-conversation.onMessage((message, type) => {
-  console.log(`${type}: ${message}`);
-});
-```
+1. Send a message to the conversation:
+   ```typescript
+   await conversation.sendMessage('Hello!');
+   ```
+
+2. Listen for responses:
+   ```typescript
+   conversation.onMessage((message, type) => {
+     console.log(`${type}: ${message}`);
+   });
+   ```
 
 ### Handle Events
 
-```typescript
-// Listen for errors
-conversation.onError((error) => {
-  console.error('Error:', error);
-});
+Use event listeners to handle various updates, errors, or custom actions:
 
-// Listen for updates
-conversation.onConversationUpdate((update) => {
-  console.log('Update:', update);
-});
+1. Error handling:
+   ```typescript
+   conversation.onError((error) => {
+     console.error('Error:', error);
+   });
+   ```
 
-// Handle actions
-conversation.onActionReceived((id, data) => {
-  console.log(`Action ${id}:`, data);
-});
-```
+2. Updates on conversation status:
+   ```typescript
+   conversation.onConversationUpdate((update) => {
+     console.log('Conversation Update:', update);
+   });
+   ```
+
+3. Handling custom actions:
+   ```typescript
+   conversation.onActionReceived((id, data) => {
+     console.log(`Action ${id}:`, data);
+   });
+   ```
 
 ### Get Conversation History
 
+Retrieve the transcript of a conversation:
+
 ```typescript
 const transcript = await conversation.getTranscript();
+console.log('Transcript:', transcript);
+```
+
+### Retrieve User Conversations
+
+Fetch a list of conversations associated with a specific user ID:
+
+```typescript
+const conversations = await api.getUserConversations('user123');
+console.log('User Conversations:', conversations);
+```
+
+### Example: Full Workflow
+
+Here’s a complete example of how to use the API:
+
+```typescript
+import { CaptivateChatAPI } from 'captivate-chat-api';
+
+(async () => {
+  try {
+    const api = new CaptivateChatAPI('YOUR_API_KEY', 'prod');
+
+    // Connect to the API
+    await api.connect();
+    console.log('Connected to CaptivateChat API');
+
+    // Create a conversation
+    const conversation = await api.createConversation(
+      'user123',
+      {
+        name: 'John Doe',
+        email: 'john@example.com',
+      },
+      { role: 'admin' },
+      'bot-first'
+    );
+
+    console.log('Conversation started:', conversation);
+
+    // Listen for messages
+    conversation.onMessage((message, type) => {
+      console.log(`Received (${type}): ${message}`);
+    });
+
+    // Send a message
+    await conversation.sendMessage('Hello! How can I assist you today?');
+
+    // Handle conversation updates
+    conversation.onConversationUpdate((update) => {
+      console.log('Conversation Update:', update);
+    });
+
+    // Fetch the transcript
+    const transcript = await conversation.getTranscript();
+    console.log('Transcript:', transcript);
+
+  } catch (error) {
+    console.error('Error:', error);
+  }
+})();
 ```
 
 ### Development Mode
 
+Switch to development mode for testing:
 ```typescript
 const api = new CaptivateChatAPI('YOUR_API_KEY', 'dev');
 ```
 
 ## Environment Support
-- Browser
-- Node.js
-- React Native
+
+The API supports the following environments:
+- **Browser**
+- **Node.js**
+- **React Native**
 
 ## API Reference
 
 ### CaptivateChatAPI
-- `constructor(apiKey: string, mode: 'prod' | 'dev' = 'prod')`
-- `connect(): Promise<void>`
-- `createConversation(userId: string, userBasicInfo?: object, userData?: object, autoConversationStart?: 'bot-first' | 'user-first'): Promise<Conversation>`
-- `getConversation(conversationId: string): Conversation`
+
+#### Methods
+- **`constructor(apiKey: string, mode: 'prod' | 'dev' = 'prod')`**  
+  Initializes the API with the given API key and mode.
+  
+- **`connect(): Promise<void>`**  
+  Connects to the WebSocket server.
+
+- **`createConversation(userId: string, userBasicInfo?: object, userData?: object, autoConversationStart?: 'bot-first' | 'user-first'): Promise<Conversation>`**  
+  Creates a new conversation.
+
+- **`getConversation(conversationId: string): Conversation`**  
+  Retrieves an existing conversation by its ID.
+
+- **`getUserConversations(userId: string): Promise<object[]>`**  
+  Fetches a list of conversations associated with the given user ID.
+
+---
 
 ### Conversation
-- `sendMessage(content: string): Promise<void>`
-- `setMetadata(metadata: object): Promise<void>`
-- `sendAction(actionId: string, data?: object): Promise<void>`
-- `getTranscript(): Promise<object[]>`
-- `onMessage(callback: (message: string, type: string) => void): void`
-- `onError(callback: (error: any) => void): void`
-- `onConversationUpdate(callback: (update: any) => void): void`
-- `onActionReceived(callback: (id: string, data: any) => void): void`
+
+#### Methods
+- **`sendMessage(content: string): Promise<void>`**  
+  Sends a message to the conversation.
+
+- **`setMetadata(metadata: object): Promise<void>`**  
+  Updates metadata for the conversation.
+
+- **`sendAction(actionId: string, data?: object): Promise<void>`**  
+  Sends a custom action to the conversation.
+
+- **`getTranscript(): Promise<object[]>`**  
+  Retrieves the conversation transcript.
+
+#### Events
+- **`onMessage(callback: (message: string, type: string) => void): void`**  
+  Listens for new messages.
+
+- **`onError(callback: (error: any) => void): void`**  
+  Listens for errors.
+
+- **`onConversationUpdate(callback: (update: any) => void): void`**  
+  Listens for updates to the conversation.
+
+- **`onActionReceived(callback: (id: string, data: any) => void): void`**  
+  Handles custom actions received during the conversation.
