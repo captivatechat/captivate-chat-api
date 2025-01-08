@@ -189,7 +189,7 @@ The API supports the following environments:
 - **`getConversation(conversationId: string): Conversation`**  
   Retrieves an existing conversation by its ID.
 
-- **`getUserConversations(userId: string): Promise<object[]>`**  
+- **`getUserConversations(userId: string): Promise<Conversation>`**  
   Fetches a list of conversations associated with the given user ID.
 
 ---

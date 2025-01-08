@@ -40,9 +40,9 @@ export declare class CaptivateChatAPI {
      */
     getConversation(conversationId: string): Conversation;
     /**
-    * Retrieves user conversations based on their userId.
-    * @param userId - The unique identifier for the user.
-    * @returns A promise resolving to the list of conversation ids.
-    */
-    getUserConversations(userId: string): Promise<object[]>;
+   * Retrieves user conversations based on their userId and returns actual conversation objects.
+   * @param userId - The unique identifier for the user.
+   * @returns A promise resolving to a list of Conversation instances.
+   */
+    getUserConversations(userId: string): Promise<Conversation[]>;
 }

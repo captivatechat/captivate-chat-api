@@ -193,11 +193,12 @@ export class CaptivateChatAPI {
   }
 
   /**
-  * Retrieves user conversations based on their userId.
-  * @param userId - The unique identifier for the user.
-  * @returns A promise resolving to the list of conversation ids.
-  */
-  public async getUserConversations(userId: string): Promise<object[]> {
+ * Retrieves user conversations based on their userId and returns actual conversation objects.
+ * @param userId - The unique identifier for the user.
+ * @returns A promise resolving to a list of Conversation instances.
+ */
+  public async getUserConversations(userId: string): Promise<Conversation[]> {
+    const conversations: Conversation[] = [];
     return new Promise((resolve, reject) => {
       try {
         this._send({
@@ -215,7 +216,13 @@ export class CaptivateChatAPI {
             const message = JSON.parse(event.data.toString());
             if (message.event?.event_type === 'user_conversations') {
               this.socket?.removeEventListener('message', onMessage);
-              resolve(message.event.event_payload.conversations);
+
+              const conversationIds = message.event.event_payload.conversations;
+              // Iterate over IDs and use getConversation to get the objects
+              for (const conv of conversationIds) {
+                conversations.push(this.getConversation(conv));
+              }
+              resolve(conversations);
             }
           } catch (err) {
             console.error('Error processing message:', err);
@@ -234,5 +241,4 @@ export class CaptivateChatAPI {
       }
     });
   }
-
 }
