@@ -38,6 +38,9 @@
     "gpt",
     "chatGPT"
   ],
+  "engines": {
+    "node": ">=v20.15.1"
+  },
   "bugs": {
     "url": "https://github.com/ldv112/captivate-chat-api/issues"
   },
