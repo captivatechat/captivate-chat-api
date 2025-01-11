@@ -134,7 +134,7 @@ export class Conversation {
 
       // Listener function for metadata update success
       const onMetadataSuccess = (payload: any) => {
-        ;
+        
         if (payload.conversation_id === this.conversationId) {
           this.removeListener('metadata_update_success', onMetadataSuccess);
           resolve(payload);
