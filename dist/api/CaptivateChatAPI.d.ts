@@ -32,7 +32,7 @@ export declare class CaptivateChatAPI {
      * @param autoConversationStart - Mode to auto-start the conversation ('bot-first' or 'user-first').
      * @returns A promise that resolves to the created Conversation instance.
      */
-    createConversation(userId: string, userBasicInfo?: object, userData?: object, autoConversationStart?: 'bot-first' | 'user-first'): Promise<Conversation>;
+    createConversation(userId: string, userBasicInfo?: object, metadata?: object, autoConversationStart?: 'bot-first' | 'user-first'): Promise<Conversation>;
     /**
      * Retrieves an existing conversation by its ID or creates a new one if not found.
      * @param conversationId - The unique ID of the conversation.

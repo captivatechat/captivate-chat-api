@@ -6,6 +6,7 @@ export class Conversation {
   private socket: WebSocket;
   private listeners: Map<string, Function[]>;
 
+
   /**
    * Initializes a new Conversation instance.
    * @param conversationId - The unique identifier of the conversation.
@@ -15,6 +16,7 @@ export class Conversation {
     this.conversationId = conversationId;
     this.socket = socket;
     this.listeners = new Map();
+
 
     // Listen to WebSocket messages and handle events.
     this.socket.onmessage = (event) => {
@@ -90,7 +92,12 @@ export class Conversation {
    * @param content - The message content to send.
    * @returns A promise that resolves when the message is sent.
    */
-  public async sendMessage(content: string): Promise<void> {
+  public async sendMessage(content: object | string): Promise<void> {
+    // Check if content is a string and transform it into a default object
+    if (typeof content === 'string') {
+      content = { type: 'text', text: content };
+    }
+
     return this.sendPayload('user_message', {
       type: 'message_create',
       client_msg_id: `unique-message-id-${Date.now()}`,
@@ -100,17 +107,51 @@ export class Conversation {
   }
 
   /**
-   * Sets metadata for the conversation.
-   * @param metadata - An object containing the metadata to set.
-   * @returns A promise that resolves when the metadata is set.
-   */
+  * Sets metadata for the conversation and listens for success confirmation.
+  * @param metadata - An object containing the metadata to set.
+  * @returns A promise that resolves when the metadata update is successful.
+  */
   public async setMetadata(metadata: object): Promise<void> {
-    return this.sendPayload('metadata', {
-      metadata,
-      client_msg_id: `metadata-${Date.now()}`,
-      conversation_id: this.conversationId,
+    if (typeof metadata !== 'object' || metadata === null) {
+      throw new Error('Metadata must be a non-null object.');
+    }
+
+    return new Promise((resolve, reject) => {
+      const metadataRequest = {
+        action: 'sendMessage',
+        event: {
+          event_type: 'metadata',
+          event_payload: {
+            metadata,
+            client_msg_id: `metadata-${Date.now()}`,
+            conversation_id: this.conversationId,
+          },
+        },
+      };
+
+      // Send the metadata update request
+      this.socket.send(JSON.stringify(metadataRequest));
+
+      // Listener function for metadata update success
+      const onMetadataSuccess = (payload: any) => {
+        ;
+        if (payload.conversation_id === this.conversationId) {
+          this.removeListener('metadata_update_success', onMetadataSuccess);
+          resolve(payload);
+        }
+      };
+
+      // Add the success listener
+      this.addListener('metadata_update_success', onMetadataSuccess);
+
+      // Timeout for failure case
+      setTimeout(() => {
+        this.removeListener('metadata_update_success', onMetadataSuccess);
+        reject(new Error('Timeout: No response for metadata update'));
+      }, 15000);
     });
   }
+
 
   /**
    * Sends an action to the conversation.
@@ -179,7 +220,7 @@ export class Conversation {
       this.socket.send(JSON.stringify(metadataRequest));
 
       const onMessage = (payload: any) => {
-        console.log(payload);
+
         if (payload.conversation_id === this.conversationId) {
           this.removeListener('conversation_metadata', onMessage);
           resolve(payload.content);

@@ -42,12 +42,12 @@ export declare class Conversation {
      * @param content - The message content to send.
      * @returns A promise that resolves when the message is sent.
      */
-    sendMessage(content: string): Promise<void>;
+    sendMessage(content: object | string): Promise<void>;
     /**
-     * Sets metadata for the conversation.
-     * @param metadata - An object containing the metadata to set.
-     * @returns A promise that resolves when the metadata is set.
-     */
+    * Sets metadata for the conversation and listens for success confirmation.
+    * @param metadata - An object containing the metadata to set.
+    * @returns A promise that resolves when the metadata update is successful.
+    */
     setMetadata(metadata: object): Promise<void>;
     /**
      * Sends an action to the conversation.

@@ -115,7 +115,7 @@ export class CaptivateChatAPI {
   public async createConversation(
     userId: string,
     userBasicInfo: object = {},
-    userData: object = {},
+    metadata: object = {},
     autoConversationStart: 'bot-first' | 'user-first' = 'bot-first'
   ): Promise<Conversation> {
     return new Promise((resolve, reject) => {
@@ -127,7 +127,7 @@ export class CaptivateChatAPI {
             event_payload: {
               userId,
               userBasicInfo,
-              userData,
+              metadata
             },
           },
         });
@@ -136,6 +136,7 @@ export class CaptivateChatAPI {
           try {
             const message = JSON.parse(event.data.toString());
             if (message.event?.event_type === 'conversation_start_success') {
+              console.log(message);
               const conversationId = message.event.event_payload.conversation_id;
               this.socket?.removeEventListener('message', onMessage);
 
@@ -144,9 +145,10 @@ export class CaptivateChatAPI {
 
               if (autoConversationStart === 'bot-first') {
                 conversation
-                  .sendMessage('')
+                  .sendMessage({ type: 'text', text: '' })
                   .then(() => resolve(conversation))
                   .catch(reject);
+                  
               } else {
                 resolve(conversation);
               }
@@ -217,9 +219,10 @@ export class CaptivateChatAPI {
             if (message.event?.event_type === 'user_conversations') {
               this.socket?.removeEventListener('message', onMessage);
 
-              const conversationIds = message.event.event_payload.conversations;
+              const conversations = message.event.event_payload.conversations;
+              console.log(conversations);
               // Iterate over IDs and use getConversation to get the objects
-              for (const conv of conversationIds) {
+              for (const conv of conversations) {
                 conversations.push(this.getConversation(conv));
               }
               resolve(conversations);
