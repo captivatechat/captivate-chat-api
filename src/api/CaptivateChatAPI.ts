@@ -220,7 +220,6 @@ export class CaptivateChatAPI {
               this.socket?.removeEventListener('message', onMessage);
 
               const conversations = message.event.event_payload.conversations;
-              console.log(conversations);
               // Iterate over IDs and use getConversation to get the objects
               for (const conv of conversations) {
                 conversations.push(this.getConversation(conv));
