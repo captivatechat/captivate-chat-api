@@ -5,12 +5,13 @@ export declare class Conversation {
     private conversationId;
     private socket;
     private listeners;
+    private metadata;
     /**
      * Initializes a new Conversation instance.
      * @param conversationId - The unique identifier of the conversation.
      * @param socket - The WebSocket instance for communication.
      */
-    constructor(conversationId: string, socket: WebSocket);
+    constructor(conversationId: string, socket: WebSocket, metadata?: object);
     /**
      * Adds an event listener for a specific event type.
      * @param eventType - The type of event to listen for.

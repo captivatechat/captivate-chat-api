@@ -5,18 +5,18 @@ export class Conversation {
   private conversationId: string;
   private socket: WebSocket;
   private listeners: Map<string, Function[]>;
-
+  private metadata: object | null; 
 
   /**
    * Initializes a new Conversation instance.
    * @param conversationId - The unique identifier of the conversation.
    * @param socket - The WebSocket instance for communication.
    */
-  constructor(conversationId: string, socket: WebSocket) {
+  constructor(conversationId: string, socket: WebSocket, metadata?: object) {
     this.conversationId = conversationId;
     this.socket = socket;
     this.listeners = new Map();
-
+    this.metadata = metadata || null; // If metadata is provided, use it; otherwise, set to null.
 
     // Listen to WebSocket messages and handle events.
     this.socket.onmessage = (event) => {

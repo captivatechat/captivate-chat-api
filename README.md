@@ -105,6 +105,9 @@ Fetch a list of conversations associated with a specific user ID:
 ```typescript
 const conversations = await api.getUserConversations('user123');
 console.log('User Conversations:', conversations);
+/*
+ Returns Conversation Object
+ */
 ```
 
 ### Example: Full Workflow
@@ -190,7 +193,7 @@ The API supports the following environments:
   Retrieves an existing conversation by its ID.
 
 - **`getUserConversations(userId: string): Promise<Conversation>`**  
-  Fetches a list of conversations associated with the given user ID.
+  Fetches a list of conversations associated with the given user ID. Returns Conversation Object
 
 ---
 

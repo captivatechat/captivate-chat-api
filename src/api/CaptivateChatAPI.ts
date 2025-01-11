@@ -136,19 +136,16 @@ export class CaptivateChatAPI {
           try {
             const message = JSON.parse(event.data.toString());
             if (message.event?.event_type === 'conversation_start_success') {
-              console.log(message);
               const conversationId = message.event.event_payload.conversation_id;
               this.socket?.removeEventListener('message', onMessage);
-
               const conversation = new Conversation(conversationId, this.socket!);
               this.conversations.set(conversationId, conversation);
-
               if (autoConversationStart === 'bot-first') {
                 conversation
                   .sendMessage({ type: 'text', text: '' })
                   .then(() => resolve(conversation))
                   .catch(reject);
-                  
+
               } else {
                 resolve(conversation);
               }
@@ -219,11 +216,17 @@ export class CaptivateChatAPI {
             if (message.event?.event_type === 'user_conversations') {
               this.socket?.removeEventListener('message', onMessage);
 
-              const conversations = message.event.event_payload.conversations;
-              // Iterate over IDs and use getConversation to get the objects
-              for (const conv of conversations) {
-                conversations.push(this.getConversation(conv));
+              const payload = message.event.event_payload.conversations;
+
+
+              // Iterate over the payload array which contains { id, metadata }
+              for (const conv of payload) {
+                const { conversation_id, metadata } = conv;  // Destructure the conversation object to get id and metadata
+                if (this.socket !== null) {
+                  conversations.push(new Conversation(conversation_id, this.socket, metadata));
+                }
               }
+
               resolve(conversations);
             }
           } catch (err) {
@@ -243,4 +246,6 @@ export class CaptivateChatAPI {
       }
     });
   }
+
+
 }
