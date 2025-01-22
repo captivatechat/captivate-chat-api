@@ -98,6 +98,16 @@ const transcript = await conversation.getTranscript();
 console.log('Transcript:', transcript);
 ```
 
+### Delete Conversation
+
+Delete the current conversation
+
+```typescript
+const transcript = await conversation.delete();
+console.log('Deleted conversation');
+```
+
+
 ### Retrieve User Conversations
 
 Fetch a list of conversations associated with a specific user ID:
@@ -109,6 +119,19 @@ console.log('User Conversations:', conversations);
  Returns Conversation Object
  */
 ```
+
+### Delete User Conversations
+
+Delete list of conversations associated with a specific user ID:
+
+```typescript
+const conversations = await api.deleteUserConversations('user123');
+console.log('Conversations Deleted successfully');
+/*
+ Throws error if failed
+ */
+```
+
 
 ### Example: Full Workflow
 
@@ -155,6 +178,10 @@ import { CaptivateChatAPI } from 'captivate-chat-api';
     const transcript = await conversation.getTranscript();
     console.log('Transcript:', transcript);
 
+    // Delete the conversation
+    await conversation.delete();
+    console.log('Conversation deleted successfully.');
+
   } catch (error) {
     console.error('Error:', error);
   }
@@ -195,6 +222,8 @@ The API supports the following environments:
 - **`getUserConversations(userId: string): Promise<Conversation>`**  
   Fetches a list of conversations associated with the given user ID. Returns Conversation Object
 
+- **`deleteUserConversations(userId: string): Promise<void>`**  
+  Deletes all conversations associated with the given user ID
 ---
 
 ### Conversation
@@ -211,6 +240,11 @@ The API supports the following environments:
 
 - **`getTranscript(): Promise<object[]>`**  
   Retrieves the conversation transcript.
+
+- **`delete(): Promise<void>`**  
+  Deletes the current conversation
+  
+
 
 #### Events
 - **`onMessage(callback: (message: string, type: string) => void): void`**  

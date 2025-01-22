@@ -246,11 +246,10 @@ export class Conversation {
         const deleteRequest = {
           action: 'sendMessage',
           event: {
-            event_type: 'conversation_delete',
+            event_type: 'delete_conversation',
             event_payload: { conversation_id: this.conversationId },
           },
         };
-
         this.socket.send(JSON.stringify(deleteRequest));
 
         const onDeleteSuccess = (event: MessageEvent) => {

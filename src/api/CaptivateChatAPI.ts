@@ -275,11 +275,9 @@ export class CaptivateChatAPI {
               message.event.event_payload.userId === userId
             ) {
               this.socket?.removeEventListener('message', onDeleteSuccess);
-              console.log(`All conversations for user ${userId} deleted successfully.`);
               resolve();
             }
           } catch (err) {
-            console.error('Error processing deleteUserConversations message:', err);
             reject(err);
           }
         };
