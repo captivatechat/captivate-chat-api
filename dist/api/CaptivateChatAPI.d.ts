@@ -45,4 +45,10 @@ export declare class CaptivateChatAPI {
    * @returns A promise resolving to a list of Conversation instances.
    */
     getUserConversations(userId: string): Promise<Conversation[]>;
+    /**
+     * Deletes all conversations for a specific user.
+     * @param userId - The unique identifier for the user whose conversations will be deleted.
+     * @returns A promise that resolves when all conversations are successfully deleted.
+     */
+    deleteUserConversations(userId: string): Promise<void>;
 }

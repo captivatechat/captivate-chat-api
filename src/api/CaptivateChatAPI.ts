@@ -247,5 +247,53 @@ export class CaptivateChatAPI {
     });
   }
 
+  /**
+   * Deletes all conversations for a specific user.
+   * @param userId - The unique identifier for the user whose conversations will be deleted.
+   * @returns A promise that resolves when all conversations are successfully deleted.
+   */
+  public async deleteUserConversations(userId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!userId) {
+        return reject(new Error('User ID must be provided.'));
+      }
+
+      try {
+        this._send({
+          action: 'sendMessage',
+          event: {
+            event_type: 'delete_conversation',
+            event_payload: { userId: userId },
+          },
+        });
+
+        const onDeleteSuccess = (event: MessageEvent) => {
+          try {
+            const message = JSON.parse(event.data.toString());
+            if (
+              message.event?.event_type === 'delete_conversation_success' &&
+              message.event.event_payload.userId === userId
+            ) {
+              this.socket?.removeEventListener('message', onDeleteSuccess);
+              console.log(`All conversations for user ${userId} deleted successfully.`);
+              resolve();
+            }
+          } catch (err) {
+            console.error('Error processing deleteUserConversations message:', err);
+            reject(err);
+          }
+        };
+
+        this.socket?.addEventListener('message', onDeleteSuccess);
+
+        setTimeout(() => {
+          this.socket?.removeEventListener('message', onDeleteSuccess);
+          reject(new Error(`Timeout: No response for deleting conversations for user ${userId}`));
+        }, 10000);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
 
 }

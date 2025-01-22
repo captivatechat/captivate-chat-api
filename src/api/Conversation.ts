@@ -5,7 +5,7 @@ export class Conversation {
   private conversationId: string;
   private socket: WebSocket;
   private listeners: Map<string, Function[]>;
-  private metadata: object | null; 
+  private metadata: object | null;
 
   /**
    * Initializes a new Conversation instance.
@@ -134,7 +134,7 @@ export class Conversation {
 
       // Listener function for metadata update success
       const onMetadataSuccess = (payload: any) => {
-        
+
         if (payload.conversation_id === this.conversationId) {
           this.removeListener('metadata_update_success', onMetadataSuccess);
           resolve(payload);
@@ -235,7 +235,46 @@ export class Conversation {
       }, 10000);
     });
   }
+  /**
+    * Deletes this conversation.
+    * @returns A promise that resolves when the conversation is deleted successfully.
+    */
+  public async delete(): Promise<void> {
+    return new Promise((resolve, reject) => {
 
+      try {
+        const deleteRequest = {
+          action: 'sendMessage',
+          event: {
+            event_type: 'conversation_delete',
+            event_payload: { conversation_id: this.conversationId },
+          },
+        };
+
+        this.socket.send(JSON.stringify(deleteRequest));
+
+        const onDeleteSuccess = (event: MessageEvent) => {
+          const message = JSON.parse(event.data);
+          if (
+            message.event?.event_type === 'delete_conversation_success' &&
+            message.event.event_payload.conversation_id === this.conversationId
+          ) {
+            this.socket.removeEventListener('message', onDeleteSuccess);
+            resolve();
+          }
+        };
+
+        this.socket.addEventListener('message', onDeleteSuccess);
+
+        setTimeout(() => {
+          this.socket.removeEventListener('message', onDeleteSuccess);
+          reject(new Error(`Timeout: No response for deleting conversation ${this.conversationId}`));
+        }, 10000);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
 
 
   /**

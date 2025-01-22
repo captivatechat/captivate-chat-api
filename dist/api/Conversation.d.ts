@@ -68,6 +68,11 @@ export declare class Conversation {
    */
     getMetadata(): Promise<object>;
     /**
+      * Deletes this conversation.
+      * @returns A promise that resolves when the conversation is deleted successfully.
+      */
+    delete(): Promise<void>;
+    /**
      * Sends a payload to the WebSocket.
      * @param eventType - The type of event being sent.
      * @param payload - The payload data to include with the event.
