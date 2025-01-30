@@ -1,3 +1,8 @@
+interface Action {
+  id: string;
+  data: any;
+}
+
 /**
  * Represents a conversation session, handling WebSocket communication and event management.
  */
@@ -55,8 +60,8 @@ export class Conversation {
      * Registers a listener for receiving actions.
      * @param callback - The function to handle incoming action.
      */
-  public onActionReceived(callback: (id: string, data: any) => void): void {
-    this.addListener('action', (payload: any) => callback(payload.id, payload.data));
+  public onActionReceived(callback: (actions:[Action]) => void): void {
+    this.addListener('action', (payload: any) => callback(payload.actions));
   }
 
   /**

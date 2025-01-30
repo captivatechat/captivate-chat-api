@@ -84,8 +84,8 @@ Use event listeners to handle various updates, errors, or custom actions:
 
 3. Handling custom actions:
    ```typescript
-   conversation.onActionReceived((id, data) => {
-     console.log(`Action ${id}:`, data);
+   conversation.onActionReceived((actions) => {
+     console.log(`Actions:`, actions);
    });
    ```
 
@@ -256,5 +256,13 @@ The API supports the following environments:
 - **`onConversationUpdate(callback: (update: any) => void): void`**  
   Listens for updates to the conversation.
 
-- **`onActionReceived(callback: (id: string, data: any) => void): void`**  
+- **`onActionReceived(callback: (actions:[Action]) => void): void`**  
   Handles custom actions received during the conversation.
+
+## Interfaces
+``` typescript
+interface Action {
+  id: string;
+  data: any;
+}
+```

@@ -1,3 +1,7 @@
+interface Action {
+    id: string;
+    data: any;
+}
 /**
  * Represents a conversation session, handling WebSocket communication and event management.
  */
@@ -27,7 +31,7 @@ export declare class Conversation {
        * Registers a listener for receiving actions.
        * @param callback - The function to handle incoming action.
        */
-    onActionReceived(callback: (id: string, data: any) => void): void;
+    onActionReceived(callback: (actions: [Action]) => void): void;
     /**
      * Registers a listener for updates to the conversation.
      * @param callback - The function to handle conversation updates.
@@ -91,3 +95,4 @@ export declare class Conversation {
      */
     getConversationId(): string;
 }
+export {};
