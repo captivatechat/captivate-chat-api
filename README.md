@@ -239,7 +239,7 @@ The API supports the following environments:
 - **`setMetadata(metadata: object): Promise<void>`**  
   Updates metadata for the conversation.
 
-  - **`getMetadata(): Promise<void>`**  
+- **`getMetadata(): Promise<object>`**  
   Returns the metadata for that current conversation session
 
 - **`sendAction(actionId: string, data?: object): Promise<void>`**  
