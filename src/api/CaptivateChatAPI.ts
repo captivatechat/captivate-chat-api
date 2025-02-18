@@ -176,6 +176,7 @@ export class CaptivateChatAPI {
     let conversation = this.conversations.get(conversationId);
 
     if (!conversation) {
+      console.log("conversation not found");
       // If conversation is not found, check if socket is initialized
       if (this.socket !== null) {
         // If socket is initialized, create the conversation

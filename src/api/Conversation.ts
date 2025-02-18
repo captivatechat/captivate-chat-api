@@ -25,11 +25,13 @@ export class Conversation {
 
     // Listen to WebSocket messages and handle events.
     this.socket.onmessage = (event) => {
+
       const message = JSON.parse(event.data);
       const eventType = message.event?.event_type;
 
       if (eventType && this.listeners.has(eventType)) {
         const payload = message.event.event_payload;
+
         this.listeners.get(eventType)?.forEach((callback) => callback(payload));
       }
     };
@@ -60,7 +62,7 @@ export class Conversation {
      * Registers a listener for receiving actions.
      * @param callback - The function to handle incoming action.
      */
-  public onActionReceived(callback: (actions:[Action]) => void): void {
+  public onActionReceived(callback: (actions: [Action]) => void): void {
     this.addListener('action', (payload: any) => callback(payload.actions));
   }
 

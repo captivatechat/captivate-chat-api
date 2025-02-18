@@ -55,6 +55,7 @@ Create a new conversation with the following options:
 1. Send a message to the conversation:
    ```typescript
    await conversation.sendMessage('Hello!');
+   await conversation.sendMessage({type:'files',files:[{filename:'test.pdf'}]});
    ```
 
 2. Listen for responses:
@@ -232,8 +233,14 @@ The API supports the following environments:
 - **`sendMessage(content: string): Promise<void>`**  
   Sends a message to the conversation.
 
+- **`sendMessage(content: object): Promise<void>`**  
+  Can also send custom payload instead of default string
+
 - **`setMetadata(metadata: object): Promise<void>`**  
   Updates metadata for the conversation.
+
+  - **`getMetadata(): Promise<void>`**  
+  Returns the metadata for that current conversation session
 
 - **`sendAction(actionId: string, data?: object): Promise<void>`**  
   Sends a custom action to the conversation.
