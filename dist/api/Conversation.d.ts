@@ -10,6 +10,7 @@ export declare class Conversation {
     private socket;
     private listeners;
     private metadata;
+    private local_id;
     /**
      * Initializes a new Conversation instance.
      * @param conversationId - The unique identifier of the conversation.

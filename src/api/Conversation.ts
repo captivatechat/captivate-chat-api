@@ -11,7 +11,7 @@ export class Conversation {
   private socket: WebSocket;
   private listeners: Map<string, Function[]>;
   private metadata: object | null;
-
+  private local_id: Number;
   /**
    * Initializes a new Conversation instance.
    * @param conversationId - The unique identifier of the conversation.
@@ -22,10 +22,12 @@ export class Conversation {
     this.socket = socket;
     this.listeners = new Map();
     this.metadata = metadata || null; // If metadata is provided, use it; otherwise, set to null.
+    this.local_id = Math.floor(Math.random() * 10000); // Simple random id for local instance tracking
 
+   
     // Listen to WebSocket messages and handle events.
     this.socket.onmessage = (event) => {
-
+      console.log('local_id_onEvent', this.local_id);
       const message = JSON.parse(event.data);
       const eventType = message.event?.event_type;
 
@@ -199,7 +201,7 @@ export class Conversation {
           resolve(payload.transcript);
         }
       };
-
+      console.log('local_id_onGetTranscript', this.local_id);
       this.addListener('conversation_transcript', onMessage);
 
       setTimeout(() => {

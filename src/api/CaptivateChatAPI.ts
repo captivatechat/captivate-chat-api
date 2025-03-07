@@ -67,7 +67,7 @@ export class CaptivateChatAPI {
     return new Promise((resolve, reject) => {
       try {
         this.socket = new WebSocketImpl(this.url);
-
+        
         const timeoutId = setTimeout(() => {
           reject(new Error('Connection timeout: socket_connected not received'));
         }, 10000);
