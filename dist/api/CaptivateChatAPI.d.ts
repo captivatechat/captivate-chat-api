@@ -38,7 +38,7 @@ export declare class CaptivateChatAPI {
      * @param conversationId - The unique ID of the conversation.
      * @returns The Conversation instance associated with the given ID.
      */
-    getConversation(conversationId: string): Conversation;
+    getConversation(conversationId: string): Conversation | void;
     /**
    * Retrieves user conversations based on their userId and returns actual conversation objects.
    * @param userId - The unique identifier for the user.

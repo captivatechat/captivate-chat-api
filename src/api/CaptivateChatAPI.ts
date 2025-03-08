@@ -67,7 +67,7 @@ export class CaptivateChatAPI {
     return new Promise((resolve, reject) => {
       try {
         this.socket = new WebSocketImpl(this.url);
-        
+
         const timeoutId = setTimeout(() => {
           reject(new Error('Connection timeout: socket_connected not received'));
         }, 10000);
@@ -172,9 +172,9 @@ export class CaptivateChatAPI {
    * @param conversationId - The unique ID of the conversation.
    * @returns The Conversation instance associated with the given ID.
    */
-  getConversation(conversationId: string): Conversation {
+  getConversation(conversationId: string): Conversation | void {
     let conversation = this.conversations.get(conversationId);
-
+    console.log('Getting conversation...', conversationId);
     if (!conversation) {
       // If conversation is not found, check if socket is initialized
       if (this.socket !== null) {
@@ -188,6 +188,8 @@ export class CaptivateChatAPI {
       }
     }
 
+    // console.log('Got:', conversation);
+    conversation?.restartListeners();
     return conversation;
   }
 

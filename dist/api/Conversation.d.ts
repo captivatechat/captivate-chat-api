@@ -17,6 +17,8 @@ export declare class Conversation {
      * @param socket - The WebSocket instance for communication.
      */
     constructor(conversationId: string, socket: WebSocket, metadata?: object);
+    private handleMessage;
+    restartListeners(): void;
     /**
      * Adds an event listener for a specific event type.
      * @param eventType - The type of event to listen for.
