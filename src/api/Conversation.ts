@@ -42,7 +42,9 @@ export class Conversation {
   }
   public restartListeners() {
     // Listen to WebSocket messages and handle events.
+
     this.socket.onmessage = this.handleMessage.bind(this);
+  
   }
 
   /**
