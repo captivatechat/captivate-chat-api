@@ -23,9 +23,7 @@ export class Conversation {
     this.listeners = new Map();
     this.metadata = metadata || null; // If metadata is provided, use it; otherwise, set to null.
     this.local_id = Math.floor(Math.random() * 10000); // Simple random id for local instance tracking
-
-
-
+    
     this.socket.onmessage = this.handleMessage.bind(this);
 
   }
@@ -42,7 +40,6 @@ export class Conversation {
   }
   public restartListeners() {
     // Listen to WebSocket messages and handle events.
-
     this.socket.onmessage = this.handleMessage.bind(this);
   
   }

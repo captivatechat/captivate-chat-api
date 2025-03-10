@@ -46,6 +46,7 @@
             try {
                 const currentConversation = await captivateAPI.getConversation(conversationId);
                 const transcript = await currentConversation.getTranscript();
+                console.log(transcript);
             } catch (e) {
                 console.log(e);
             }
