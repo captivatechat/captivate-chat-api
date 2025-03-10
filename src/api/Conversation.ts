@@ -29,7 +29,6 @@ export class Conversation {
   }
 
   private handleMessage(event: MessageEvent) {
-    console.log('local_id_onEvent', this.local_id);
     const message = JSON.parse(event.data);
     const eventType = message.event?.event_type;
 
@@ -206,7 +205,6 @@ export class Conversation {
           resolve(payload.transcript);
         }
       };
-      console.log('local_id_onGetTranscript', this.local_id);
       this.addListener('conversation_transcript', onMessage);
 
       setTimeout(() => {

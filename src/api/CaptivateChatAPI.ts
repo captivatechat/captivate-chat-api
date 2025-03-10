@@ -174,7 +174,7 @@ export class CaptivateChatAPI {
    */
   getConversation(conversationId: string): Conversation | void {
     let conversation = this.conversations.get(conversationId);
-    console.log('Getting conversation...', conversationId);
+
     if (!conversation) {
       // If conversation is not found, check if socket is initialized
       if (this.socket !== null) {
@@ -188,7 +188,6 @@ export class CaptivateChatAPI {
       }
     }
 
-    // console.log('Got:', conversation);
     conversation?.restartListeners();
     return conversation;
   }
