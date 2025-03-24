@@ -23,7 +23,7 @@ export class Conversation {
     this.listeners = new Map();
     this.metadata = metadata || null; // If metadata is provided, use it; otherwise, set to null.
     this.local_id = Math.floor(Math.random() * 10000); // Simple random id for local instance tracking
-    
+
     this.socket.onmessage = this.handleMessage.bind(this);
 
   }
@@ -31,7 +31,8 @@ export class Conversation {
   private handleMessage(event: MessageEvent) {
     const message = JSON.parse(event.data);
     const eventType = message.event?.event_type;
-
+    console.log(message);
+    console.log(this.listeners);
     if (eventType && this.listeners.has(eventType)) {
       const payload = message.event.event_payload;
       this.listeners.get(eventType)?.forEach((callback) => callback(payload));
@@ -40,7 +41,7 @@ export class Conversation {
   public restartListeners() {
     // Listen to WebSocket messages and handle events.
     this.socket.onmessage = this.handleMessage.bind(this);
-  
+
   }
 
   /**
@@ -49,6 +50,7 @@ export class Conversation {
    * @param callback - The function to invoke when the event occurs.
    */
   private addListener(eventType: string, callback: Function): void {
+    this.restartListeners();
     if (!this.listeners.has(eventType)) {
       this.listeners.set(eventType, []);
     }
