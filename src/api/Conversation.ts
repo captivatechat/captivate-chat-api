@@ -31,8 +31,6 @@ export class Conversation {
   private handleMessage(event: MessageEvent) {
     const message = JSON.parse(event.data);
     const eventType = message.event?.event_type;
-    console.log(message);
-    console.log(this.listeners);
     if (eventType && this.listeners.has(eventType)) {
       const payload = message.event.event_payload;
       this.listeners.get(eventType)?.forEach((callback) => callback(payload));
