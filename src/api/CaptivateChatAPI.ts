@@ -95,8 +95,12 @@ export class CaptivateChatAPI {
           reject(new Error(event.message || 'WebSocket error'));
         };
 
-        this.socket.onclose = () => {
-          console.log('WebSocket connection closed');
+        this.socket.onclose = (event) => {
+          console.log('WebSocket connection closed with');
+          if (event.code !== 1000) { 
+            console.log('Attempting to reconnect...');
+            setTimeout(() => this.connect(), 3000); // Reconnect after 3 seconds
+          }
         };
       } catch (error) {
         reject(error);
