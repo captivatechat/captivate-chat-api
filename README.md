@@ -256,7 +256,7 @@ The API supports the following environments:
 - **`sendAction(actionId: string, data?: object): Promise<void>`**  
   Sends a custom action to the conversation.
 
-- **`editMessage(messageId: string, message: string | object): Promise<void>`**  
+- **`editMessage(messageId: string, content: string | object): Promise<void>`**  
   Edits a previously sent message in the conversation. Resolves when the edit is confirmed by the server.
 
 - **`getTranscript(): Promise<object[]>`**  
