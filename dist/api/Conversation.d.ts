@@ -80,6 +80,13 @@ export declare class Conversation {
       */
     delete(): Promise<void>;
     /**
+     * Edits a message in the conversation.
+     * @param messageId - The ID of the message to edit.
+     * @param content - The new content for the message (object or string).
+     * @returns A promise that resolves when the edit is confirmed by user_message_updated.
+     */
+    editMessage(messageId: string, content: object | string): Promise<void>;
+    /**
      * Sends a payload to the WebSocket.
      * @param eventType - The type of event being sent.
      * @param payload - The payload data to include with the event.

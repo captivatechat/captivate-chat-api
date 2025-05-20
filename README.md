@@ -1,4 +1,3 @@
-
 # captivate-chat-api
 
 WebSocket-based chat API for real-time conversations with support for bot and human agents.
@@ -64,6 +63,18 @@ Create a new conversation with the following options:
      console.log(`${type}: ${message}`);
    });
    ```
+
+### Edit a Message
+
+Edit a previously sent message in the conversation:
+
+```typescript
+await conversation.editMessage('messageId123', 'Updated message text');
+// Or with a custom object:
+await conversation.editMessage('messageId123', { type: 'text', text: 'Updated message text', files: [], actions: [] });
+```
+
+The method returns a promise that resolves when the edit is confirmed by the server (`message_edited_success` event).
 
 ### Handle Events
 
@@ -244,6 +255,9 @@ The API supports the following environments:
 
 - **`sendAction(actionId: string, data?: object): Promise<void>`**  
   Sends a custom action to the conversation.
+
+- **`editMessage(messageId: string, content: string | object): Promise<void>`**  
+  Edits a previously sent message in the conversation. Resolves when the edit is confirmed by the server.
 
 - **`getTranscript(): Promise<object[]>`**  
   Retrieves the conversation transcript.

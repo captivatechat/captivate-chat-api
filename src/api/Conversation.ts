@@ -287,6 +287,49 @@ export class Conversation {
     });
   }
 
+  /**
+   * Edits a message in the conversation.
+   * @param messageId - The ID of the message to edit.
+   * @param content - The new content for the message (object or string).
+   * @returns A promise that resolves when the edit is confirmed by user_message_updated.
+   */
+  public async editMessage(messageId: string, content: object | string): Promise<void> {
+    // If content is a string, wrap it in a default object
+    if (typeof content === 'string') {
+      content = { type: 'text', text: content };
+    }
+
+    return new Promise((resolve, reject) => {
+      // Send the edit_message payload
+      this.sendPayload('edit_message', {
+        type: 'message_create',
+        client_msg_id: `edit-message-id-${Date.now()}`,
+        conversation_id: this.conversationId,
+        message_id: messageId,
+        content,
+      });
+
+      // Listener for message_edited_success event
+      const onEditSuccess = (payload: any) => {
+        console.log(payload);
+        if (
+          payload.conversation_id === this.conversationId &&
+          payload.message_id === messageId
+        ) {
+          this.removeListener('message_edited_success', onEditSuccess);
+          resolve();
+        }
+      };
+
+      this.addListener('message_edited_success', onEditSuccess);
+
+      // Timeout for failure case
+      const timerId = setTimeout(() => {
+        this.removeListener('message_edited_success', onEditSuccess);
+        reject(new Error('Timeout: No response for message edit'));
+      }, 10000);
+    });
+  }
 
   /**
    * Sends a payload to the WebSocket.
