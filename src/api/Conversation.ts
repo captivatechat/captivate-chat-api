@@ -324,7 +324,7 @@ export class Conversation {
       this.addListener('message_edited_success', onEditSuccess);
 
       // Timeout for failure case
-      setTimeout(() => {
+      const timerId = setTimeout(() => {
         this.removeListener('message_edited_success', onEditSuccess);
         reject(new Error('Timeout: No response for message edit'));
       }, 10000);
