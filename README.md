@@ -74,7 +74,7 @@ await conversation.editMessage('messageId123', 'Updated message text');
 await conversation.editMessage('messageId123', { type: 'text', text: 'Updated message text', files: [], actions: [] });
 ```
 
-The method returns a promise that resolves when the edit is confirmed by the server (`user_message_updated` event).
+The method returns a promise that resolves when the edit is confirmed by the server (`message_edited_success` event).
 
 ### Handle Events
 
