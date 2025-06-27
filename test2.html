@@ -22,7 +22,7 @@
     const stgKey = 'e7b8c3f2-98da-4c1b-b6f4-2a3d7e5f9c81';
     //const euBotApiKey = '02WJ8YW-X88MG02-KP1RJPY-5DSGGJR';
     const key = 'NP8D72V-J6G4BAT-QV8XDMQ-9VVZYEV';
-    
+
 
     const testCaptivateAPI = async () => {
       // Create an instance of CaptivateChatAPI
@@ -34,27 +34,25 @@
       //const mae = new CaptivateChatAPI("0J10E74-S44M589-NJZBSB2-EW2DC0X", 'prod')
 
       const hikma = new CaptivateChatAPI("04KNKV0-HFN4RM0-GECQY9Q-Q33SJZF", "dev");
-    
+
       try {
         // Connect to the WebSocket server
         await hikma.connect();
 
-        let conv = await hikma.createConversation('testxczvczxwaasdsayn1vz59', { firstName: 'Lance', lastName: 'safa', email: 'asdaf@gmail.com' }, {}, 'bot-first');
-        
-        await delay(2000);
 
-        conv.onMessage((message, type) => {
-          console.log(message);
-        });
+        const gFred = new CaptivateChatAPI('4f9069aa-41cb-11ee-a60d-325096b39f47', 'dev');
+        await gFred.connect();
+        let chats = await gFred.getUserConversations(
+          "66f016f09d5961b684ce05f0",
+          { mode: "dbFred" },
+          { page: "1", limit: "92" }
+        );
+        console.log(chats);
+        //await conv.sendMessage('hi there');
+        await delay(5000);
+        ///const transcript = await conv.getTranscript();
 
-        conv.onActionReceived((actions) => {
-          console.log(`Action`, actions);
-        });
-
-        conv.sendMessage('generate me a course on adobe firefly');
-
-
-
+        //console.log('Transcript:', transcript);
 
         // let convs = await mae.getUserConversations('66c46158e84e63012f00800c');
 
