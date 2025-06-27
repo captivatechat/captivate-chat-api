@@ -122,11 +122,25 @@ console.log('Deleted conversation');
 
 ### Retrieve User Conversations
 
-Fetch a list of conversations associated with a specific user ID:
+Fetch a list of conversations associated with a specific user ID. This method now supports both legacy (v1) and advanced (v2) usage with filter and pagination:
 
+**Legacy usage (v1):**
 ```typescript
 const conversations = await api.getUserConversations('user123');
 console.log('User Conversations:', conversations);
+/*
+ Returns Conversation Object
+ */
+```
+
+**Advanced usage (v2, with filter and pagination):**
+```typescript
+const conversations = await api.getUserConversations(
+  'user123',
+  { mode: 'dbFred' }, // filter (optional)
+  { page: '1', limit: '50' } // pagination (optional)
+);
+console.log('Filtered & Paginated User Conversations:', conversations);
 /*
  Returns Conversation Object
  */
@@ -147,7 +161,7 @@ console.log('Conversations Deleted successfully');
 
 ### Example: Full Workflow
 
-Here’s a complete example of how to use the API:
+Here's a complete example of how to use the API:
 
 ```typescript
 import { CaptivateChatAPI } from 'captivate-chat-api';
@@ -231,8 +245,8 @@ The API supports the following environments:
 - **`getConversation(conversationId: string): Conversation`**  
   Retrieves an existing conversation by its ID.
 
-- **`getUserConversations(userId: string): Promise<Conversation>`**  
-  Fetches a list of conversations associated with the given user ID. Returns Conversation Object
+- **`getUserConversations(userId: string, filter?: object, pagination?: { page?: string | number; limit?: string | number }): Promise<Conversation[]>`**  
+  Fetches a list of conversations associated with the given user ID. If `filter` or `pagination` is provided, uses the v2 API for advanced querying. Returns Conversation Object
 
 - **`deleteUserConversations(userId: string): Promise<void>`**  
   Deletes all conversations associated with the given user ID

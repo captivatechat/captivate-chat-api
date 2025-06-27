@@ -197,41 +197,57 @@ export class CaptivateChatAPI {
   }
 
   /**
- * Retrieves user conversations based on their userId and returns actual conversation objects.
- * @param userId - The unique identifier for the user.
- * @returns A promise resolving to a list of Conversation instances.
- */
-  public async getUserConversations(userId: string): Promise<Conversation[]> {
+   * Retrieves user conversations. Uses v2 if filter or pagination is provided, otherwise uses v1.
+   * @param userId - The unique identifier for the user.
+   * @param filter - Optional filter object (triggers v2 if provided).
+   * @param pagination - Optional pagination object (triggers v2 if provided).
+   * @returns A promise resolving to a list of Conversation instances.
+   */
+  public async getUserConversations(
+    userId: string,
+    filter: object = {},
+    pagination: { page?: string | number; limit?: string | number } = {}
+  ): Promise<Conversation[]> {
     const conversations: Conversation[] = [];
+    const useV2 = (filter && Object.keys(filter).length > 0) || (pagination && Object.keys(pagination).length > 0);
     return new Promise((resolve, reject) => {
       try {
-        this._send({
-          action: 'sendMessage',
-          event: {
-            event_type: 'get_user_conversations',
-            event_payload: {
-              userId,
+        if (useV2) {
+          this._send({
+            action: 'sendMessage',
+            event: {
+              event_type: 'get_user_conversations_v2',
+              event_payload: {
+                userId,
+                filter,
+                pagination,
+              },
             },
-          },
-        });
+          });
+        } else { //For legacy support
+          this._send({
+            action: 'sendMessage',
+            event: {
+              event_type: 'get_user_conversations',
+              event_payload: {
+                userId,
+              },
+            },
+          });
+        }
 
         const onMessage = (event: MessageEvent) => {
           try {
             const message = JSON.parse(event.data.toString());
             if (message.event?.event_type === 'user_conversations') {
               this.socket?.removeEventListener('message', onMessage);
-
               const payload = message.event.event_payload.conversations;
-
-
-              // Iterate over the payload array which contains { id, metadata }
               for (const conv of payload) {
-                const { conversation_id, metadata } = conv;  // Destructure the conversation object to get id and metadata
+                const { conversation_id, metadata } = conv;
                 if (this.socket !== null) {
                   conversations.push(new Conversation(conversation_id, this.socket, metadata));
                 }
               }
-
               resolve(conversations);
             }
           } catch (err) {

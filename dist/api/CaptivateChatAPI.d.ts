@@ -40,11 +40,16 @@ export declare class CaptivateChatAPI {
      */
     getConversation(conversationId: string): Conversation | void;
     /**
-   * Retrieves user conversations based on their userId and returns actual conversation objects.
-   * @param userId - The unique identifier for the user.
-   * @returns A promise resolving to a list of Conversation instances.
-   */
-    getUserConversations(userId: string): Promise<Conversation[]>;
+     * Retrieves user conversations. Uses v2 if filter or pagination is provided, otherwise uses v1.
+     * @param userId - The unique identifier for the user.
+     * @param filter - Optional filter object (triggers v2 if provided).
+     * @param pagination - Optional pagination object (triggers v2 if provided).
+     * @returns A promise resolving to a list of Conversation instances.
+     */
+    getUserConversations(userId: string, filter?: object, pagination?: {
+        page?: string | number;
+        limit?: string | number;
+    }): Promise<Conversation[]>;
     /**
      * Deletes all conversations for a specific user.
      * @param userId - The unique identifier for the user whose conversations will be deleted.
