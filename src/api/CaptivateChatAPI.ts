@@ -197,34 +197,41 @@ export class CaptivateChatAPI {
   }
 
   /**
-   * Retrieves user conversations. Uses v2 if filter or pagination is provided, otherwise uses v1.
-   * @param userId - The unique identifier for the user.
-   * @param filter - Optional filter object (triggers v2 if provided).
-   * @param pagination - Optional pagination object (triggers v2 if provided).
+   * Retrieves user conversations. Uses v2 if filter, search, or pagination is provided, otherwise uses v1.
+   * @param options - Options object containing userId and optional filter, search, and pagination.
    * @returns A promise resolving to a list of Conversation instances.
    */
-  public async getUserConversations(
-    userId: string,
-    filter: object = {},
-    pagination: { page?: string | number; limit?: string | number } = {}
-  ): Promise<Conversation[]> {
+  public async getUserConversations(options: {
+    userId: string;
+    filter?: object;
+    search?: object;
+    pagination?: { page?: string | number; limit?: string | number };
+  }): Promise<Conversation[]> {
+    const { userId, filter = {}, search = {}, pagination = {} } = options;
     const conversations: Conversation[] = [];
-    const useV2 = (filter && Object.keys(filter).length > 0) || (pagination && Object.keys(pagination).length > 0);
+    const useV2 = (filter && Object.keys(filter).length > 0) || (search && Object.keys(search).length > 0) || (pagination && Object.keys(pagination).length > 0);
     return new Promise((resolve, reject) => {
       try {
         if (useV2) {
+          const eventPayload: any = { userId };
+          if (filter && Object.keys(filter).length > 0) {
+            eventPayload.filter = filter;
+          }
+          if (search && Object.keys(search).length > 0) {
+            eventPayload.search = search;
+          }
+          if (pagination && Object.keys(pagination).length > 0) {
+            eventPayload.pagination = pagination;
+          }
+          
           this._send({
             action: 'sendMessage',
             event: {
               event_type: 'get_user_conversations_v2',
-              event_payload: {
-                userId,
-                filter,
-                pagination,
-              },
+              event_payload: eventPayload,
             },
           });
-        } else { //For legacy support
+        } else {
           this._send({
             action: 'sendMessage',
             event: {

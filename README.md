@@ -122,11 +122,17 @@ console.log('Deleted conversation');
 
 ### Retrieve User Conversations
 
-Fetch a list of conversations associated with a specific user ID. This method now supports both legacy (v1) and advanced (v2) usage with filter and pagination:
+Fetch a list of conversations associated with a specific user ID. This method supports both legacy (v1) and advanced (v2) usage with filter, search, and pagination. Both versions return the same response format:
+
+**Note:** 
+- `search` parameter uses wildcard matching by default (e.g., "fred" matches "frederick", "alfred", etc.)
+- `filter` parameter uses exact matching only (e.g., "fred" only matches "fred")
 
 **Legacy usage (v1):**
 ```typescript
-const conversations = await api.getUserConversations('user123');
+const conversations = await api.getUserConversations({
+  userId: 'user123'
+});
 console.log('User Conversations:', conversations);
 /*
  Returns Conversation Object
@@ -135,12 +141,39 @@ console.log('User Conversations:', conversations);
 
 **Advanced usage (v2, with filter and pagination):**
 ```typescript
-const conversations = await api.getUserConversations(
-  'user123',
-  { mode: 'dbFred' }, // filter (optional)
-  { page: '1', limit: '50' } // pagination (optional)
-);
+const conversations = await api.getUserConversations({
+  userId: 'user123',
+  filter: { mode: 'dbfred' }, // exact match only
+  pagination: { page: '1', limit: '10' }
+});
 console.log('Filtered & Paginated User Conversations:', conversations);
+/*
+ Returns Conversation Object
+ */
+```
+
+**Advanced usage (v2, with search and pagination):**
+```typescript
+const conversations = await api.getUserConversations({
+  userId: 'user123',
+  search: { mode: 'fred' }, // wildcard match (matches "frederick", "alfred", etc.)
+  pagination: { page: '1', limit: '10' }
+});
+console.log('Searched & Paginated User Conversations:', conversations);
+/*
+ Returns Conversation Object
+ */
+```
+
+**Advanced usage (v2, with both filter and search):**
+```typescript
+const conversations = await api.getUserConversations({
+  userId: 'user123',
+  filter: { mode: 'dbfred' }, // exact match
+  search: { mode: 'fred' }, // wildcard match
+  pagination: { page: '1', limit: '10' }
+});
+console.log('Filtered, Searched & Paginated User Conversations:', conversations);
 /*
  Returns Conversation Object
  */
@@ -245,8 +278,8 @@ The API supports the following environments:
 - **`getConversation(conversationId: string): Conversation`**  
   Retrieves an existing conversation by its ID.
 
-- **`getUserConversations(userId: string, filter?: object, pagination?: { page?: string | number; limit?: string | number }): Promise<Conversation[]>`**  
-  Fetches a list of conversations associated with the given user ID. If `filter` or `pagination` is provided, uses the v2 API for advanced querying. Returns Conversation Object
+- **`getUserConversations(options: { userId: string; filter?: object; search?: object; pagination?: { page?: string | number; limit?: string | number } }): Promise<Conversation[]>`**  
+  Fetches a list of conversations associated with the given user ID. If `filter`, `search`, or `pagination` is provided, uses the v2 API for advanced querying. Both `filter` and `search` parameters are supported for different querying needs. Returns Conversation Object
 
 - **`deleteUserConversations(userId: string): Promise<void>`**  
   Deletes all conversations associated with the given user ID
