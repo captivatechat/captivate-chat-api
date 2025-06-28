@@ -198,15 +198,23 @@ export class CaptivateChatAPI {
 
   /**
    * Retrieves user conversations. Uses v2 if filter, search, or pagination is provided, otherwise uses v1.
-   * @param options - Options object containing userId and optional filter, search, and pagination.
+   * Supports both legacy API (userId string) and new API (options object) for backward compatibility.
+   * @param userIdOrOptions - Either a userId string (legacy) or options object containing userId and optional filter, search, and pagination.
    * @returns A promise resolving to a list of Conversation instances.
    */
-  public async getUserConversations(options: {
-    userId: string;
-    filter?: object;
-    search?: object;
-    pagination?: { page?: string | number; limit?: string | number };
-  }): Promise<Conversation[]> {
+  public async getUserConversations(
+    userIdOrOptions: string | {
+      userId: string;
+      filter?: object;
+      search?: object;
+      pagination?: { page?: string | number; limit?: string | number };
+    }
+  ): Promise<Conversation[]> {
+    // Handle backward compatibility - if string is passed, treat as userId
+    const options = typeof userIdOrOptions === 'string' 
+      ? { userId: userIdOrOptions }
+      : userIdOrOptions;
+    
     const { userId, filter = {}, search = {}, pagination = {} } = options;
     const conversations: Conversation[] = [];
     const useV2 = (filter && Object.keys(filter).length > 0) || (search && Object.keys(search).length > 0) || (pagination && Object.keys(pagination).length > 0);
