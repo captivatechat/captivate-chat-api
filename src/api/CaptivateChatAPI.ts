@@ -200,7 +200,7 @@ export class CaptivateChatAPI {
    * Retrieves user conversations. Uses v2 if filter, search, or pagination is provided, otherwise uses v1.
    * Supports both legacy API (userId string) and new API (options object) for backward compatibility.
    * @param userIdOrOptions - Either a userId string (legacy) or options object containing userId and optional filter, search, and pagination.
-   * @returns A promise resolving to a list of Conversation instances.
+   * @returns A promise resolving to an object with a list of Conversation instances and optional pagination data.
    */
   public async getUserConversations(
     userIdOrOptions: string | {
@@ -209,7 +209,14 @@ export class CaptivateChatAPI {
       search?: object;
       pagination?: { page?: string | number; limit?: string | number };
     }
-  ): Promise<Conversation[]> {
+  ): Promise<{ conversations: Conversation[]; pagination?: {
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  } }> {
     // Handle backward compatibility - if string is passed, treat as userId
     const options = typeof userIdOrOptions === 'string' 
       ? { userId: userIdOrOptions }
@@ -217,6 +224,14 @@ export class CaptivateChatAPI {
     
     const { userId, filter = {}, search = {}, pagination = {} } = options;
     const conversations: Conversation[] = [];
+    let paginationData: {
+      hasNextPage: boolean;
+      hasPrevPage: boolean;
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
+    } | undefined = undefined;
     const useV2 = (filter && Object.keys(filter).length > 0) || (search && Object.keys(search).length > 0) || (pagination && Object.keys(pagination).length > 0);
     return new Promise((resolve, reject) => {
       try {
@@ -263,7 +278,11 @@ export class CaptivateChatAPI {
                   conversations.push(new Conversation(conversation_id, this.socket, metadata));
                 }
               }
-              resolve(conversations);
+              // Extract pagination data if present
+              if (message.event.event_payload.pagination) {
+                paginationData = message.event.event_payload.pagination;
+              }
+              resolve({ conversations, pagination: paginationData });
             }
           } catch (err) {
             console.error('Error processing message:', err);
