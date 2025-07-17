@@ -208,6 +208,7 @@ export class CaptivateChatAPI {
       filter?: object;
       search?: object;
       pagination?: { page?: string | number; limit?: string | number };
+      apiKeys?: string[]; // Restore multi-api-key support
     }
   ): Promise<{ conversations: Conversation[]; pagination?: {
     hasNextPage: boolean;
@@ -222,7 +223,7 @@ export class CaptivateChatAPI {
       ? { userId: userIdOrOptions }
       : userIdOrOptions;
     
-    const { userId, filter = {}, search = {}, pagination = {} } = options;
+    const { userId, filter = {}, search = {}, pagination = {}, apiKeys } = options;
     const conversations: Conversation[] = [];
     let paginationData: {
       hasNextPage: boolean;
@@ -232,7 +233,7 @@ export class CaptivateChatAPI {
       total: number;
       totalPages: number;
     } | undefined = undefined;
-    const useV2 = (filter && Object.keys(filter).length > 0) || (search && Object.keys(search).length > 0) || (pagination && Object.keys(pagination).length > 0);
+    const useV2 = (filter && Object.keys(filter).length > 0) || (search && Object.keys(search).length > 0) || (pagination && Object.keys(pagination).length > 0) || (apiKeys && Array.isArray(apiKeys) && apiKeys.length > 0);
     return new Promise((resolve, reject) => {
       try {
         if (useV2) {
@@ -246,7 +247,9 @@ export class CaptivateChatAPI {
           if (pagination && Object.keys(pagination).length > 0) {
             eventPayload.pagination = pagination;
           }
-          
+          if (apiKeys && Array.isArray(apiKeys) && apiKeys.length > 0) {
+            eventPayload.apiKeys = apiKeys;
+          }
           this._send({
             action: 'sendMessage',
             event: {
@@ -273,9 +276,9 @@ export class CaptivateChatAPI {
               this.socket?.removeEventListener('message', onMessage);
               const payload = message.event.event_payload.conversations;
               for (const conv of payload) {
-                const { conversation_id, metadata } = conv;
+                const { conversation_id, metadata, apiKey } = conv;
                 if (this.socket !== null) {
-                  conversations.push(new Conversation(conversation_id, this.socket, metadata));
+                  conversations.push(new Conversation(conversation_id, this.socket, metadata, apiKey || this.apiKey));
                 }
               }
               // Extract pagination data if present
@@ -349,4 +352,13 @@ export class CaptivateChatAPI {
     });
   }
 
+  /**
+   * Public getter for the WebSocket instance.
+   */
+  public getSocket() {
+    return this.socket;
+  }
+
 }
+
+

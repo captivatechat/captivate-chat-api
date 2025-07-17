@@ -53,6 +53,7 @@ export declare class CaptivateChatAPI {
             page?: string | number;
             limit?: string | number;
         };
+        apiKeys?: string[];
     }): Promise<{
         conversations: Conversation[];
         pagination?: {
@@ -70,4 +71,8 @@ export declare class CaptivateChatAPI {
      * @returns A promise that resolves when all conversations are successfully deleted.
      */
     deleteUserConversations(userId: string): Promise<void>;
+    /**
+     * Public getter for the WebSocket instance.
+     */
+    getSocket(): WebSocket | null;
 }
