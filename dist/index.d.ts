@@ -1,2 +1,3 @@
 import { CaptivateChatAPI } from './api/CaptivateChatAPI';
-export default CaptivateChatAPI;
+import { CaptivateChatManager } from './api/CaptivateChatManager';
+export { CaptivateChatAPI, CaptivateChatManager };

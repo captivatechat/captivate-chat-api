@@ -6,6 +6,7 @@ interface Action {
  * Represents a conversation session, handling WebSocket communication and event management.
  */
 export declare class Conversation {
+    apiKey: string;
     private conversationId;
     private socket;
     private listeners;
@@ -16,7 +17,7 @@ export declare class Conversation {
      * @param conversationId - The unique identifier of the conversation.
      * @param socket - The WebSocket instance for communication.
      */
-    constructor(conversationId: string, socket: WebSocket, metadata?: object);
+    constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string);
     private handleMessage;
     restartListeners(): void;
     /**

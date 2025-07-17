@@ -200,7 +200,7 @@ export class CaptivateChatAPI {
    * Retrieves user conversations. Uses v2 if filter, search, or pagination is provided, otherwise uses v1.
    * Supports both legacy API (userId string) and new API (options object) for backward compatibility.
    * @param userIdOrOptions - Either a userId string (legacy) or options object containing userId and optional filter, search, and pagination.
-   * @returns A promise resolving to a list of Conversation instances.
+   * @returns A promise resolving to an object with a list of Conversation instances and optional pagination data.
    */
   public async getUserConversations(
     userIdOrOptions: string | {
@@ -208,16 +208,32 @@ export class CaptivateChatAPI {
       filter?: object;
       search?: object;
       pagination?: { page?: string | number; limit?: string | number };
+      apiKeys?: string[]; // Restore multi-api-key support
     }
-  ): Promise<Conversation[]> {
+  ): Promise<{ conversations: Conversation[]; pagination?: {
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  } }> {
     // Handle backward compatibility - if string is passed, treat as userId
     const options = typeof userIdOrOptions === 'string' 
       ? { userId: userIdOrOptions }
       : userIdOrOptions;
     
-    const { userId, filter = {}, search = {}, pagination = {} } = options;
+    const { userId, filter = {}, search = {}, pagination = {}, apiKeys } = options;
     const conversations: Conversation[] = [];
-    const useV2 = (filter && Object.keys(filter).length > 0) || (search && Object.keys(search).length > 0) || (pagination && Object.keys(pagination).length > 0);
+    let paginationData: {
+      hasNextPage: boolean;
+      hasPrevPage: boolean;
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
+    } | undefined = undefined;
+    const useV2 = (filter && Object.keys(filter).length > 0) || (search && Object.keys(search).length > 0) || (pagination && Object.keys(pagination).length > 0) || (apiKeys && Array.isArray(apiKeys) && apiKeys.length > 0);
     return new Promise((resolve, reject) => {
       try {
         if (useV2) {
@@ -231,7 +247,9 @@ export class CaptivateChatAPI {
           if (pagination && Object.keys(pagination).length > 0) {
             eventPayload.pagination = pagination;
           }
-          
+          if (apiKeys && Array.isArray(apiKeys) && apiKeys.length > 0) {
+            eventPayload.apiKeys = apiKeys;
+          }
           this._send({
             action: 'sendMessage',
             event: {
@@ -258,12 +276,16 @@ export class CaptivateChatAPI {
               this.socket?.removeEventListener('message', onMessage);
               const payload = message.event.event_payload.conversations;
               for (const conv of payload) {
-                const { conversation_id, metadata } = conv;
+                const { conversation_id, metadata, apiKey } = conv;
                 if (this.socket !== null) {
-                  conversations.push(new Conversation(conversation_id, this.socket, metadata));
+                  conversations.push(new Conversation(conversation_id, this.socket, metadata, apiKey || this.apiKey));
                 }
               }
-              resolve(conversations);
+              // Extract pagination data if present
+              if (message.event.event_payload.pagination) {
+                paginationData = message.event.event_payload.pagination;
+              }
+              resolve({ conversations, pagination: paginationData });
             }
           } catch (err) {
             console.error('Error processing message:', err);
@@ -330,4 +352,13 @@ export class CaptivateChatAPI {
     });
   }
 
+  /**
+   * Public getter for the WebSocket instance.
+   */
+  public getSocket() {
+    return this.socket;
+  }
+
 }
+
+

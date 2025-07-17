@@ -1,5 +1,12 @@
-import { CaptivateChatAPI } from './api/CaptivateChatAPI';  // Import the CaptivateChatAPI class
+import { CaptivateChatAPI } from './api/CaptivateChatAPI';
+import { CaptivateChatManager } from './api/CaptivateChatManager';
 
+export { CaptivateChatAPI, CaptivateChatManager };
 
-// Export the class as default
-export default CaptivateChatAPI;
+// Attach to window for browser global usage
+if (typeof window !== 'undefined') {
+  // @ts-ignore
+  window.CaptivateChatAPI = CaptivateChatAPI;
+  // @ts-ignore
+  window.CaptivateChatManager = CaptivateChatManager;
+}

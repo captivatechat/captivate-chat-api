@@ -5,11 +5,6 @@ module.exports = {
     output: {
         path: path.resolve(__dirname, 'dist'),
         filename: 'captivate-chat-api.js',
-        library: {
-            name: 'CaptivateChatAPI',
-            type: 'umd',
-            export: 'default'
-        },
         globalObject: 'this'
     },
     module: {

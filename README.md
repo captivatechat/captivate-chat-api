@@ -12,6 +12,21 @@ npm install captivate-chat-api
 
 ## Usage
 
+### Single API Key Usage (CaptivateChatAPI)
+
+Most users will only need to use a single API key. Use the `CaptivateChatAPI` class for all standard chat operations:
+
+```typescript
+import { CaptivateChatAPI } from 'captivate-chat-api';
+
+const api = new CaptivateChatAPI('YOUR_API_KEY');
+await api.connect();
+
+const conversation = await api.createConversation('user123');
+```
+
+You can use all the features described below (creating conversations, sending messages, etc.) with a single API key using this class.
+
 ### Basic Setup
 
 Import and initialize the API client:
@@ -188,26 +203,38 @@ console.log('Filtered, Searched & Paginated User Conversations:', conversations)
  */
 ```
 
-**Mixed usage examples:**
+### Multi-API-Key Support (CaptivateChatManager)
+
+For advanced use cases where you need to fetch and interact with conversations across multiple API keys, use the `CaptivateChatManager` class. This manager handles multiple `CaptivateChatAPI` instances and ensures each `Conversation` uses the correct socket for its API key.
+
+**Note:** Most users do not need this. Only use the manager if you need to aggregate or interact with conversations across multiple API keys.
+
+**Example:**
 ```typescript
-// Just pagination (v2)
-const conversations = await api.getUserConversations({
-  userId: 'user123',
-  pagination: { page: '1', limit: '50' }
+import { CaptivateChatManager } from 'captivate-chat-api';
+
+const apiKeys = [
+  'T7Q00YH-KJCMD00-HEST4R9-8ADH9RQ',
+  'P1QRBUN-HMCMZ1A-K97C3KV-501BQTE'
+];
+
+const manager = new CaptivateChatManager(apiKeys, 'dev');
+await manager.connectAll();
+
+const { conversations, pagination } = await manager.getUserConversations({
+  userId: '66f016f09d5961b684ce05f0',
+  apiKeys,
+  pagination: { page: '1', limit: '90' }
 });
 
-// Just filter (v2)
-const conversations = await api.getUserConversations({
-  userId: 'user123',
-  filter: { status: 'active' }
-});
-
-// Just search (v2)
-const conversations = await api.getUserConversations({
-  userId: 'user123',
-  search: { title: 'meeting' }
-});
+for (const conv of conversations) {
+  const transcript = await conv.getTranscript();
+  console.log(`Transcript for ${conv.getConversationId()}:`, transcript);
+}
 ```
+
+- Use `CaptivateChatAPI` for single-key scenarios.
+- Use `CaptivateChatManager` for multi-key scenarios.
 
 ### Delete User Conversations
 
@@ -321,8 +348,8 @@ The API supports the following environments:
 - **`getConversation(conversationId: string): Conversation`**  
   Retrieves an existing conversation by its ID.
 
-- **`getUserConversations(userIdOrOptions: string | { userId: string; filter?: object; search?: object; pagination?: { page?: string | number; limit?: string | number } }): Promise<Conversation[]>`**  
-  Fetches a list of conversations associated with the given user ID. Supports backward compatibility with string parameter or options object. If `filter`, `search`, or `pagination` is provided, uses the v2 API for advanced querying. Both `filter` and `search` parameters are supported for different querying needs. Returns Conversation Object
+- **`getUserConversations(userIdOrOptions: string | { userId: string; filter?: object; search?: object; pagination?: { page?: string | number; limit?: string | number }; apiKeys?: string[] }): Promise<Conversation[]>`**  
+  Fetches a list of conversations associated with the given user ID. Supports backward compatibility with string parameter or options object. If `filter`, `search`, `pagination`, or `apiKeys` is provided, uses the v2 API for advanced querying. Both `filter` and `search` parameters are supported for different querying needs. The `apiKeys` parameter allows grouping conversations by API key. Returns Conversation Object
 
 - **`deleteUserConversations(userId: string): Promise<void>`**  
   Deletes all conversations associated with the given user ID

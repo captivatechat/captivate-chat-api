@@ -7,6 +7,7 @@ interface Action {
  * Represents a conversation session, handling WebSocket communication and event management.
  */
 export class Conversation {
+  public apiKey: string;
   private conversationId: string;
   private socket: WebSocket;
   private listeners: Map<string, Function[]>;
@@ -17,8 +18,9 @@ export class Conversation {
    * @param conversationId - The unique identifier of the conversation.
    * @param socket - The WebSocket instance for communication.
    */
-  constructor(conversationId: string, socket: WebSocket, metadata?: object) {
-    this.conversationId = conversationId;
+  constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string) {
+    this.apiKey = apiKey || '';
+    this.conversationId = conversation_id;
     this.socket = socket;
     this.listeners = new Map();
     this.metadata = metadata || null; // If metadata is provided, use it; otherwise, set to null.
