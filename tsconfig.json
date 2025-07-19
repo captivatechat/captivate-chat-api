@@ -10,7 +10,9 @@
     "resolveJsonModule": true,
     "moduleResolution": "node",
     "jsx": "react", // If you're using React JSX, or "react-jsx" for newer versions
-    "isolatedModules": true
+    "isolatedModules": true,
+    "declarationDir": "dist",
+    "emitDeclarationOnly": false
   },
   "ts-node": {
     "esm": true
