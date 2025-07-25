@@ -64,6 +64,19 @@ Create a new conversation with the following options:
    );
    ```
 
+3. **(New)** Include private metadata (not visible to frontend):
+   ```typescript
+   const conversation = await api.createConversation(
+     'user123',
+     { name: 'John Doe' },
+     { publicKey: 'visible' },
+     'user-first',
+     { secretKey: 'hidden', internalFlag: true } // privateMetadata
+   );
+   ```
+   - The `privateMetadata` parameter is optional and, if provided, will be sent under the `private` key in the metadata. This is intended for backend/internal use and will not be returned to the frontend when fetching metadata.
+   - This change is **backwards compatible**: existing usages of `createConversation` do not need to change.
+
 ### Send and Receive Messages
 
 1. Send a message to the conversation:
@@ -366,6 +379,13 @@ The API supports the following environments:
 
 - **`setMetadata(metadata: object): Promise<void>`**  
   Updates metadata for the conversation.
+
+- **`setPrivateMetadata(privateMeta: object): Promise<void>`**  
+  **(New)** Updates private metadata for the conversation (not visible to frontend). Example:
+  ```typescript
+  await conversation.setPrivateMetadata({ secret: 'mySecretValue', internalFlag: true });
+  ```
+  This will set the metadata under the `private` key. The private metadata is intended for backend/internal use only and will not be returned to the frontend when fetching metadata.
 
 - **`getMetadata(): Promise<object>`**  
   Returns the metadata for that current conversation session

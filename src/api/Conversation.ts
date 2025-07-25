@@ -167,6 +167,19 @@ export class Conversation {
     });
   }
 
+  /**
+ * Sets private metadata for the conversation (not visible to frontend).
+ * @param privateMeta - An object containing the private metadata to set.
+ * @returns A promise that resolves when the metadata update is successful.
+ */
+public async setPrivateMetadata(privateMeta: object): Promise<void> {
+  if (typeof privateMeta !== 'object' || privateMeta === null) {
+    throw new Error('Private metadata must be a non-null object.');
+  }
+  // Reuse the setMetadata logic, but wrap in { private: ... }
+  return this.setMetadata({ private: privateMeta });
+}
+
 
   /**
    * Sends an action to the conversation.

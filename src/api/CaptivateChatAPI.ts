@@ -96,7 +96,7 @@ export class CaptivateChatAPI {
         };
 
         this.socket.onclose = (event) => {
-          console.log('WebSocket connection closed with');
+          console.log('WebSocket connection closed with', event.code);
           if (event.code !== 1000) { 
             console.log('Attempting to reconnect...');
             setTimeout(() => this.connect(), 3000); // Reconnect after 3 seconds
@@ -119,11 +119,17 @@ export class CaptivateChatAPI {
   public async createConversation(
     userId: string,
     userBasicInfo: object = {},
-    metadata: object = {},
-    autoConversationStart: 'bot-first' | 'user-first' = 'bot-first'
+    metadata: Record<string, any> = {},
+    autoConversationStart: 'bot-first' | 'user-first' = 'bot-first',
+    privateMetadata: object = {}
   ): Promise<Conversation> {
     return new Promise((resolve, reject) => {
       try {
+        // Merge privateMetadata into metadata under the 'private' key if provided
+        const fullMetadata: Record<string, any> = { ...metadata };
+        if (privateMetadata && Object.keys(privateMetadata).length > 0) {
+          fullMetadata.private = privateMetadata;
+        }
         this._send({
           action: 'sendMessage',
           event: {
@@ -131,7 +137,7 @@ export class CaptivateChatAPI {
             event_payload: {
               userId,
               userBasicInfo,
-              metadata
+              metadata: fullMetadata
             },
           },
         });
