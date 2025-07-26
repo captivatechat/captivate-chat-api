@@ -8,6 +8,9 @@ export declare class CaptivateChatAPI {
     private url;
     private socket;
     private conversations;
+    private reconnectAttempts;
+    private maxReconnectAttempts;
+    private reconnectDelay;
     /**
      * Creates an instance of CaptivateChatAPI.
      * @param apiKey - The API key for authentication.
@@ -32,7 +35,7 @@ export declare class CaptivateChatAPI {
      * @param autoConversationStart - Mode to auto-start the conversation ('bot-first' or 'user-first').
      * @returns A promise that resolves to the created Conversation instance.
      */
-    createConversation(userId: string, userBasicInfo?: object, metadata?: object, autoConversationStart?: 'bot-first' | 'user-first'): Promise<Conversation>;
+    createConversation(userId: string, userBasicInfo?: object, metadata?: Record<string, any>, autoConversationStart?: 'bot-first' | 'user-first', privateMetadata?: object): Promise<Conversation>;
     /**
      * Retrieves an existing conversation by its ID or creates a new one if not found.
      * @param conversationId - The unique ID of the conversation.
@@ -75,4 +78,22 @@ export declare class CaptivateChatAPI {
      * Public getter for the WebSocket instance.
      */
     getSocket(): WebSocket | null;
+    /**
+     * Checks if the WebSocket connection is active and open.
+     * @returns True if the socket is open, false otherwise.
+     */
+    isSocketActive(): boolean;
+    /**
+     * Attempts to reconnect to the WebSocket server.
+     * @returns A promise that resolves when reconnection is successful.
+     */
+    reconnect(): Promise<void>;
+    /**
+     * Static factory method to create and connect a CaptivateChatAPI instance.
+     * The returned instance is automatically guarded: all method calls will check socket state and auto-reconnect if needed.
+     * @param apiKey - The API key for authentication.
+     * @param mode - The mode of operation ('prod' or 'dev').
+     * @returns A promise that resolves to a connected and guarded CaptivateChatAPI instance.
+     */
+    static create(apiKey: string, mode?: 'prod' | 'dev'): Promise<CaptivateChatAPI>;
 }

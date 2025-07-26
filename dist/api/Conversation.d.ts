@@ -59,6 +59,12 @@ export declare class Conversation {
     */
     setMetadata(metadata: object): Promise<void>;
     /**
+   * Sets private metadata for the conversation (not visible to frontend).
+   * @param privateMeta - An object containing the private metadata to set.
+   * @returns A promise that resolves when the metadata update is successful.
+   */
+    setPrivateMetadata(privateMeta: object): Promise<void>;
+    /**
      * Sends an action to the conversation.
      * @param actionId - The unique ID of the action to send.
      * @param data - Optional data associated with the action.

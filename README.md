@@ -31,6 +31,16 @@ You can use all the features described below (creating conversations, sending me
 
 Import and initialize the API client:
 
+**Option 1: Using the static factory method (Recommended)**
+```typescript
+import { CaptivateChatAPI } from 'captivate-chat-api';
+
+// Create and connect in one step
+const api = await CaptivateChatAPI.create('YOUR_API_KEY');
+// API is ready to use!
+```
+
+**Option 2: Manual instantiation and connection**
 ```typescript
 import { CaptivateChatAPI } from 'captivate-chat-api';
 
@@ -63,6 +73,19 @@ Create a new conversation with the following options:
      'user-first' // Start the conversation with user-first or bot-first mode
    );
    ```
+
+3. **(New)** Include private metadata (not visible to frontend):
+   ```typescript
+   const conversation = await api.createConversation(
+     'user123',
+     { name: 'John Doe' },
+     { publicKey: 'visible' },
+     'user-first',
+     { secretKey: 'hidden', internalFlag: true } // privateMetadata
+   );
+   ```
+   - The `privateMetadata` parameter is optional and, if provided, will be sent under the `private` key in the metadata. This is intended for backend/internal use and will not be returned to the frontend when fetching metadata.
+   - This change is **backwards compatible**: existing usages of `createConversation` do not need to change.
 
 ### Send and Receive Messages
 
@@ -209,13 +232,37 @@ For advanced use cases where you need to fetch and interact with conversations a
 
 **Note:** Most users do not need this. Only use the manager if you need to aggregate or interact with conversations across multiple API keys.
 
-**Example:**
+**Option 1: Using the static factory method (Recommended)**
 ```typescript
 import { CaptivateChatManager } from 'captivate-chat-api';
 
 const apiKeys = [
-  'T7Q00YH-KJCMD00-HEST4R9-8ADH9RQ',
-  'P1QRBUN-HMCMZ1A-K97C3KV-501BQTE'
+  'YOUR_API_KEY_1',
+  'YOUR_API_KEY_2'
+];
+
+// Create and connect all instances in one step
+const manager = await CaptivateChatManager.create(apiKeys, 'dev');
+
+const { conversations, pagination } = await manager.getUserConversations({
+  userId: '66f016f09d5961b684ce05f0',
+  apiKeys,
+  pagination: { page: '1', limit: '90' }
+});
+
+for (const conv of conversations) {
+  const transcript = await conv.getTranscript();
+  console.log(`Transcript for ${conv.getConversationId()}:`, transcript);
+}
+```
+
+**Option 2: Manual instantiation and connection**
+```typescript
+import { CaptivateChatManager } from 'captivate-chat-api';
+
+const apiKeys = [
+  'YOUR_API_KEY_1',
+  'YOUR_API_KEY_2'
 ];
 
 const manager = new CaptivateChatManager(apiKeys, 'dev');
@@ -258,10 +305,8 @@ import { CaptivateChatAPI } from 'captivate-chat-api';
 
 (async () => {
   try {
-    const api = new CaptivateChatAPI('YOUR_API_KEY', 'prod');
-
-    // Connect to the API
-    await api.connect();
+    // Create and connect to the API in one step
+    const api = await CaptivateChatAPI.create('YOUR_API_KEY', 'prod');
     console.log('Connected to CaptivateChat API');
 
     // Create a conversation
@@ -338,9 +383,15 @@ The API supports the following environments:
 #### Methods
 - **`constructor(apiKey: string, mode: 'prod' | 'dev' = 'prod')`**  
   Initializes the API with the given API key and mode.
+
+- **`static create(apiKey: string, mode: 'prod' | 'dev' = 'prod'): Promise<CaptivateChatAPI>`**  
+  **(New)** Static factory method that creates and connects a CaptivateChatAPI instance. Returns a promise that resolves to a ready-to-use, connected API instance.
   
 - **`connect(): Promise<void>`**  
   Connects to the WebSocket server.
+
+- **`isSocketActive(): boolean`**  
+  **(New)** Checks if the WebSocket connection is active and open. Returns true if the socket is open, false otherwise.
 
 - **`createConversation(userId: string, userBasicInfo?: object, userData?: object, autoConversationStart?: 'bot-first' | 'user-first'): Promise<Conversation>`**  
   Creates a new conversation.
@@ -366,6 +417,13 @@ The API supports the following environments:
 
 - **`setMetadata(metadata: object): Promise<void>`**  
   Updates metadata for the conversation.
+
+- **`setPrivateMetadata(privateMeta: object): Promise<void>`**  
+  **(New)** Updates private metadata for the conversation (not visible to frontend). Example:
+  ```typescript
+  await conversation.setPrivateMetadata({ secret: 'mySecretValue', internalFlag: true });
+  ```
+  This will set the metadata under the `private` key. The private metadata is intended for backend/internal use only and will not be returned to the frontend when fetching metadata.
 
 - **`getMetadata(): Promise<object>`**  
   Returns the metadata for that current conversation session

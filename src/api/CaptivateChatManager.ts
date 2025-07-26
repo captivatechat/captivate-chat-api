@@ -12,6 +12,22 @@ export class CaptivateChatManager {
     }
   }
 
+  /**
+   * Static factory method to create and connect all CaptivateChatAPI instances.
+   * All apiInstances are created using CaptivateChatAPI.create, so they are guarded and connected.
+   * @param apiKeys - Array of API keys to create instances for.
+   * @param mode - The mode of operation ('prod' or 'dev').
+   * @returns A promise that resolves to a connected CaptivateChatManager instance with guarded APIs.
+   */
+  static async create(apiKeys: ApiKey[], mode: 'prod' | 'dev' = 'prod'): Promise<CaptivateChatManager> {
+    const manager = Object.create(CaptivateChatManager.prototype) as CaptivateChatManager;
+    manager.apiInstances = {};
+    for (const key of apiKeys) {
+      manager.apiInstances[key] = await CaptivateChatAPI.create(key, mode);
+    }
+    return manager;
+  }
+
   // Connect all API instances
   async connectAll(): Promise<void> {
     await Promise.all(
