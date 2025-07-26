@@ -21,6 +21,48 @@ else {
   }
 }
 
+// Helper to wait for socket to be open (not used in proxy guard, but kept for reference)
+async function waitForSocketOpen(socket: WebSocket, timeout = 10000): Promise<void> {
+  if (socket.readyState === WebSocketImpl.OPEN) return;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('WebSocket did not open in time')), timeout);
+    socket.addEventListener('open', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+// Proxy guard function for automatic socket state checking and reconnection
+function withSocketGuard<T extends object>(instance: T): T {
+  return new Proxy(instance, {
+    get(target, prop, receiver) {
+      const orig = target[prop as keyof T];
+      if (
+        typeof orig === 'function' &&
+        !['isSocketActive', 'connect', 'reconnect', 'getSocket'].includes(prop as string)
+      ) {
+        return async function (...args: any[]) {
+          if (typeof (target as any)['isSocketActive'] === 'function' && !(target as any)['isSocketActive']()) {
+            console.log('Socket not active, attempting to reconnect...');
+            try {
+              if (typeof (target as any)['reconnect'] === 'function') {
+                await (target as any)['reconnect']();
+              } else {
+                throw new Error('Reconnect method not available');
+              }
+            } catch (error: any) {
+              throw new Error(`Socket reconnection failed. Cannot execute ${String(prop)}: ${error.message}`);
+            }
+          }
+          return (orig as Function).apply(target, args);
+        };
+      }
+      return orig;
+    }
+  });
+}
+
 /**
  * CaptivateChatAPI class for managing conversations through WebSocket connections.
  */
@@ -30,6 +72,9 @@ export class CaptivateChatAPI {
   private url: string;
   private socket: InstanceType<typeof WebSocketImpl> | null;
   private conversations: Map<string, Conversation>;
+  private reconnectAttempts: number = 0;
+  private maxReconnectAttempts: number = 5;
+  private reconnectDelay: number = 3000;
 
   /**
    * Creates an instance of CaptivateChatAPI.
@@ -148,7 +193,7 @@ export class CaptivateChatAPI {
             if (message.event?.event_type === 'conversation_start_success') {
               const conversationId = message.event.event_payload.conversation_id;
               this.socket?.removeEventListener('message', onMessage);
-              const conversation = new Conversation(conversationId, this.socket!);
+              const conversation = withSocketGuard(new Conversation(conversationId, this.socket!));
               this.conversations.set(conversationId, conversation);
               if (autoConversationStart === 'bot-first') {
                 conversation
@@ -189,7 +234,7 @@ export class CaptivateChatAPI {
       // If conversation is not found, check if socket is initialized
       if (this.socket !== null) {
         // If socket is initialized, create the conversation
-        conversation = new Conversation(conversationId, this.socket);
+        conversation = withSocketGuard(new Conversation(conversationId, this.socket));
         this.conversations.set(conversationId, conversation);
       } else {
         // Handle the case where socket is not initialized
@@ -284,7 +329,7 @@ export class CaptivateChatAPI {
               for (const conv of payload) {
                 const { conversation_id, metadata, apiKey } = conv;
                 if (this.socket !== null) {
-                  conversations.push(new Conversation(conversation_id, this.socket, metadata, apiKey || this.apiKey));
+                  conversations.push(withSocketGuard(new Conversation(conversation_id, this.socket, metadata, apiKey || this.apiKey)));
                 }
               }
               // Extract pagination data if present
@@ -363,6 +408,53 @@ export class CaptivateChatAPI {
    */
   public getSocket() {
     return this.socket;
+  }
+
+  /**
+   * Checks if the WebSocket connection is active and open.
+   * @returns True if the socket is open, false otherwise.
+   */
+  public isSocketActive(): boolean {
+    return !!this.socket && this.socket.readyState === WebSocketImpl.OPEN;
+  }
+
+  /**
+   * Attempts to reconnect to the WebSocket server.
+   * @returns A promise that resolves when reconnection is successful.
+   */
+  public async reconnect(): Promise<void> {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      throw new Error(`Max reconnection attempts (${this.maxReconnectAttempts}) reached`);
+    }
+    this.reconnectAttempts++;
+    console.log(`Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    try {
+      await this.connect();
+      this.reconnectAttempts = 0; // Reset on successful connection
+      console.log('Reconnection successful');
+    } catch (error) {
+      console.error(`Reconnection attempt ${this.reconnectAttempts} failed:`, error);
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        // Wait before next attempt
+        await new Promise(resolve => setTimeout(resolve, this.reconnectDelay));
+        return this.reconnect();
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Static factory method to create and connect a CaptivateChatAPI instance.
+   * The returned instance is automatically guarded: all method calls will check socket state and auto-reconnect if needed.
+   * @param apiKey - The API key for authentication.
+   * @param mode - The mode of operation ('prod' or 'dev').
+   * @returns A promise that resolves to a connected and guarded CaptivateChatAPI instance.
+   */
+  static async create(apiKey: string, mode: 'prod' | 'dev' = 'prod'): Promise<CaptivateChatAPI> {
+    const api = new CaptivateChatAPI(apiKey, mode);
+    await api.connect();
+    return withSocketGuard(api);
   }
 
 }
