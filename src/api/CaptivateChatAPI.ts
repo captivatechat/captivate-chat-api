@@ -21,17 +21,7 @@ else {
   }
 }
 
-// Helper to wait for socket to be open (not used in proxy guard, but kept for reference)
-async function waitForSocketOpen(socket: WebSocket, timeout = 10000): Promise<void> {
-  if (socket.readyState === WebSocketImpl.OPEN) return;
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('WebSocket did not open in time')), timeout);
-    socket.addEventListener('open', () => {
-      clearTimeout(timer);
-      resolve();
-    });
-  });
-}
+// Removed unused `waitForSocketOpen` function to improve maintainability.
 
 // Proxy guard function for automatic socket state checking and reconnection
 function withSocketGuard<T extends object>(instance: T): T {
