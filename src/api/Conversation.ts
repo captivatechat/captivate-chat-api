@@ -326,7 +326,6 @@ public async setPrivateMetadata(privateMeta: object): Promise<void> {
 
       // Listener for message_edited_success event
       const onEditSuccess = (payload: any) => {
-        console.log(payload);
         if (
           payload.conversation_id === this.conversationId &&
           payload.message_id === messageId
