@@ -1,36 +1,6 @@
 import { CaptivateChatAPI } from './CaptivateChatAPI';
 import { Conversation } from './Conversation';
 
-// Proxy guard function for automatic socket state checking and reconnection
-function withSocketGuard<T extends object>(instance: T): T {
-  return new Proxy(instance, {
-    get(target, prop, receiver) {
-      const orig = target[prop as keyof T];
-      if (
-        typeof orig === 'function' &&
-        !['connectAll', 'create', 'getApiInstance', 'isSocketActive'].includes(prop as string)
-      ) {
-        return async function (...args: any[]) {
-          if (typeof (target as any)['isSocketActive'] === 'function' && !(target as any)['isSocketActive']()) {
-            console.log('Manager: Socket not active, attempting to reconnect...');
-            try {
-              if (typeof (target as any)['reconnect'] === 'function') {
-                await (target as any)['reconnect']();
-              } else {
-                throw new Error('Reconnect method not available');
-              }
-            } catch (error: any) {
-              throw new Error(`Socket reconnection failed. Cannot execute ${String(prop)}: ${error.message}`);
-            }
-          }
-          return (orig as Function).apply(target, args);
-        };
-      }
-      return orig;
-    }
-  });
-}
-
 type ApiKey = string;
 
 export class CaptivateChatManager {
