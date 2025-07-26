@@ -172,7 +172,7 @@ export class CaptivateChatAPI {
       try {
         // Merge privateMetadata into metadata under the 'private' key if provided
         const fullMetadata: Record<string, any> = { ...metadata };
-        if (privateMetadata && Object.keys(privateMetadata).length > 0) {
+        if (privateMetadata) {
           fullMetadata.private = privateMetadata;
         }
         this._send({
