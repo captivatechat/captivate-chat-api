@@ -204,7 +204,10 @@ public async setPrivateMetadata(privateMeta: object): Promise<void> {
     if (!this.apiKey) {
       throw new Error('API key is required to fetch transcript via REST.');
     }
-    const url = `https://channel.dev.captivat.io/api/transcript?conversation_id=${encodeURIComponent(this.conversationId)}`;
+    const baseUrl = (this as any).mode === 'prod' 
+      ? 'https://channel.prod.captivat.io' 
+      : 'https://channel.dev.captivat.io';
+    const url = `${baseUrl}/api/transcript?conversation_id=${encodeURIComponent(this.conversationId)}`;
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -216,8 +219,8 @@ public async setPrivateMetadata(privateMeta: object): Promise<void> {
       throw new Error(`Failed to fetch transcript: ${response.status} ${response.statusText}`);
     }
     const data = await response.json();
- 
-    return data.transcript;
+    console.log('REST transcript payload:', data);
+    return data.message;
   }
 
   /**
