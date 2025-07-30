@@ -201,32 +201,23 @@ public async setPrivateMetadata(privateMeta: object): Promise<void> {
    * @returns A promise that resolves to the conversation transcript.
    */
   public async getTranscript(): Promise<object[]> {
-    return new Promise((resolve, reject) => {
-      const transcriptRequest = {
-        action: 'sendMessage',
-        event: {
-          event_type: 'conversation_transcript_request',
-          event_payload: {
-            conversation_id: this.conversationId,
-          },
-        },
-      };
-
-      this.socket.send(JSON.stringify(transcriptRequest));
-
-      const onMessage = (payload: any) => {
-        if (payload.conversation_id === this.conversationId) {
-          this.removeListener('conversation_transcript', onMessage);
-          resolve(payload.transcript);
-        }
-      };
-      this.addListener('conversation_transcript', onMessage);
-
-      setTimeout(() => {
-        this.removeListener('conversation_transcript', onMessage);
-        reject(new Error('Timeout: No response for transcript request'));
-      }, 10000);
+    if (!this.apiKey) {
+      throw new Error('API key is required to fetch transcript via REST.');
+    }
+    const url = `https://channel.dev.captivat.io/api/transcript?conversation_id=${encodeURIComponent(this.conversationId)}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'x-api-key': this.apiKey,
+        'Accept': 'application/json'
+      }
     });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch transcript: ${response.status} ${response.statusText}`);
+    }
+    const data = await response.json();
+ 
+    return data.transcript;
   }
 
   /**

@@ -1,6 +1,6 @@
 # captivate-chat-api
 
-WebSocket-based chat API for real-time conversations with support for bot and human agents.
+Hybrid WebSocket/REST-based chat API for real-time conversations with support for bot and human agents. Features WebSocket communication for real-time messaging and REST endpoints for data retrieval operations.
 
 ## Installation
 
