@@ -1,6 +1,6 @@
 {
   "name": "captivate-chat-api",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "This is a wrapper for captivate chat api socket custom channel",
   "main": "dist/captivate-chat-api.js",
   "types": "dist/index.d.ts",
