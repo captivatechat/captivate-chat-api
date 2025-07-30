@@ -183,7 +183,7 @@ export class CaptivateChatAPI {
             if (message.event?.event_type === 'conversation_start_success') {
               const conversationId = message.event.event_payload.conversation_id;
               this.socket?.removeEventListener('message', onMessage);
-              const conversation = withSocketGuard(new Conversation(conversationId, this.socket!));
+              const conversation = withSocketGuard(new Conversation(conversationId, this.socket!,{},this.apiKey));
               this.conversations.set(conversationId, conversation);
               if (autoConversationStart === 'bot-first') {
                 conversation
@@ -224,7 +224,7 @@ export class CaptivateChatAPI {
       // If conversation is not found, check if socket is initialized
       if (this.socket !== null) {
         // If socket is initialized, create the conversation
-        conversation = withSocketGuard(new Conversation(conversationId, this.socket));
+        conversation = withSocketGuard(new Conversation(conversationId, this.socket,{},this.apiKey));
         this.conversations.set(conversationId, conversation);
       } else {
         // Handle the case where socket is not initialized
