@@ -64,6 +64,34 @@ export class Conversation {
   public onMessage(callback: (message: string, type: string) => void): void {
     this.addListener('bot_message', (payload: any) => callback(payload.content, 'ai_agent'));
     this.addListener('livechat_message', (payload: any) => callback(payload.content, 'human_agent'));
+
+    // Handle large messages that are too big for WebSocket usually from AI Agents
+    this.addListener('general_error', async (payload: any) => {
+
+      if (payload.error_code === 413 && payload.message_link) {
+        try {
+          const response = await fetch(payload.message_link, {
+            method: 'GET',
+            headers: {
+              'x-api-key': this.apiKey,
+              'Accept': 'application/json'
+            }
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to fetch large message: ${response.status} ${response.statusText}`);
+          }
+          const messageData = await response.json();
+          callback(messageData.botMessage.content, 'ai_agent');
+        } catch (error: any) {
+          console.error('Error fetching large message:', error);
+          callback(`[Error fetching large message: ${error.message}]`, 'error');
+        }
+      } else {
+        console.log('Not a large message error or no message_link provided');
+        // Handle other general errors
+        callback(`[Error: ${payload.error_desc || 'Unknown error'}]`, 'error');
+      }
+    });
   }
 
   /**
@@ -172,13 +200,13 @@ export class Conversation {
  * @param privateMeta - An object containing the private metadata to set.
  * @returns A promise that resolves when the metadata update is successful.
  */
-public async setPrivateMetadata(privateMeta: object): Promise<void> {
-  if (typeof privateMeta !== 'object' || privateMeta === null) {
-    throw new Error('Private metadata must be a non-null object.');
+  public async setPrivateMetadata(privateMeta: object): Promise<void> {
+    if (typeof privateMeta !== 'object' || privateMeta === null) {
+      throw new Error('Private metadata must be a non-null object.');
+    }
+    // Reuse the setMetadata logic, but wrap in { private: ... }
+    return this.setMetadata({ private: privateMeta });
   }
-  // Reuse the setMetadata logic, but wrap in { private: ... }
-  return this.setMetadata({ private: privateMeta });
-}
 
 
   /**
@@ -204,8 +232,8 @@ public async setPrivateMetadata(privateMeta: object): Promise<void> {
     if (!this.apiKey) {
       throw new Error('API key is required to fetch transcript via REST.');
     }
-    const baseUrl = (this as any).mode === 'prod' 
-      ? 'https://channel.prod.captivat.io' 
+    const baseUrl = (this as any).mode === 'prod'
+      ? 'https://channel.prod.captivat.io'
       : 'https://channel.dev.captivat.io';
     const url = `${baseUrl}/api/transcript?conversation_id=${encodeURIComponent(this.conversationId)}`;
     const response = await fetch(url, {
@@ -219,7 +247,7 @@ public async setPrivateMetadata(privateMeta: object): Promise<void> {
       throw new Error(`Failed to fetch transcript: ${response.status} ${response.statusText}`);
     }
     const data = await response.json();
-    console.log('REST transcript payload:', data);
+
     return data.message;
   }
 
