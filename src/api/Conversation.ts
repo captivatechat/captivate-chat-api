@@ -81,7 +81,7 @@ export class Conversation {
             throw new Error(`Failed to fetch large message: ${response.status} ${response.statusText}`);
           }
           const messageData = await response.json();
-          callback(messageData.botMessage.message, 'ai_agent');
+          callback(messageData.botMessage.content, 'ai_agent');
         } catch (error: any) {
           console.error('Error fetching large message:', error);
           callback(`[Error fetching large message: ${error.message}]`, 'error');
@@ -247,7 +247,7 @@ export class Conversation {
       throw new Error(`Failed to fetch transcript: ${response.status} ${response.statusText}`);
     }
     const data = await response.json();
-    console.log('REST transcript payload:', data);
+
     return data.message;
   }
 
