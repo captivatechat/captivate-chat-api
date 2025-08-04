@@ -12,12 +12,16 @@ export declare class Conversation {
     private listeners;
     private metadata;
     private local_id;
+    private mode;
     /**
      * Initializes a new Conversation instance.
      * @param conversationId - The unique identifier of the conversation.
      * @param socket - The WebSocket instance for communication.
+     * @param metadata - Optional metadata for the conversation.
+     * @param apiKey - Optional API key for REST operations.
+     * @param mode - The mode of operation ('prod' or 'dev').
      */
-    constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string);
+    constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string, mode?: 'prod' | 'dev');
     private handleMessage;
     restartListeners(): void;
     /**
