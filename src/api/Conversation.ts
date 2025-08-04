@@ -13,18 +13,23 @@ export class Conversation {
   private listeners: Map<string, Function[]>;
   private metadata: object | null;
   private local_id: Number;
+  private mode: 'prod' | 'dev';
   /**
    * Initializes a new Conversation instance.
    * @param conversationId - The unique identifier of the conversation.
    * @param socket - The WebSocket instance for communication.
+   * @param metadata - Optional metadata for the conversation.
+   * @param apiKey - Optional API key for REST operations.
+   * @param mode - The mode of operation ('prod' or 'dev').
    */
-  constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string) {
+  constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string, mode?: 'prod' | 'dev') {
     this.apiKey = apiKey || '';
     this.conversationId = conversation_id;
     this.socket = socket;
     this.listeners = new Map();
     this.metadata = metadata || null; // If metadata is provided, use it; otherwise, set to null.
     this.local_id = Math.floor(Math.random() * 10000); // Simple random id for local instance tracking
+    this.mode = mode || 'prod'; // Default to 'prod' if not specified
 
     this.socket.onmessage = this.handleMessage.bind(this);
 
@@ -232,7 +237,7 @@ export class Conversation {
     if (!this.apiKey) {
       throw new Error('API key is required to fetch transcript via REST.');
     }
-    const baseUrl = (this as any).mode === 'prod'
+    const baseUrl = this.mode === 'prod'
       ? 'https://channel.prod.captivat.io'
       : 'https://channel.dev.captivat.io';
     const url = `${baseUrl}/api/transcript?conversation_id=${encodeURIComponent(this.conversationId)}`;
