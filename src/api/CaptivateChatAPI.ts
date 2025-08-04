@@ -183,7 +183,7 @@ export class CaptivateChatAPI {
             if (message.event?.event_type === 'conversation_start_success') {
               const conversationId = message.event.event_payload.conversation_id;
               this.socket?.removeEventListener('message', onMessage);
-              const conversation = withSocketGuard(new Conversation(conversationId, this.socket!,{},this.apiKey));
+              const conversation = withSocketGuard(new Conversation(conversationId, this.socket!,{},this.apiKey, this.mode));
               this.conversations.set(conversationId, conversation);
               if (autoConversationStart === 'bot-first') {
                 conversation
@@ -224,7 +224,7 @@ export class CaptivateChatAPI {
       // If conversation is not found, check if socket is initialized
       if (this.socket !== null) {
         // If socket is initialized, create the conversation
-        conversation = withSocketGuard(new Conversation(conversationId, this.socket,{},this.apiKey));
+        conversation = withSocketGuard(new Conversation(conversationId, this.socket,{},this.apiKey, this.mode));
         this.conversations.set(conversationId, conversation);
       } else {
         // Handle the case where socket is not initialized
@@ -319,7 +319,7 @@ export class CaptivateChatAPI {
               for (const conv of payload) {
                 const { conversation_id, metadata, apiKey } = conv;
                 if (this.socket !== null) {
-                  conversations.push(withSocketGuard(new Conversation(conversation_id, this.socket, metadata, apiKey || this.apiKey)));
+                  conversations.push(withSocketGuard(new Conversation(conversation_id, this.socket, metadata, apiKey || this.apiKey, this.mode)));
                 }
               }
               // Extract pagination data if present
