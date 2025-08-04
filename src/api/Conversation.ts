@@ -253,7 +253,7 @@ export class Conversation {
     }
     const data = await response.json();
 
-    return data.message;
+    return data.transcript;
   }
 
   /**
