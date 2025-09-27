@@ -343,6 +343,120 @@ export class CaptivateChatFileInput {
   }
 
   /**
+   * Factory method to create multiple file inputs from an array of files.
+   * Processes all files in parallel and returns a single CaptivateChatFileInput with all files.
+   * @param files - Array of files to process.
+   * @param options - Configuration options for all files.
+   * @returns A promise that resolves to a CaptivateChatFileInput instance with all processed files.
+   */
+  static async createMultiple(
+    files: (File | Blob)[],
+    options?: {
+      includeMetadata?: boolean;
+    }
+  ): Promise<CaptivateChatFileInput>;
+
+  /**
+   * Factory method to create multiple file inputs from an array of external URLs.
+   * Processes all URLs in parallel and returns a single CaptivateChatFileInput with all files.
+   * @param fileOptions - Array of file options with URLs.
+   * @returns A promise that resolves to a CaptivateChatFileInput instance with all processed files.
+   */
+  static async createMultiple(
+    fileOptions: Array<{
+      fileName: string;
+      fileType: string;
+      url: string;
+      includeMetadata?: boolean;
+    }>
+  ): Promise<CaptivateChatFileInput>;
+
+  /**
+   * Implementation of the createMultiple factory method.
+   */
+  static async createMultiple(
+    filesOrOptions: (File | Blob)[] | Array<{
+      fileName: string;
+      fileType: string;
+      url: string;
+      includeMetadata?: boolean;
+    }>,
+    options?: {
+      includeMetadata?: boolean;
+    }
+  ): Promise<CaptivateChatFileInput> {
+    const isFileArray = filesOrOptions.length > 0 && (filesOrOptions[0] instanceof File || filesOrOptions[0] instanceof Blob);
+    
+    if (isFileArray) {
+      // Process multiple files
+      const files = filesOrOptions as (File | Blob)[];
+      const fileInputs = await Promise.all(
+        files.map(file => CaptivateChatFileInput.create(file, {
+          includeMetadata: options?.includeMetadata || false
+        }))
+      );
+
+      // Combine all files into a single array
+      const allFiles = fileInputs.flatMap(input => input.files);
+
+      // Create a new instance with all files
+      const combinedInstance = new CaptivateChatFileInput(
+        files[0], // Use first file as placeholder
+        {
+          type: 'file_content',
+          text: '', // Will be ignored since we're using the files array
+          metadata: {
+            source: 'file_attachment',
+            originalFileName: 'multiple_files',
+            storageType: 'direct'
+          }
+        },
+        'application/octet-stream'
+      );
+
+      // Replace the files array with the combined files
+      (combinedInstance as any).files = allFiles;
+
+      return CaptivateChatFileInput.createProxy(combinedInstance);
+    } else {
+      // Process multiple URLs
+      const urlOptions = filesOrOptions as Array<{
+        fileName: string;
+        fileType: string;
+        url: string;
+        includeMetadata?: boolean;
+      }>;
+
+      const fileInputs = await Promise.all(
+        urlOptions.map(options => CaptivateChatFileInput.create(options))
+      );
+
+      // Combine all files into a single array
+      const allFiles = fileInputs.flatMap(input => input.files);
+
+      // Create a new instance with all files
+      const combinedInstance = new CaptivateChatFileInput(
+        urlOptions[0].url, // Use first URL as placeholder
+        {
+          type: 'file_content',
+          text: '', // Will be ignored since we're using the files array
+          metadata: {
+            source: 'file_attachment',
+            originalFileName: 'multiple_files',
+            storageType: 'external'
+          }
+        },
+        urlOptions[0].fileType
+      );
+
+      // Replace the files array with the combined files
+      (combinedInstance as any).files = allFiles;
+
+      return CaptivateChatFileInput.createProxy(combinedInstance);
+    }
+  }
+
+  /**
    * Converts a file to text using the file-to-text API endpoint.
    * @param file - The file to convert (File or Blob).
    * @param fileName - The name of the file.
