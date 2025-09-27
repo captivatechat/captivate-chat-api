@@ -329,6 +329,45 @@ export class Conversation {
     });
   }
 
+
+  /**
+   * Converts a File object to base64 string.
+   * @param file - The File object to convert.
+   * @returns A promise that resolves to the base64 string.
+   */
+  private fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove the data URL prefix to get just the base64 data
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /**
+   * Converts a Blob object to base64 string.
+   * @param blob - The Blob object to convert.
+   * @returns A promise that resolves to the base64 string.
+   */
+  private blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove the data URL prefix to get just the base64 data
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
   /**
    * Edits a message in the conversation.
    * @param messageId - The ID of the message to edit.

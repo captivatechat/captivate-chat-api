@@ -89,18 +89,153 @@ Create a new conversation with the following options:
 
 ### Send and Receive Messages
 
-1. Send a message to the conversation:
+1. Send a text message to the conversation:
    ```typescript
    await conversation.sendMessage('Hello!');
-   await conversation.sendMessage({type:'files',files:[{filename:'test.pdf'}]});
    ```
 
-2. Listen for responses:
+2. Send a file with text message (recommended format):
+   ```typescript
+   await conversation.sendMessage({
+     text: "Here's the document you requested",
+     files: [fileObject]
+   });
+   ```
+
+3. Listen for responses:
    ```typescript
    conversation.onMessage((message, type) => {
      console.log(`${type}: ${message}`);
    });
    ```
+
+### File Handling with CaptivateChatFileInput
+
+The `CaptivateChatFileInput` class provides automatic file-to-text conversion and structured file handling for chat messages.
+
+#### Basic File Upload
+
+```typescript
+import { CaptivateChatFileInput } from 'captivate-chat-api';
+
+// Upload a local file
+const fileInput = await CaptivateChatFileInput.create(file, {
+  fileName: 'document.pdf',
+  includeMetadata: true
+});
+
+// Send file with text message
+await conversation.sendMessage({
+  text: "Here's the document you requested",
+  files: fileInput.files
+});
+```
+
+#### External URL File Processing
+
+```typescript
+// Process file from external URL (S3, etc.)
+const fileInput = await CaptivateChatFileInput.create({
+  fileName: 'document.pdf',
+  fileType: 'application/pdf',
+  url: 'https://s3.amazonaws.com/bucket/document.pdf',
+  includeMetadata: true
+});
+
+await conversation.sendMessage({
+  text: "Document from external storage",
+  files: fileInput.files
+});
+```
+
+#### Multiple Files
+
+```typescript
+// Process multiple files
+const files = [file1, file2, file3];
+const fileInputs = await Promise.all(
+  files.map(file => CaptivateChatFileInput.create(file, {
+    includeMetadata: true
+  }))
+);
+
+// Combine all files
+const allFiles = fileInputs.flatMap(input => input.files);
+
+await conversation.sendMessage({
+  text: "Multiple documents attached",
+  files: allFiles
+});
+```
+
+#### File Input Structure
+
+The `CaptivateChatFileInput` creates a structured object with:
+
+```typescript
+{
+  type: 'files',
+  files: [
+    {
+      filename: 'document.pdf',
+      type: 'application/pdf',
+      file?: File | Blob,        // For direct uploads
+      url?: string,              // For external URLs
+      textContent: {
+        type: 'file_content',
+        text: 'Extracted text from file...',
+        metadata: {
+          source: 'file_attachment',
+          originalFileName: 'document.pdf',
+          storageType: 'direct' | 'external'
+        }
+      }
+    }
+  ]
+}
+```
+
+#### Supported File Types
+
+- **Documents**: PDF, DOCX, TXT
+- **Images**: PNG, JPG, JPEG (with OCR text extraction)
+- **Any file type** supported by the file-to-text API
+
+#### WebSocket Payload Format
+
+Files are sent in the following WebSocket payload structure:
+
+```json
+{
+  "action": "sendMessage",
+  "event": {
+    "event_type": "user_message",
+    "event_payload": {
+      "type": "message_create",
+      "client_msg_id": "unique-message-id-1234567890",
+      "conversation_id": "your-conversation-id",
+      "content": {
+        "text": "Here's the document you requested",
+        "files": [
+          {
+            "filename": "document.pdf",
+            "type": "application/pdf",
+            "textContent": {
+              "type": "file_content",
+              "text": "Extracted text from PDF...",
+              "metadata": {
+                "source": "file_attachment",
+                "originalFileName": "document.pdf",
+                "storageType": "direct"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
 
 ### Edit a Message
 
@@ -301,7 +436,7 @@ console.log('Conversations Deleted successfully');
 Here's a complete example of how to use the API:
 
 ```typescript
-import { CaptivateChatAPI } from 'captivate-chat-api';
+import { CaptivateChatAPI, CaptivateChatFileInput } from 'captivate-chat-api';
 
 (async () => {
   try {
@@ -327,8 +462,19 @@ import { CaptivateChatAPI } from 'captivate-chat-api';
       console.log(`Received (${type}): ${message}`);
     });
 
-    // Send a message
+    // Send a text message
     await conversation.sendMessage('Hello! How can I assist you today?');
+
+    // Send a file with text message
+    const fileInput = await CaptivateChatFileInput.create(file, {
+      fileName: 'document.pdf',
+      includeMetadata: true
+    });
+    
+    await conversation.sendMessage({
+      text: "Here's the document you requested",
+      files: fileInput.files
+    });
 
     // Handle conversation updates
     conversation.onConversationUpdate((update) => {
@@ -376,7 +522,51 @@ The API supports the following environments:
 - **Node.js**
 - **React Native**
 
+### File Processing
+
+File-to-text conversion is handled by the external API endpoint:
+- **Production**: `https://file-to-text.prod.captivat.io/api/file-to-text`
+- **Supported formats**: PDF, DOCX, TXT, PNG, JPG, JPEG
+- **Features**: OCR for images, metadata extraction, automatic text conversion
+
 ## API Reference
+
+### CaptivateChatFileInput
+
+A utility class for processing files and converting them to text for chat messages.
+
+#### Methods
+
+- **`static create(file: File | Blob, options?: { fileName?: string; fileType?: string; includeMetadata?: boolean }): Promise<CaptivateChatFileInput>`**  
+  Creates a `CaptivateChatFileInput` from a local file with automatic text extraction.
+
+- **`static create(options: { fileName: string; fileType: string; url: string; includeMetadata?: boolean }): Promise<CaptivateChatFileInput>`**  
+  Creates a `CaptivateChatFileInput` from an external URL with automatic text extraction.
+
+#### Properties
+
+- **`type: 'files'`** - Always 'files' for file inputs
+- **`files: Array<FileObject>`** - Array of processed file objects
+
+#### FileObject Structure
+
+```typescript
+{
+  filename: string;
+  type: string;
+  file?: File | Blob;        // For direct uploads
+  url?: string;              // For external URLs
+  textContent: {
+    type: 'file_content';
+    text: string;
+    metadata: {
+      source: 'file_attachment';
+      originalFileName: string;
+      storageType: 'direct' | 'external';
+    };
+  };
+}
+```
 
 ### CaptivateChatAPI
 
@@ -410,10 +600,13 @@ The API supports the following environments:
 
 #### Methods
 - **`sendMessage(content: string): Promise<void>`**  
-  Sends a message to the conversation.
+  Sends a text message to the conversation.
 
 - **`sendMessage(content: object): Promise<void>`**  
-  Can also send custom payload instead of default string
+  Sends a structured message. Supports:
+  - **Text only**: `{ type: 'text', text: 'Hello' }`
+  - **Files only**: `{ type: 'files', files: [...] }`
+  - **Combined**: `{ text: 'Hello', files: [...] }` (recommended)
 
 - **`setMetadata(metadata: object): Promise<void>`**  
   Updates metadata for the conversation.
