@@ -10,6 +10,26 @@ Install the package using npm:
 npm install captivate-chat-api
 ```
 
+## What's New
+
+### Enhanced File Handling (v2.0+)
+
+The `CaptivateChatFileInput` class has been significantly improved with:
+
+- **🎉 Direct Usage**: Use `fileInput` directly as `files: fileInput` instead of `files: fileInput.files`
+- **🔧 Convenience Methods**: Easy access to file properties with `getFilename()`, `getTextContent()`, `getFileType()`
+- **📦 Single File Factory**: New `createFile()` method for direct file object creation
+- **🔄 Array-like Behavior**: Proxy-based implementation supports array access and iteration
+- **⚡ Performance**: Eliminated API URL duplication and optimized internal structure
+- **🔒 Backward Compatibility**: All existing code continues to work without changes
+
+### Key Improvements
+
+1. **Simplified API**: No more complex `.files[0]` access patterns
+2. **Better Developer Experience**: Cleaner, more intuitive method names
+3. **Flexible Usage**: Choose between wrapper (`create()`) or direct (`createFile()`) approaches
+4. **Type Safety**: Full TypeScript support with proper type definitions
+
 ## Usage
 
 ### Single API Key Usage (CaptivateChatAPI)
@@ -111,7 +131,7 @@ Create a new conversation with the following options:
 
 ### File Handling with CaptivateChatFileInput
 
-The `CaptivateChatFileInput` class provides automatic file-to-text conversion and structured file handling for chat messages.
+The `CaptivateChatFileInput` class provides automatic file-to-text conversion and structured file handling for chat messages. The class now includes several convenience methods and supports direct usage as a files array.
 
 #### Basic File Upload
 
@@ -124,11 +144,34 @@ const fileInput = await CaptivateChatFileInput.create(file, {
   includeMetadata: true
 });
 
-// Send file with text message
+// Send file with text message - NEW: You can use fileInput directly!
 await conversation.sendMessage({
   text: "Here's the document you requested",
-  files: fileInput.files
+  files: fileInput  // 🎉 No need for .files anymore!
 });
+```
+
+#### Convenience Methods
+
+The `CaptivateChatFileInput` class now includes several convenience methods for easier access to file properties:
+
+```typescript
+const fileInput = await CaptivateChatFileInput.create(file, {
+  fileName: 'document.pdf',
+  includeMetadata: true
+});
+
+// Get file information easily
+console.log('Filename:', fileInput.getFilename());
+console.log('File type:', fileInput.getFileType());
+console.log('Text content:', fileInput.getTextContent());
+console.log('Text length:', fileInput.getTextContent().length);
+
+// Get the first file object if needed
+const firstFile = fileInput.getFirstFile();
+
+// Convert to files array explicitly (though not needed anymore)
+const filesArray = fileInput.toFilesArray();
 ```
 
 #### External URL File Processing
@@ -144,7 +187,7 @@ const fileInput = await CaptivateChatFileInput.create({
 
 await conversation.sendMessage({
   text: "Document from external storage",
-  files: fileInput.files
+  files: fileInput  // 🎉 Direct usage supported!
 });
 ```
 
@@ -159,12 +202,29 @@ const fileInputs = await Promise.all(
   }))
 );
 
-// Combine all files
-const allFiles = fileInputs.flatMap(input => input.files);
+// Combine all files - NEW: You can use fileInputs directly!
+const allFiles = fileInputs.flatMap(input => input);
 
 await conversation.sendMessage({
   text: "Multiple documents attached",
   files: allFiles
+});
+```
+
+#### Alternative: Single File Factory Method
+
+For even simpler usage when you only need one file object, you can use the new `createFile()` method:
+
+```typescript
+// Get just the file object directly (no wrapper)
+const fileObj = await CaptivateChatFileInput.createFile(file, {
+  fileName: 'document.pdf',
+  includeMetadata: true
+});
+
+await conversation.sendMessage({
+  text: "Here's the document",
+  files: [fileObj]  // Wrap in array since it's a single file object
 });
 ```
 
@@ -473,7 +533,7 @@ import { CaptivateChatAPI, CaptivateChatFileInput } from 'captivate-chat-api';
     
     await conversation.sendMessage({
       text: "Here's the document you requested",
-      files: fileInput.files
+      files: fileInput  // 🎉 Direct usage - no .files needed!
     });
 
     // Handle conversation updates
@@ -533,7 +593,7 @@ File-to-text conversion is handled by the external API endpoint:
 
 ### CaptivateChatFileInput
 
-A utility class for processing files and converting them to text for chat messages.
+A utility class for processing files and converting them to text for chat messages. The class now supports direct usage as a files array and includes convenience methods for easier file property access.
 
 #### Methods
 
@@ -543,10 +603,46 @@ A utility class for processing files and converting them to text for chat messag
 - **`static create(options: { fileName: string; fileType: string; url: string; includeMetadata?: boolean }): Promise<CaptivateChatFileInput>`**  
   Creates a `CaptivateChatFileInput` from an external URL with automatic text extraction.
 
+- **`static createFile(file: File | Blob, options?: { fileName?: string; fileType?: string; includeMetadata?: boolean }): Promise<FileObject>`**  
+  **(New)** Creates a single file object directly (no wrapper) with automatic text extraction.
+
+- **`static createFile(options: { fileName: string; fileType: string; url: string; includeMetadata?: boolean }): Promise<FileObject>`**  
+  **(New)** Creates a single file object from an external URL (no wrapper) with automatic text extraction.
+
+- **`getFilename(): string | undefined`**  
+  **(New)** Gets the filename of the first file.
+
+- **`getTextContent(): string`**  
+  **(New)** Gets the text content of the first file.
+
+- **`getFileType(): string | undefined`**  
+  **(New)** Gets the file type of the first file.
+
+- **`getFirstFile(): FileObject | undefined`**  
+  **(New)** Gets the first file object from the files array.
+
+- **`toFilesArray(): Array<FileObject>`**  
+  **(New)** Returns the files array explicitly.
+
 #### Properties
 
 - **`type: 'files'`** - Always 'files' for file inputs
 - **`files: Array<FileObject>`** - Array of processed file objects
+- **`length: number`** - **(New)** Returns the length of the files array for array-like behavior
+
+#### Array-like Behavior
+
+The `CaptivateChatFileInput` class now supports array-like behavior through a proxy, allowing you to use it directly as a files array:
+
+```typescript
+const fileInput = await CaptivateChatFileInput.create(file, options);
+
+// All of these work:
+files: fileInput           // ✅ Direct usage
+files: fileInput.files     // ✅ Traditional usage (still supported)
+fileInput[0]               // ✅ Array access
+fileInput.length           // ✅ Array length
+```
 
 #### FileObject Structure
 

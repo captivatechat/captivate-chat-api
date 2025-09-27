@@ -122,8 +122,8 @@ export class CaptivateChatFileInput {
         options?.includeMetadata || false
       );
 
-      // Create and return the instance
-      return new CaptivateChatFileInput(file, {
+      // Create and return the instance with proxy for array-like behavior
+      const instance = new CaptivateChatFileInput(file, {
         type: 'file_content',
         text: extractedText,
         metadata: {
@@ -132,6 +132,8 @@ export class CaptivateChatFileInput {
           storageType: 'direct'
         }
       }, finalType);
+      
+      return CaptivateChatFileInput.createProxy(instance);
     } else {
       // External storage URL
       const urlOptions = fileOrOptions as {
@@ -152,8 +154,8 @@ export class CaptivateChatFileInput {
         urlOptions.includeMetadata || false
       );
 
-      // Create and return the instance
-      return new CaptivateChatFileInput(urlOptions.url, {
+      // Create and return the instance with proxy for array-like behavior
+      const instance = new CaptivateChatFileInput(urlOptions.url, {
         type: 'file_content',
         text: extractedText,
         metadata: {
@@ -162,7 +164,182 @@ export class CaptivateChatFileInput {
           storageType: 'external'
         }
       }, urlOptions.fileType);
+      
+      return CaptivateChatFileInput.createProxy(instance);
     }
+  }
+
+  /**
+   * Gets the first file from the files array for convenience.
+   * @returns The first file object, or undefined if no files exist.
+   */
+  getFirstFile() {
+    return this.files[0];
+  }
+
+  /**
+   * Gets the filename of the first file.
+   * @returns The filename, or undefined if no files exist.
+   */
+  getFilename() {
+    return this.files[0]?.filename;
+  }
+
+  /**
+   * Gets the text content of the first file.
+   * @returns The text content, or empty string if no files exist.
+   */
+  getTextContent() {
+    return this.files[0]?.textContent?.text || '';
+  }
+
+  /**
+   * Gets the file type of the first file.
+   * @returns The file type, or undefined if no files exist.
+   */
+  getFileType() {
+    return this.files[0]?.type;
+  }
+
+  /**
+   * Returns the files array directly for compatibility with the files property.
+   * This allows using fileInputObj directly as the files value.
+   * @returns The files array.
+   */
+  toFilesArray() {
+    return this.files;
+  }
+
+  /**
+   * Makes the class iterable so it can be used directly as an array.
+   */
+  *[Symbol.iterator]() {
+    yield* this.files;
+  }
+
+  /**
+   * Getter that returns the files array, allowing the class to be used directly as files.
+   * This enables: files: fileInputObj instead of files: fileInputObj.files
+   */
+  get [Symbol.toStringTag]() {
+    return 'Array';
+  }
+
+  /**
+   * Returns the length of the files array for array-like behavior.
+   */
+  get length() {
+    return this.files.length;
+  }
+
+  /**
+   * Proxy handler to make the class behave like the files array.
+   * This allows using fileInputObj directly as files: fileInputObj
+   */
+  static createProxy(instance: CaptivateChatFileInput) {
+    return new Proxy(instance, {
+      get(target, prop) {
+        // If accessing the files array directly, return the files
+        if (prop === Symbol.iterator || prop === 'length' || typeof prop === 'number') {
+          return target.files[prop as any];
+        }
+        // Otherwise, return the property from the instance
+        return (target as any)[prop];
+      }
+    });
+  }
+
+  /**
+   * Factory method to create a single file object with automatic file-to-text conversion.
+   * Returns just the file object instead of the full CaptivateChatFileInput wrapper.
+   * @param file - The file to convert.
+   * @param options - Configuration options for the file input.
+   * @returns A promise that resolves to a single file object.
+   */
+  static async createFile(
+    file: File | Blob,
+    options?: {
+      fileName?: string;
+      fileType?: string;
+      includeMetadata?: boolean;
+    }
+  ): Promise<{
+    filename: string;
+    type: string;
+    file?: File | Blob;
+    url?: string;
+    textContent: {
+      type: 'file_content';
+      text: string;
+      metadata: {
+        source: 'file_attachment';
+        originalFileName: string;
+        storageType?: 'direct' | 'external';
+      };
+    };
+  }>;
+
+  /**
+   * Factory method to create a single file object with automatic file-to-text conversion for external URLs.
+   * Returns just the file object instead of the full CaptivateChatFileInput wrapper.
+   * @param options - Configuration options for the file input (must include url).
+   * @returns A promise that resolves to a single file object.
+   */
+  static async createFile(
+    options: {
+      fileName: string;
+      fileType: string;
+      includeMetadata?: boolean;
+      url: string;
+    }
+  ): Promise<{
+    filename: string;
+    type: string;
+    file?: File | Blob;
+    url?: string;
+    textContent: {
+      type: 'file_content';
+      text: string;
+      metadata: {
+        source: 'file_attachment';
+        originalFileName: string;
+        storageType?: 'direct' | 'external';
+      };
+    };
+  }>;
+
+  /**
+   * Implementation of the createFile factory method.
+   */
+  static async createFile(
+    fileOrOptions: File | Blob | {
+      fileName?: string;
+      fileType?: string;
+      includeMetadata?: boolean;
+      url?: string;
+    },
+    options?: {
+      fileName?: string;
+      fileType?: string;
+      includeMetadata?: boolean;
+    }
+  ): Promise<{
+    filename: string;
+    type: string;
+    file?: File | Blob;
+    url?: string;
+    textContent: {
+      type: 'file_content';
+      text: string;
+      metadata: {
+        source: 'file_attachment';
+        originalFileName: string;
+        storageType?: 'direct' | 'external';
+      };
+    };
+  }> {
+    const fileInput = await CaptivateChatFileInput.create(fileOrOptions as any, options);
+    return fileInput.getFirstFile()!;
   }
 
   /**
