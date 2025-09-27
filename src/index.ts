@@ -1,5 +1,6 @@
 import { CaptivateChatAPI } from './api/CaptivateChatAPI';
 import { CaptivateChatManager } from './api/CaptivateChatManager';
+import { CaptivateChatFileInput } from './api/CaptivateChatFileInput';
 
 
 
@@ -9,6 +10,8 @@ if (typeof window !== 'undefined') {
   window.CaptivateChatAPI = CaptivateChatAPI;
   // @ts-ignore
   window.CaptivateChatManager = CaptivateChatManager;
+  // @ts-ignore
+  window.CaptivateChatFileInput = CaptivateChatFileInput;
 }
 
-export { CaptivateChatAPI, CaptivateChatManager };
+export { CaptivateChatAPI, CaptivateChatManager, CaptivateChatFileInput };

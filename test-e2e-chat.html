@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CaptivateChat End-to-End Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: #555;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        input[type="file"], input[type="text"], input[type="url"], select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        .loading {
+            color: #007bff;
+            font-style: italic;
+        }
+        
+        .chat-container {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .chat-sidebar {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .chat-main {
+            flex: 2;
+        }
+        
+        .chat-messages {
+            height: 400px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+            margin-bottom: 15px;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+        
+        .message.user {
+            background-color: #007bff;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .message.assistant {
+            background-color: #e9ecef;
+            color: #333;
+        }
+        
+        .message.system {
+            background-color: #fff3cd;
+            color: #856404;
+            text-align: center;
+            font-style: italic;
+        }
+        
+        .message-content {
+            word-wrap: break-word;
+        }
+        
+        .message-meta {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+        
+        .file-attachment {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 5px 0;
+        }
+        
+        .file-info {
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .file-text {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 5px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        
+        .input-area {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        
+        .message-input {
+            flex: 1;
+            min-height: 40px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-connected {
+            background-color: #28a745;
+        }
+        
+        .status-disconnected {
+            background-color: #dc3545;
+        }
+        
+        .status-connecting {
+            background-color: #ffc107;
+        }
+        
+        .code-block {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+        
+        .paste-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 123, 255, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .paste-indicator.show {
+            opacity: 1;
+        }
+        
+        .input-area {
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 CaptivateChat End-to-End Test</h1>
+        
+        <!-- Configuration -->
+        <div class="section">
+            <h2>⚙️ Configuration</h2>
+            
+            <div class="form-group">
+                <label for="apiKey">API Key:</label>
+                <input type="text" id="apiKey" value="7NJQ4C2-727MHJP-Q8ZDXXE-DA32PH8" placeholder="Enter your API key">
+            </div>
+            
+            <div class="form-group">
+                <label for="mode">Mode:</label>
+                <select id="mode">
+                    <option value="prod" selected>Production</option>
+                    <option value="dev">Development</option>
+                </select>
+            </div>
+            
+            <button onclick="initializeChat()">🔗 Initialize Chat</button>
+            <button onclick="disconnectChat()">🔌 Disconnect</button>
+            
+            <div id="connectionStatus" class="result info" style="display: none;"></div>
+        </div>
+        
+        <div class="chat-container">
+            <!-- Chat Interface -->
+            <div class="chat-main">
+                <div class="section">
+                    <h2>💬 Chat Interface</h2>
+                    
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message system">
+                            <div class="message-content">Welcome to CaptivateChat! Initialize the connection to start chatting.</div>
+                        </div>
+                    </div>
+                    
+                    <div class="input-area">
+                        <textarea class="message-input" id="messageInput" placeholder="Type your message here or paste an image (Ctrl+V)..." disabled></textarea>
+                        <button onclick="sendTextMessage()" id="sendTextBtn" disabled>📤 Send</button>
+                        <div class="paste-indicator" id="pasteIndicator">📋 Processing pasted image...</div>
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label>📋 Paste Image Support:</label>
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                            • Use Windows Snipping Tool (Win+Shift+S) to capture an image<br>
+                            • Paste it directly into the text area (Ctrl+V)<br>
+                            • The image will be automatically processed and sent
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- File Upload Sidebar -->
+            <div class="chat-sidebar">
+                <div class="section">
+                    <h2>📁 File Upload</h2>
+                    <p style="font-size: 12px; color: #666; margin-bottom: 15px;">
+                        💡 <strong>Tip:</strong> You can type a message in the chat input above and send it along with the file. 
+                        The file will be sent with both the text message and the extracted file content.
+                    </p>
+                    
+                    <div class="form-group">
+                        <label for="fileInput">Select File:</label>
+                        <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="fileName">Custom File Name (optional):</label>
+                        <input type="text" id="fileName" placeholder="Leave empty to use original filename">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="includeMetadata"> Include Metadata
+                        </label>
+                    </div>
+                    
+                    <button onclick="sendFileMessage()" id="sendFileBtn" disabled>📎 Send File + Message</button>
+                    <button onclick="clearChat()">🗑️ Clear Chat</button>
+                    
+                    <div id="fileResult" class="result" style="display: none;"></div>
+                </div>
+                
+                <!-- WebSocket Payload Preview -->
+                <div class="section">
+                    <h2>📡 WebSocket Payload</h2>
+                    <p>Last sent payload:</p>
+                    <div id="payloadPreview" class="code-block">
+                        No messages sent yet
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Connection Log -->
+        <div class="section">
+            <h2>📋 Connection Log</h2>
+            <div id="connectionLog" class="result info">
+                Ready to initialize connection...
+            </div>
+        </div>
+    </div>
+
+    <!-- Include the CaptivateChat library -->
+    <script src="dist/captivate-chat-api.js"></script>
+    
+    <script>
+        // Global variables
+        let chatAPI = null;
+        let currentConversation = null;
+        let messageCounter = 0;
+        
+        // Initialize chat connection
+        async function initializeChat() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const mode = document.getElementById('mode').value;
+            
+            if (!apiKey) {
+                showResult('connectionStatus', 'Please enter an API key.', 'error');
+                return;
+            }
+            
+            try {
+                showResult('connectionStatus', '🔄 Connecting to CaptivateChat...', 'loading');
+                logMessage('Initializing CaptivateChat API...');
+                
+                // Create API instance
+                chatAPI = new CaptivateChatAPI(apiKey, mode);
+                
+                // Connect to WebSocket
+                await chatAPI.connect();
+                logMessage('✅ Connected to WebSocket');
+                
+                // Create a new conversation
+                currentConversation = await chatAPI.createConversation();
+                logMessage(`✅ Created conversation: ${currentConversation.conversationId}`);
+                
+                // Set up event listeners
+                setupEventListeners();
+                
+                // Enable UI
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('sendTextBtn').disabled = false;
+                document.getElementById('sendFileBtn').disabled = false;
+                
+                showResult('connectionStatus', '✅ Connected successfully!', 'success');
+                addChatMessage('system', 'Connected to CaptivateChat! You can now send messages and files.');
+                
+            } catch (error) {
+                showResult('connectionStatus', `❌ Connection failed: ${error.message}`, 'error');
+                logMessage(`❌ Connection failed: ${error.message}`);
+            }
+        }
+        
+        // Disconnect chat
+        function disconnectChat() {
+            if (chatAPI) {
+                chatAPI.disconnect();
+                chatAPI = null;
+                currentConversation = null;
+                
+                // Disable UI
+                document.getElementById('messageInput').disabled = true;
+                document.getElementById('sendTextBtn').disabled = true;
+                document.getElementById('sendFileBtn').disabled = true;
+                
+                showResult('connectionStatus', '🔌 Disconnected', 'info');
+                logMessage('🔌 Disconnected from CaptivateChat');
+                addChatMessage('system', 'Disconnected from CaptivateChat.');
+            }
+        }
+        
+        // Set up event listeners
+        function setupEventListeners() {
+            if (!currentConversation) return;
+            
+            // Listen for assistant messages
+            currentConversation.onMessage((message, type) => {
+                logMessage(`📨 Received message (${type}): ${message}`);
+                addChatMessage('assistant', message);
+            });
+            
+            // Listen for conversation updates
+            currentConversation.onConversationUpdate((update) => {
+                logMessage(`🔄 Conversation update: ${JSON.stringify(update, null, 2)}`);
+            });
+            
+            // Listen for errors
+            currentConversation.onError((error) => {
+                logMessage(`❌ Conversation error: ${error.message || error}`);
+                addChatMessage('system', `Error: ${error.message || error}`);
+            });
+            
+            // Listen for actions
+            currentConversation.onActionReceived((actions) => {
+                logMessage(`🎯 Action received: ${JSON.stringify(actions, null, 2)}`);
+            });
+        }
+        
+        // Send text message
+        async function sendTextMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message || !currentConversation) {
+                return;
+            }
+            
+            try {
+                // Add user message to chat
+                addChatMessage('user', message);
+                
+                // Send message to conversation
+                await currentConversation.sendMessage(message);
+                logMessage(`📤 Sent text message: "${message}"`);
+                
+                // Clear input
+                messageInput.value = '';
+                
+            } catch (error) {
+                logMessage(`❌ Failed to send message: ${error.message}`);
+                addChatMessage('system', `Failed to send message: ${error.message}`);
+            }
+        }
+        
+        // Send file message
+        async function sendFileMessage() {
+            const fileInput = document.getElementById('fileInput');
+            const fileName = document.getElementById('fileName').value;
+            const includeMetadata = document.getElementById('includeMetadata').checked;
+            const messageInput = document.getElementById('messageInput');
+            const messageText = messageInput.value.trim();
+            
+            if (!fileInput.files[0] || !currentConversation) {
+                showResult('fileResult', 'Please select a file and ensure chat is connected.', 'error');
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            
+            try {
+                showResult('fileResult', '🔄 Processing file...', 'loading');
+                logMessage(`📁 Processing file: ${file.name}`);
+                
+                // Create CaptivateChatFileInput
+                const fileInputObj = await CaptivateChatFileInput.create(file, {
+                    fileName: fileName || undefined,
+                    includeMetadata: includeMetadata
+                });
+                
+                logMessage(`✅ File processed successfully. Text length: ${fileInputObj.files[0].textContent.text.length} characters`);
+                
+                // Create combined message with text and files
+                const combinedMessage = {
+                    text: messageText || `📎 File: ${fileInputObj.files[0].filename}`,
+                    files: fileInputObj.files
+                };
+                
+                // Add file message to chat
+                addChatMessage('user', combinedMessage.text, fileInputObj);
+                
+                // Send combined message to conversation
+                await currentConversation.sendMessage(combinedMessage);
+                logMessage(`📤 Sent combined message with file: ${fileInputObj.files[0].filename}`);
+                
+                // Update payload preview
+                updatePayloadPreview(combinedMessage);
+                
+                showResult('fileResult', '✅ File with message sent successfully!', 'success');
+                
+                // Clear inputs
+                fileInput.value = '';
+                document.getElementById('fileName').value = '';
+                messageInput.value = '';
+                
+            } catch (error) {
+                showResult('fileResult', `❌ Error: ${error.message}`, 'error');
+                logMessage(`❌ File processing failed: ${error.message}`);
+                addChatMessage('system', `File processing failed: ${error.message}`);
+            }
+        }
+        
+        // Add message to chat interface
+        function addChatMessage(type, content, fileInput = null) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            messageContent.textContent = content;
+            messageDiv.appendChild(messageContent);
+            
+            // Add file attachment if present
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+                const fileAttachment = document.createElement('div');
+                fileAttachment.className = 'file-attachment';
+                
+                const fileInfo = document.createElement('div');
+                fileInfo.className = 'file-info';
+                fileInfo.textContent = `📎 ${fileInput.files[0].filename} (${fileInput.files[0].type})`;
+                fileAttachment.appendChild(fileInfo);
+                
+                const fileText = document.createElement('div');
+                fileText.className = 'file-text';
+                fileText.textContent = fileInput.files[0].textContent.text.substring(0, 200) + (fileInput.files[0].textContent.text.length > 200 ? '...' : '');
+                fileAttachment.appendChild(fileText);
+                
+                messageDiv.appendChild(fileAttachment);
+            }
+            
+            const messageMeta = document.createElement('div');
+            messageMeta.className = 'message-meta';
+            messageMeta.textContent = `${new Date().toLocaleTimeString()} - Message #${++messageCounter}`;
+            messageDiv.appendChild(messageMeta);
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Update payload preview
+        function updatePayloadPreview(content) {
+            const payloadPreview = document.getElementById('payloadPreview');
+            const payload = {
+                action: 'sendMessage',
+                event: {
+                    event_type: 'user_message',
+                    event_payload: {
+                        type: 'message_create',
+                        client_msg_id: `unique-message-id-${Date.now()}`,
+                        conversation_id: currentConversation ? currentConversation.conversationId : 'unknown',
+                        content: content
+                    }
+                }
+            };
+            
+            payloadPreview.textContent = JSON.stringify(payload, null, 2);
+        }
+        
+        // Clear chat
+        function clearChat() {
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '<div class="message system"><div class="message-content">Chat cleared.</div></div>';
+            messageCounter = 0;
+            document.getElementById('payloadPreview').textContent = 'No messages sent yet';
+        }
+        
+        // Log message
+        function logMessage(message) {
+            const log = document.getElementById('connectionLog');
+            const timestamp = new Date().toLocaleTimeString();
+            log.textContent += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        // Utility functions
+        function showResult(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `result ${type}`;
+            element.style.display = 'block';
+        }
+        
+        // Show paste indicator
+        function showPasteIndicator() {
+            const indicator = document.getElementById('pasteIndicator');
+            indicator.classList.add('show');
+        }
+        
+        // Hide paste indicator
+        function hidePasteIndicator() {
+            const indicator = document.getElementById('pasteIndicator');
+            indicator.classList.remove('show');
+        }
+        
+        // Handle Enter key in message input
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendTextMessage();
+            }
+        });
+        
+        // Handle clipboard paste events
+        document.getElementById('messageInput').addEventListener('paste', async function(e) {
+            e.preventDefault();
+            
+            if (!currentConversation) {
+                logMessage('❌ Cannot paste image: Chat not connected');
+                return;
+            }
+            
+            const clipboardData = e.clipboardData || window.clipboardData;
+            const items = clipboardData.items;
+            
+            // Look for image data in clipboard
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                
+                if (item.type.indexOf('image') !== -1) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        logMessage(`📋 Image pasted from clipboard: ${file.name || 'clipboard-image'}`);
+                        
+                        try {
+                            // Show visual indicator
+                            showPasteIndicator();
+                            
+                            // Show processing message
+                            addChatMessage('system', '🔄 Processing pasted image...');
+                            
+                            // Create CaptivateChatFileInput from pasted image
+                            const fileInputObj = await CaptivateChatFileInput.create(file, {
+                                fileName: `pasted-image-${Date.now()}.png`,
+                                includeMetadata: true
+                            });
+                            
+                            logMessage(`✅ Pasted image processed successfully. Text length: ${fileInputObj.files[0].textContent.text.length} characters`);
+                            
+                            // Create combined message with text and files
+                            const combinedMessage = {
+                                text: `📋 Pasted Image: ${fileInputObj.files[0].filename}`,
+                                files: fileInputObj.files
+                            };
+                            
+                            // Add file message to chat
+                            addChatMessage('user', combinedMessage.text, fileInputObj);
+                            
+                            // Send combined message to conversation
+                            await currentConversation.sendMessage(combinedMessage);
+                            logMessage(`📤 Sent pasted image with message: ${fileInputObj.files[0].filename}`);
+                            
+                            // Update payload preview
+                            updatePayloadPreview(combinedMessage);
+                            
+                            // Clear the text input
+                            document.getElementById('messageInput').value = '';
+                            
+                            // Hide indicator
+                            hidePasteIndicator();
+                            
+                            return; // Exit after processing the first image
+                        } catch (error) {
+                            logMessage(`❌ Failed to process pasted image: ${error.message}`);
+                            addChatMessage('system', `Failed to process pasted image: ${error.message}`);
+                            
+                            // Hide indicator on error
+                            hidePasteIndicator();
+                        }
+                    }
+                }
+            }
+            
+            // If no image was found, handle as regular text paste
+            const textData = clipboardData.getData('text/plain');
+            if (textData) {
+                const currentValue = document.getElementById('messageInput').value;
+                const cursorPos = document.getElementById('messageInput').selectionStart;
+                const newValue = currentValue.substring(0, cursorPos) + textData + currentValue.substring(cursorPos);
+                document.getElementById('messageInput').value = newValue;
+                
+                // Set cursor position after pasted text
+                const newCursorPos = cursorPos + textData.length;
+                document.getElementById('messageInput').setSelectionRange(newCursorPos, newCursorPos);
+            }
+        });
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            logMessage('🧪 CaptivateChat End-to-End Test Page Loaded');
+            logMessage('🔑 API Key configured: ' + document.getElementById('apiKey').value);
+            logMessage('ℹ️ Click "Initialize Chat" to start the end-to-end test');
+        });
+    </script>
+</body>
+</html>

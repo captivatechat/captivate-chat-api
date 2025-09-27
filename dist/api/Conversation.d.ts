@@ -91,6 +91,18 @@ export declare class Conversation {
       */
     delete(): Promise<void>;
     /**
+     * Converts a File object to base64 string.
+     * @param file - The File object to convert.
+     * @returns A promise that resolves to the base64 string.
+     */
+    private fileToBase64;
+    /**
+     * Converts a Blob object to base64 string.
+     * @param blob - The Blob object to convert.
+     * @returns A promise that resolves to the base64 string.
+     */
+    private blobToBase64;
+    /**
      * Edits a message in the conversation.
      * @param messageId - The ID of the message to edit.
      * @param content - The new content for the message (object or string).
