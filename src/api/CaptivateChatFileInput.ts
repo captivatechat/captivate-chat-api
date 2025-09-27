@@ -3,6 +3,8 @@
  * Supports both direct file uploads and external storage URLs (like S3).
  */
 export class CaptivateChatFileInput {
+  private static readonly FILE_TO_TEXT_API_URL = 'https://file-to-text.prod.captivat.io/api/file-to-text';
+  
   public readonly type: 'files' = 'files';
   public readonly files: Array<{
     filename: string;
@@ -171,7 +173,7 @@ export class CaptivateChatFileInput {
    * @returns A promise that resolves to the extracted text.
    */
   private static async convertFileToText(file: File | Blob, fileName: string, includeMetadata: boolean): Promise<string> {
-    const url = 'https://file-to-text.prod.captivat.io/api/file-to-text';
+    const url = CaptivateChatFileInput.FILE_TO_TEXT_API_URL;
 
     // Create FormData for multipart/form-data request
     const formData = new FormData();
@@ -213,7 +215,7 @@ export class CaptivateChatFileInput {
    * @returns A promise that resolves to the extracted text.
    */
   private static async convertUrlToText(url: string, fileName: string, includeMetadata: boolean): Promise<string> {
-    const apiUrl = 'https://file-to-text.prod.captivat.io/api/file-to-text';
+    const apiUrl = CaptivateChatFileInput.FILE_TO_TEXT_API_URL;
 
     // Create FormData for multipart/form-data request with URL
     const formData = new FormData();
