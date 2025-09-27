@@ -190,6 +190,28 @@ export declare class CaptivateChatFileInput {
         };
     }>;
     /**
+     * Factory method to create multiple file inputs from an array of files.
+     * Processes all files in parallel and returns a single CaptivateChatFileInput with all files.
+     * @param files - Array of files to process.
+     * @param options - Configuration options for all files.
+     * @returns A promise that resolves to a CaptivateChatFileInput instance with all processed files.
+     */
+    static createMultiple(files: (File | Blob)[], options?: {
+        includeMetadata?: boolean;
+    }): Promise<CaptivateChatFileInput>;
+    /**
+     * Factory method to create multiple file inputs from an array of external URLs.
+     * Processes all URLs in parallel and returns a single CaptivateChatFileInput with all files.
+     * @param fileOptions - Array of file options with URLs.
+     * @returns A promise that resolves to a CaptivateChatFileInput instance with all processed files.
+     */
+    static createMultiple(fileOptions: Array<{
+        fileName: string;
+        fileType: string;
+        url: string;
+        includeMetadata?: boolean;
+    }>): Promise<CaptivateChatFileInput>;
+    /**
      * Converts a file to text using the file-to-text API endpoint.
      * @param file - The file to convert (File or Blob).
      * @param fileName - The name of the file.

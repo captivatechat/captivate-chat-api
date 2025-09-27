@@ -193,8 +193,25 @@ await conversation.sendMessage({
 
 #### Multiple Files
 
+**Option 1: Using the new `createMultiple()` method (Recommended)**
+
 ```typescript
-// Process multiple files
+// Process multiple files in one call - NEW!
+const files = [file1, file2, file3];
+const fileInput = await CaptivateChatFileInput.createMultiple(files, {
+  includeMetadata: true
+});
+
+await conversation.sendMessage({
+  text: "Multiple documents attached",
+  files: fileInput  // 🎉 All files processed and ready!
+});
+```
+
+**Option 2: Manual processing (still supported)**
+
+```typescript
+// Process multiple files manually
 const files = [file1, file2, file3];
 const fileInputs = await Promise.all(
   files.map(file => CaptivateChatFileInput.create(file, {
@@ -202,12 +219,29 @@ const fileInputs = await Promise.all(
   }))
 );
 
-// Combine all files - NEW: You can use fileInputs directly!
+// Combine all files
 const allFiles = fileInputs.flatMap(input => input);
 
 await conversation.sendMessage({
   text: "Multiple documents attached",
   files: allFiles
+});
+```
+
+**Option 3: Multiple external URLs**
+
+```typescript
+// Process multiple files from external URLs
+const urlFiles = [
+  { fileName: 'doc1.pdf', fileType: 'application/pdf', url: 'https://s3.amazonaws.com/bucket/doc1.pdf' },
+  { fileName: 'doc2.pdf', fileType: 'application/pdf', url: 'https://s3.amazonaws.com/bucket/doc2.pdf' }
+];
+
+const fileInput = await CaptivateChatFileInput.createMultiple(urlFiles);
+
+await conversation.sendMessage({
+  text: "Multiple documents from external storage",
+  files: fileInput
 });
 ```
 
@@ -608,6 +642,12 @@ A utility class for processing files and converting them to text for chat messag
 
 - **`static createFile(options: { fileName: string; fileType: string; url: string; includeMetadata?: boolean }): Promise<FileObject>`**  
   **(New)** Creates a single file object from an external URL (no wrapper) with automatic text extraction.
+
+- **`static createMultiple(files: (File | Blob)[], options?: { includeMetadata?: boolean }): Promise<CaptivateChatFileInput>`**  
+  **(New)** Creates a single `CaptivateChatFileInput` from multiple files, processing them in parallel.
+
+- **`static createMultiple(fileOptions: Array<{ fileName: string; fileType: string; url: string; includeMetadata?: boolean }>): Promise<CaptivateChatFileInput>`**  
+  **(New)** Creates a single `CaptivateChatFileInput` from multiple external URLs, processing them in parallel.
 
 - **`getFilename(): string | undefined`**  
   **(New)** Gets the filename of the first file.
