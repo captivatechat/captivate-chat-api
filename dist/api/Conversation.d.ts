@@ -76,10 +76,16 @@ export declare class Conversation {
      */
     sendAction(actionId: string, data?: object): Promise<void>;
     /**
-     * Requests the transcript of the conversation.
-     * @returns A promise that resolves to the conversation transcript.
+     * Requests the transcript of the conversation with automatic file URL refresh.
+     * @returns A promise that resolves to the conversation transcript with refreshed file URLs.
      */
     getTranscript(): Promise<object[]>;
+    /**
+     * Refreshes expired file URLs in the transcript.
+     * @param transcript - The transcript array to process.
+     * @returns A promise that resolves to the transcript with refreshed file URLs.
+     */
+    private refreshExpiredFileUrls;
     /**
    * Requests metadata for the conversation.
    * @returns A promise that resolves to the conversation metadata.

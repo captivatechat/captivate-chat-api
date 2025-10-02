@@ -1,3 +1,5 @@
+import { CaptivateChatFileManager } from './CaptivateChatFileManager';
+
 interface Action {
   id: string;
   data: any;
@@ -230,8 +232,8 @@ export class Conversation {
   }
 
   /**
-   * Requests the transcript of the conversation.
-   * @returns A promise that resolves to the conversation transcript.
+   * Requests the transcript of the conversation with automatic file URL refresh.
+   * @returns A promise that resolves to the conversation transcript with refreshed file URLs.
    */
   public async getTranscript(): Promise<object[]> {
     if (!this.apiKey) {
@@ -253,7 +255,72 @@ export class Conversation {
     }
     const data = await response.json();
 
-    return data.transcript;
+    // Refresh expired file URLs in the transcript
+    const refreshedTranscript = await this.refreshExpiredFileUrls(data.transcript);
+    return refreshedTranscript;
+  }
+
+  /**
+   * Refreshes expired file URLs in the transcript.
+   * @param transcript - The transcript array to process.
+   * @returns A promise that resolves to the transcript with refreshed file URLs.
+   */
+  private async refreshExpiredFileUrls(transcript: any[]): Promise<object[]> {
+    const refreshedTranscript = [];
+
+    for (const message of transcript) {
+      if (message.files && message.files.length > 0) {
+        const refreshedMessageFiles = [];
+
+        for (const file of message.files) {
+          if (file.storage && file.storage.fileKey) {
+            try {
+              // Check if URL needs refresh (less than 5 minutes remaining)
+              const now = Math.floor(Date.now() / 1000);
+              const timeUntilExpiry = file.storage.expiresIn - now;
+
+              if (timeUntilExpiry < 300) { // Less than 5 minutes
+                console.log(`Refreshing expired URL for file: ${file.filename}`);
+                
+                const refreshedUrl = await CaptivateChatFileManager.getSecureFileUrl(
+                  file.storage.fileKey,
+                  7200 // 2 hours
+                );
+
+                // Create updated file object with refreshed URL
+                refreshedMessageFiles.push({
+                  ...file,
+                  storage: {
+                    ...file.storage,
+                    presignedUrl: refreshedUrl,
+                    expiresIn: now + 7200
+                  }
+                });
+              } else {
+                // URL is still valid
+                refreshedMessageFiles.push(file);
+              }
+            } catch (error) {
+              console.error(`Failed to refresh file ${file.filename}:`, error);
+              // Keep original file even if refresh failed
+              refreshedMessageFiles.push(file);
+            }
+          } else {
+            // No storage info, keep as is
+            refreshedMessageFiles.push(file);
+          }
+        }
+
+        refreshedTranscript.push({
+          ...message,
+          files: refreshedMessageFiles
+        });
+      } else {
+        refreshedTranscript.push(message);
+      }
+    }
+
+    return refreshedTranscript;
   }
 
   /**
