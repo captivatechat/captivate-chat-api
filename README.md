@@ -12,14 +12,16 @@ npm install captivate-chat-api
 
 ## What's New
 
-### Enhanced File Handling (v2.0+)
+### Enhanced File Handling (v4.0.0)
 
-The `CaptivateChatFileInput` class has been significantly improved with:
+The `CaptivateChatFileManager` class has been significantly improved with:
 
 - **🎉 Direct Usage**: Use `fileInput` directly as `files: fileInput` instead of `files: fileInput.files`
 - **🔧 Convenience Methods**: Easy access to file properties with `getFilename()`, `getTextContent()`, `getFileType()`
 - **📦 Single File Factory**: New `createFile()` method for direct file object creation
 - **🔄 Array-like Behavior**: Proxy-based implementation supports array access and iteration
+- **💾 Storage Options**: Choose between service storage (`storage: true`) or developer storage (`storage: false`)
+- **🔗 URL Support**: When `storage: false`, provide your own URL for `sendMessage` compatibility
 - **⚡ Performance**: Eliminated API URL duplication and optimized internal structure
 - **🔒 Backward Compatibility**: All existing code continues to work without changes
 
@@ -129,19 +131,20 @@ Create a new conversation with the following options:
    });
    ```
 
-### File Handling with CaptivateChatFileInput
+### File Handling with CaptivateChatFileManager
 
-The `CaptivateChatFileInput` class provides automatic file-to-text conversion and structured file handling for chat messages. The class now includes several convenience methods and supports direct usage as a files array.
+The `CaptivateChatFileManager` class provides automatic file-to-text conversion and structured file handling for chat messages. The class now includes several convenience methods and supports direct usage as a files array.
 
 #### Basic File Upload
 
 ```typescript
-import { CaptivateChatFileInput } from 'captivate-chat-api';
+import { CaptivateChatFileManager } from 'captivate-chat-api';
 
-// Upload a local file
-const fileInput = await CaptivateChatFileInput.create(file, {
-  fileName: 'document.pdf',
-  includeMetadata: true
+// Upload a local file with storage (default behavior)
+const fileInput = await CaptivateChatFileManager.create({
+  file: file,
+  fileName: 'document.pdf'
+  // storage defaults to true - file stored by service
 });
 
 // Send file with text message - NEW: You can use fileInput directly!
@@ -151,14 +154,96 @@ await conversation.sendMessage({
 });
 ```
 
-#### Convenience Methods
+#### File Storage Options
 
-The `CaptivateChatFileInput` class now includes several convenience methods for easier access to file properties:
+The library now supports two storage modes:
+
+**1. Service Storage (Default) - `storage: true`**
+```typescript
+// File stored by the service (default behavior)
+const fileInput = await CaptivateChatFileManager.create({
+  file: file,
+  fileName: 'document.pdf'
+  // storage defaults to true - file stored by service
+});
+
+// File object includes storage information:
+// {
+//   filename: 'document.pdf',
+//   type: 'application/pdf',
+//   file: File,
+//   textContent: { ... },
+//   storage: {
+//     fileKey: 'uploads/1704067200000-...',
+//     presignedUrl: 'https://my-bucket.s3.amazonaws.com/...',
+//     expiresIn: 1704070800,
+//     fileSize: 1024,
+//     processingTime: 15
+//   }
+// }
+```
+
+**2. Developer Storage - `storage: false`**
+```typescript
+// File processed without storage, provide your own URL
+const fileInput = await CaptivateChatFileManager.create({
+  file: file,
+  fileName: 'document.pdf',
+  storage: false,
+  url: 'https://my-bucket.s3.amazonaws.com/documents/document.pdf'  // Required
+});
+
+// File object includes your URL:
+// {
+//   filename: 'document.pdf',
+//   type: 'application/pdf',
+//   file: File,
+//   url: 'https://my-bucket.s3.amazonaws.com/documents/document.pdf',
+//   textContent: { ... }
+// }
+```
+
+**Storage Benefits:**
+- **Service Storage**: Automatic file management, presigned URLs, no developer overhead
+- **Developer Storage**: Full control over storage location, access permissions, and costs
+
+#### Secure URL Management
+
+When using service storage, you can generate fresh secure URLs for accessing stored files:
 
 ```typescript
-const fileInput = await CaptivateChatFileInput.create(file, {
-  fileName: 'document.pdf',
-  includeMetadata: true
+// Create file with storage
+const fileInput = await CaptivateChatFileManager.create({
+  file: file,
+  fileName: 'document.pdf'
+  // storage defaults to true
+});
+
+// Refresh secure URL (expires in 2 hours by default)
+const refreshedUrl = await fileInput.refreshSecureUrl();
+console.log('Refreshed secure URL:', refreshedUrl);
+
+// Refresh secure URL with custom expiration (1 hour)
+const customUrl = await fileInput.refreshSecureUrl(3600);
+
+// Generate secure URL from file key directly
+const fileKey = 'uploads/1704067200000-uuid-example.txt';
+const directUrl = await CaptivateChatFileManager.getSecureFileUrl(fileKey, 7200);
+```
+
+**Use Cases:**
+- **Expired URLs**: Refresh secure URLs when the original expires
+- **Custom Expiration**: Set different expiration times for different use cases
+- **Direct Access**: Generate secure URLs from file keys without file objects
+
+#### Convenience Methods
+
+The `CaptivateChatFileManager` class now includes several convenience methods for easier access to file properties:
+
+```typescript
+const fileInput = await CaptivateChatFileManager.create({
+  file: file,
+  fileName: 'document.pdf'
 });
 
 // Get file information easily
@@ -174,19 +259,19 @@ const firstFile = fileInput.getFirstFile();
 const filesArray = fileInput.toFilesArray();
 ```
 
-#### External URL File Processing
+#### Developer Storage with URL
 
 ```typescript
-// Process file from external URL (S3, etc.)
-const fileInput = await CaptivateChatFileInput.create({
+// Process file without service storage, provide your own URL
+const fileInput = await CaptivateChatFileManager.create({
+  file: file,
   fileName: 'document.pdf',
-  fileType: 'application/pdf',
-  url: 'https://s3.amazonaws.com/bucket/document.pdf',
-  includeMetadata: true
+  storage: false,
+  url: 'https://my-bucket.s3.amazonaws.com/documents/document.pdf'  // Required
 });
 
 await conversation.sendMessage({
-  text: "Document from external storage",
+  text: "Document from my storage",
   files: fileInput  // 🎉 Direct usage supported!
 });
 ```
@@ -196,10 +281,11 @@ await conversation.sendMessage({
 **Option 1: Using the new `createMultiple()` method (Recommended)**
 
 ```typescript
-// Process multiple files in one call - NEW!
+// Process multiple files with service storage (default)
 const files = [file1, file2, file3];
-const fileInput = await CaptivateChatFileInput.createMultiple(files, {
-  includeMetadata: true
+const fileInput = await CaptivateChatFileManager.createMultiple({
+  files: files
+  // storage defaults to true
 });
 
 await conversation.sendMessage({
@@ -208,14 +294,37 @@ await conversation.sendMessage({
 });
 ```
 
-**Option 2: Manual processing (still supported)**
+**Option 2: Multiple files with developer storage**
+
+```typescript
+// Process multiple files without service storage
+const files = [file1, file2, file3];
+const urls = [
+  'https://my-bucket.s3.amazonaws.com/file1.pdf',
+  'https://my-bucket.s3.amazonaws.com/file2.pdf',
+  'https://my-bucket.s3.amazonaws.com/file3.pdf'
+];
+
+const fileInput = await CaptivateChatFileManager.createMultiple({
+  files: files,
+  storage: false,
+  urls: urls  // Required when storage is false
+});
+
+await conversation.sendMessage({
+  text: "Multiple documents from my storage",
+  files: fileInput
+});
+```
+
+**Option 3: Manual processing (still supported)**
 
 ```typescript
 // Process multiple files manually
 const files = [file1, file2, file3];
 const fileInputs = await Promise.all(
-  files.map(file => CaptivateChatFileInput.create(file, {
-    includeMetadata: true
+  files.map(file => CaptivateChatFileManager.create({
+    file: file
   }))
 );
 
@@ -228,44 +337,42 @@ await conversation.sendMessage({
 });
 ```
 
-**Option 3: Multiple external URLs**
-
-```typescript
-// Process multiple files from external URLs
-const urlFiles = [
-  { fileName: 'doc1.pdf', fileType: 'application/pdf', url: 'https://s3.amazonaws.com/bucket/doc1.pdf' },
-  { fileName: 'doc2.pdf', fileType: 'application/pdf', url: 'https://s3.amazonaws.com/bucket/doc2.pdf' }
-];
-
-const fileInput = await CaptivateChatFileInput.createMultiple(urlFiles);
-
-await conversation.sendMessage({
-  text: "Multiple documents from external storage",
-  files: fileInput
-});
-```
-
 #### Alternative: Single File Factory Method
 
 For even simpler usage when you only need one file object, you can use the new `createFile()` method:
 
 ```typescript
-// Get just the file object directly (no wrapper)
-const fileObj = await CaptivateChatFileInput.createFile(file, {
-  fileName: 'document.pdf',
-  includeMetadata: true
+// Get just the file object directly (no wrapper) with service storage
+const fileObj = await CaptivateChatFileManager.createFile({
+  file: file,
+  fileName: 'document.pdf'
+  // storage defaults to true
 });
 
 await conversation.sendMessage({
   text: "Here's the document",
-  files: [fileObj]  // Wrap in array since it's a single file object
+  files: fileObj  // 🎉 Direct usage - no array wrapping needed!
+});
+
+// Or with developer storage
+const fileObjWithUrl = await CaptivateChatFileManager.createFile({
+  file: file,
+  fileName: 'document.pdf',
+  storage: false,
+  url: 'https://my-bucket.s3.amazonaws.com/document.pdf'
+});
+
+await conversation.sendMessage({
+  text: "Here's the document from my storage",
+  files: fileObjWithUrl  // 🎉 Direct usage - no array wrapping needed!
 });
 ```
 
 #### File Input Structure
 
-The `CaptivateChatFileInput` creates a structured object with:
+The `CaptivateChatFileManager` creates a structured object with:
 
+**Service Storage (storage: true):**
 ```typescript
 {
   type: 'files',
@@ -273,15 +380,45 @@ The `CaptivateChatFileInput` creates a structured object with:
     {
       filename: 'document.pdf',
       type: 'application/pdf',
-      file?: File | Blob,        // For direct uploads
-      url?: string,              // For external URLs
+      file: File | Blob,         // Original file
       textContent: {
         type: 'file_content',
         text: 'Extracted text from file...',
         metadata: {
           source: 'file_attachment',
           originalFileName: 'document.pdf',
-          storageType: 'direct' | 'external'
+          storageType: 'direct'
+        }
+      },
+      storage: {
+        fileKey: 'uploads/1704067200000-...',
+        presignedUrl: 'https://my-bucket.s3.amazonaws.com/...',
+        expiresIn: 1704070800,
+        fileSize: 1024,
+        processingTime: 15
+      }
+    }
+  ]
+}
+```
+
+**Developer Storage (storage: false):**
+```typescript
+{
+  type: 'files',
+  files: [
+    {
+      filename: 'document.pdf',
+      type: 'application/pdf',
+      file: File | Blob,         // Original file
+      url: 'https://my-bucket.s3.amazonaws.com/document.pdf',  // Developer's URL
+      textContent: {
+        type: 'file_content',
+        text: 'Extracted text from file...',
+        metadata: {
+          source: 'file_attachment',
+          originalFileName: 'document.pdf',
+          storageType: 'direct'
         }
       }
     }
@@ -530,7 +667,7 @@ console.log('Conversations Deleted successfully');
 Here's a complete example of how to use the API:
 
 ```typescript
-import { CaptivateChatAPI, CaptivateChatFileInput } from 'captivate-chat-api';
+import { CaptivateChatAPI, CaptivateChatFileManager } from 'captivate-chat-api';
 
 (async () => {
   try {
@@ -560,9 +697,9 @@ import { CaptivateChatAPI, CaptivateChatFileInput } from 'captivate-chat-api';
     await conversation.sendMessage('Hello! How can I assist you today?');
 
     // Send a file with text message
-    const fileInput = await CaptivateChatFileInput.create(file, {
-      fileName: 'document.pdf',
-      includeMetadata: true
+    const fileInput = await CaptivateChatFileManager.create({
+      file: file,
+      fileName: 'document.pdf'
     });
     
     await conversation.sendMessage({
@@ -625,29 +762,20 @@ File-to-text conversion is handled by the external API endpoint:
 
 ## API Reference
 
-### CaptivateChatFileInput
+### CaptivateChatFileManager
 
 A utility class for processing files and converting them to text for chat messages. The class now supports direct usage as a files array and includes convenience methods for easier file property access.
 
 #### Methods
 
-- **`static create(file: File | Blob, options?: { fileName?: string; fileType?: string; includeMetadata?: boolean }): Promise<CaptivateChatFileInput>`**  
-  Creates a `CaptivateChatFileInput` from a local file with automatic text extraction.
+- **`static create(options: { file: File | Blob; fileName?: string; fileType?: string; storage?: boolean; url?: string }): Promise<CaptivateChatFileManager>`**  
+  Creates a `CaptivateChatFileManager` from a local file with automatic text extraction. `storage` defaults to `true`.
 
-- **`static create(options: { fileName: string; fileType: string; url: string; includeMetadata?: boolean }): Promise<CaptivateChatFileInput>`**  
-  Creates a `CaptivateChatFileInput` from an external URL with automatic text extraction.
+- **`static createFile(options: { file: File | Blob; fileName?: string; fileType?: string; storage?: boolean; url?: string }): Promise<FileObject>`**  
+  **(New)** Creates a single file object directly (no wrapper) with automatic text extraction. `storage` defaults to `true`.
 
-- **`static createFile(file: File | Blob, options?: { fileName?: string; fileType?: string; includeMetadata?: boolean }): Promise<FileObject>`**  
-  **(New)** Creates a single file object directly (no wrapper) with automatic text extraction.
-
-- **`static createFile(options: { fileName: string; fileType: string; url: string; includeMetadata?: boolean }): Promise<FileObject>`**  
-  **(New)** Creates a single file object from an external URL (no wrapper) with automatic text extraction.
-
-- **`static createMultiple(files: (File | Blob)[], options?: { includeMetadata?: boolean }): Promise<CaptivateChatFileInput>`**  
-  **(New)** Creates a single `CaptivateChatFileInput` from multiple files, processing them in parallel.
-
-- **`static createMultiple(fileOptions: Array<{ fileName: string; fileType: string; url: string; includeMetadata?: boolean }>): Promise<CaptivateChatFileInput>`**  
-  **(New)** Creates a single `CaptivateChatFileInput` from multiple external URLs, processing them in parallel.
+- **`static createMultiple(options: { files: (File | Blob)[]; storage?: boolean; urls?: string[] }): Promise<CaptivateChatFileManager>`**  
+  **(New)** Creates a single `CaptivateChatFileManager` from multiple files, processing them in parallel. `storage` defaults to `true`.
 
 - **`getFilename(): string | undefined`**  
   **(New)** Gets the filename of the first file.
@@ -664,6 +792,12 @@ A utility class for processing files and converting them to text for chat messag
 - **`toFilesArray(): Array<FileObject>`**  
   **(New)** Returns the files array explicitly.
 
+- **`refreshSecureUrl(expiresIn?: number): Promise<string | undefined>`**  
+  **(New)** Refreshes the secure URL for the first file (if it has storage information).
+
+- **`static getSecureFileUrl(fileKey: string, expiresIn?: number): Promise<string>`**  
+  **(New)** Generates a secure URL for accessing a stored file by file key.
+
 #### Properties
 
 - **`type: 'files'`** - Always 'files' for file inputs
@@ -672,10 +806,10 @@ A utility class for processing files and converting them to text for chat messag
 
 #### Array-like Behavior
 
-The `CaptivateChatFileInput` class now supports array-like behavior through a proxy, allowing you to use it directly as a files array:
+The `CaptivateChatFileManager` class now supports array-like behavior through a proxy, allowing you to use it directly as a files array:
 
 ```typescript
-const fileInput = await CaptivateChatFileInput.create(file, options);
+const fileInput = await CaptivateChatFileManager.create(file, options);
 
 // All of these work:
 files: fileInput           // ✅ Direct usage
@@ -686,19 +820,45 @@ fileInput.length           // ✅ Array length
 
 #### FileObject Structure
 
+**Service Storage (storage: true):**
 ```typescript
 {
   filename: string;
   type: string;
-  file?: File | Blob;        // For direct uploads
-  url?: string;              // For external URLs
+  file: File | Blob;         // Original file
   textContent: {
     type: 'file_content';
     text: string;
     metadata: {
       source: 'file_attachment';
       originalFileName: string;
-      storageType: 'direct' | 'external';
+      storageType: 'direct';
+    };
+  };
+  storage: {
+    fileKey: string;
+    presignedUrl: string;
+    expiresIn: number;
+    fileSize: number;
+    processingTime: number;
+  };
+}
+```
+
+**Developer Storage (storage: false):**
+```typescript
+{
+  filename: string;
+  type: string;
+  file: File | Blob;         // Original file
+  url: string;               // Developer's URL (required when storage is false)
+  textContent: {
+    type: 'file_content';
+    text: string;
+    metadata: {
+      source: 'file_attachment';
+      originalFileName: string;
+      storageType: 'direct';
     };
   };
 }

@@ -348,11 +348,17 @@
                     
                     <div class="form-group">
                         <label>
-                            <input type="checkbox" id="includeMetadata"> Include Metadata
+                            <input type="checkbox" id="storage" checked> Store File (default)
                         </label>
                     </div>
                     
+                    <div class="form-group" id="urlGroup" style="display: none;">
+                        <label for="fileUrl">File URL (required when storage is false):</label>
+                        <input type="url" id="fileUrl" placeholder="https://example.com/file.pdf">
+                    </div>
+                    
                     <button onclick="sendFileMessage()" id="sendFileBtn" disabled>📎 Send File + Message</button>
+                    <button onclick="testTranscript()" id="testTranscriptBtn" disabled>📜 Test Transcript</button>
                     <button onclick="clearChat()">🗑️ Clear Chat</button>
                     
                     <div id="fileResult" class="result" style="display: none;"></div>
@@ -419,6 +425,7 @@
                 document.getElementById('messageInput').disabled = false;
                 document.getElementById('sendTextBtn').disabled = false;
                 document.getElementById('sendFileBtn').disabled = false;
+                document.getElementById('testTranscriptBtn').disabled = false;
                 
                 showResult('connectionStatus', '✅ Connected successfully!', 'success');
                 addChatMessage('system', 'Connected to CaptivateChat! You can now send messages and files.');
@@ -440,6 +447,7 @@
                 document.getElementById('messageInput').disabled = true;
                 document.getElementById('sendTextBtn').disabled = true;
                 document.getElementById('sendFileBtn').disabled = true;
+                document.getElementById('testTranscriptBtn').disabled = true;
                 
                 showResult('connectionStatus', '🔌 Disconnected', 'info');
                 logMessage('🔌 Disconnected from CaptivateChat');
@@ -504,12 +512,18 @@
         async function sendFileMessage() {
             const fileInput = document.getElementById('fileInput');
             const fileName = document.getElementById('fileName').value;
-            const includeMetadata = document.getElementById('includeMetadata').checked;
+            const storage = document.getElementById('storage').checked;
+            const fileUrl = document.getElementById('fileUrl').value;
             const messageInput = document.getElementById('messageInput');
             const messageText = messageInput.value.trim();
             
             if (!fileInput.files[0] || !currentConversation) {
                 showResult('fileResult', 'Please select a file and ensure chat is connected.', 'error');
+                return;
+            }
+            
+            if (!storage && !fileUrl) {
+                showResult('fileResult', 'Please provide a URL when storage is false.', 'error');
                 return;
             }
             
@@ -519,13 +533,24 @@
                 showResult('fileResult', '🔄 Processing file...', 'loading');
                 logMessage(`📁 Processing file: ${file.name}`);
                 
-                // Create CaptivateChatFileInput
-                const fileInputObj = await CaptivateChatFileInput.create(file, {
+                // Create CaptivateChatFileManager
+                const fileInputObj = await CaptivateChatFileManager.create({
+                    file: file,
                     fileName: fileName || undefined,
-                    includeMetadata: includeMetadata
+                    storage: storage,
+                    url: storage ? undefined : fileUrl
                 });
                 
                 logMessage(`✅ File processed successfully. Text length: ${fileInputObj.files[0].textContent.text.length} characters`);
+                
+                // Log storage information if available
+                if (fileInputObj.files[0].storage) {
+                    logMessage(`📦 File stored with key: ${fileInputObj.files[0].storage.fileKey}`);
+                    logMessage(`🔗 Presigned URL: ${fileInputObj.files[0].storage.presignedUrl.substring(0, 50)}...`);
+                    logMessage(`⏰ Expires: ${new Date(fileInputObj.files[0].storage.expiresIn * 1000).toLocaleString()}`);
+                } else if (fileInputObj.files[0].url) {
+                    logMessage(`🔗 Using custom URL: ${fileInputObj.files[0].url}`);
+                }
                 
                 // Create combined message with text and files
                 const combinedMessage = {
@@ -548,6 +573,7 @@
                 // Clear inputs
                 fileInput.value = '';
                 document.getElementById('fileName').value = '';
+                document.getElementById('fileUrl').value = '';
                 messageInput.value = '';
                 
             } catch (error) {
@@ -612,6 +638,57 @@
             };
             
             payloadPreview.textContent = JSON.stringify(payload, null, 2);
+        }
+        
+        // Test transcript functionality
+        async function testTranscript() {
+            if (!currentConversation) {
+                showResult('fileResult', 'Please connect to chat first.', 'error');
+                return;
+            }
+            
+            try {
+                showResult('fileResult', '🔄 Fetching transcript with automatic URL refresh...', 'loading');
+                logMessage('📜 Fetching conversation transcript...');
+                
+                // Get transcript - URLs are automatically refreshed if expired
+                const transcript = await currentConversation.getTranscript();
+                
+                logMessage(`✅ Transcript retrieved: ${transcript.length} messages`);
+                
+                // Process transcript and show file information
+                let fileCount = 0;
+                let refreshedUrls = 0;
+                
+                transcript.forEach((message, index) => {
+                    if (message.files && message.files.length > 0) {
+                        fileCount += message.files.length;
+                        
+                        message.files.forEach(file => {
+                            if (file.storage && file.storage.presignedUrl) {
+                                refreshedUrls++;
+                                logMessage(`📎 File: ${file.filename} - URL: ${file.storage.presignedUrl.substring(0, 50)}...`);
+                                logMessage(`   Expires: ${new Date(file.storage.expiresIn * 1000).toLocaleString()}`);
+                            }
+                        });
+                    }
+                });
+                
+                const resultMessage = `✅ Transcript retrieved successfully!\n\n` +
+                    `📊 Statistics:\n` +
+                    `• Messages: ${transcript.length}\n` +
+                    `• Files: ${fileCount}\n` +
+                    `• Refreshed URLs: ${refreshedUrls}\n\n` +
+                    `🔗 All file URLs are fresh and valid for 2 hours!`;
+                
+                showResult('fileResult', resultMessage, 'success');
+                addChatMessage('system', `Transcript test completed: ${transcript.length} messages, ${fileCount} files processed`);
+                
+            } catch (error) {
+                showResult('fileResult', `❌ Transcript test failed: ${error.message}`, 'error');
+                logMessage(`❌ Transcript test failed: ${error.message}`);
+                addChatMessage('system', `Transcript test failed: ${error.message}`);
+            }
         }
         
         // Clear chat
@@ -686,10 +763,11 @@
                             // Show processing message
                             addChatMessage('system', '🔄 Processing pasted image...');
                             
-                            // Create CaptivateChatFileInput from pasted image
-                            const fileInputObj = await CaptivateChatFileInput.create(file, {
-                                fileName: `pasted-image-${Date.now()}.png`,
-                                includeMetadata: true
+                            // Create CaptivateChatFileManager from pasted image
+                            const fileInputObj = await CaptivateChatFileManager.create({
+                                file: file,
+                                fileName: `pasted-image-${Date.now()}.png`
+                                // storage defaults to true
                             });
                             
                             logMessage(`✅ Pasted image processed successfully. Text length: ${fileInputObj.files[0].textContent.text.length} characters`);
@@ -742,11 +820,26 @@
             }
         });
         
+        // Toggle URL field visibility based on storage checkbox
+        function toggleUrlField() {
+            const storageCheckbox = document.getElementById('storage');
+            const urlGroup = document.getElementById('urlGroup');
+            
+            if (storageCheckbox.checked) {
+                urlGroup.style.display = 'none';
+            } else {
+                urlGroup.style.display = 'block';
+            }
+        }
+        
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
             logMessage('🧪 CaptivateChat End-to-End Test Page Loaded');
             logMessage('🔑 API Key configured: ' + document.getElementById('apiKey').value);
             logMessage('ℹ️ Click "Initialize Chat" to start the end-to-end test');
+            
+            // Add event listener for storage checkbox
+            document.getElementById('storage').addEventListener('change', toggleUrlField);
         });
     </script>
 </body>

@@ -1,15 +1,23 @@
 /**
- * Represents a file attachment with both file data and extracted text content.
- * Supports direct file uploads only (URL processing not supported by the API).
+ * File manager for handling file uploads, storage, and presigned URL generation.
+ * Supports direct file uploads with automatic text extraction and storage management.
  */
-export declare class CaptivateChatFileInput {
+export declare class CaptivateChatFileManager {
     private static readonly FILE_TO_TEXT_API_URL;
+    private static readonly PRESIGNED_URL_API_URL;
     readonly type: 'files';
     readonly files: Array<{
         filename: string;
         type: string;
         file?: File | Blob;
         url?: string;
+        storage?: {
+            fileKey: string;
+            presignedUrl: string;
+            expiresIn: number;
+            fileSize: number;
+            processingTime: number;
+        };
         textContent: {
             type: 'file_content';
             text: string;
@@ -30,14 +38,14 @@ export declare class CaptivateChatFileInput {
         };
     }, type: string);
     /**
-     * Factory method to create a CaptivateChatFileInput with automatic file-to-text conversion for direct file uploads.
+     * Factory method to create a CaptivateChatFileManager with automatic file-to-text conversion for direct file uploads.
      * @param options - Configuration options for the file input.
      * @param options.file - The file to convert.
      * @param options.fileName - Optional custom file name.
      * @param options.fileType - Optional custom file type.
      * @param options.storage - Whether to store the file for future reference (default: true).
      * @param options.url - URL to reference the file when storage is false (required when storage is false).
-     * @returns A promise that resolves to a CaptivateChatFileInput instance with converted text.
+     * @returns A promise that resolves to a CaptivateChatFileManager instance with converted text.
      */
     static create(options: {
         file: File | Blob;
@@ -45,7 +53,7 @@ export declare class CaptivateChatFileInput {
         fileType?: string;
         storage?: boolean;
         url?: string;
-    }): Promise<CaptivateChatFileInput>;
+    }): Promise<CaptivateChatFileManager>;
     /**
      * Gets the first file from the files array for convenience.
      * @returns The first file object, or undefined if no files exist.
@@ -55,6 +63,13 @@ export declare class CaptivateChatFileInput {
         type: string;
         file?: File | Blob;
         url?: string;
+        storage?: {
+            fileKey: string;
+            presignedUrl: string;
+            expiresIn: number;
+            fileSize: number;
+            processingTime: number;
+        };
         textContent: {
             type: "file_content";
             text: string;
@@ -90,6 +105,13 @@ export declare class CaptivateChatFileInput {
         type: string;
         file?: File | Blob;
         url?: string;
+        storage?: {
+            fileKey: string;
+            presignedUrl: string;
+            expiresIn: number;
+            fileSize: number;
+            processingTime: number;
+        };
         textContent: {
             type: "file_content";
             text: string;
@@ -108,6 +130,13 @@ export declare class CaptivateChatFileInput {
         type: string;
         file?: File | Blob;
         url?: string;
+        storage?: {
+            fileKey: string;
+            presignedUrl: string;
+            expiresIn: number;
+            fileSize: number;
+            processingTime: number;
+        };
         textContent: {
             type: "file_content";
             text: string;
@@ -128,13 +157,19 @@ export declare class CaptivateChatFileInput {
      */
     get length(): number;
     /**
+     * Refreshes the secure URL for the first file (if it has storage information).
+     * @param expiresIn - Expiration time in seconds (default: 7200 = 2 hours).
+     * @returns A promise that resolves to the refreshed secure URL, or undefined if no storage info.
+     */
+    refreshSecureUrl(expiresIn?: number): Promise<string | undefined>;
+    /**
      * Proxy handler to make the class behave like the files array.
      * This allows using fileInputObj directly as files: fileInputObj
      */
-    static createProxy(instance: CaptivateChatFileInput): CaptivateChatFileInput;
+    static createProxy(instance: CaptivateChatFileManager): CaptivateChatFileManager;
     /**
      * Factory method to create a single file object with automatic file-to-text conversion.
-     * Returns just the file object instead of the full CaptivateChatFileInput wrapper.
+     * Returns just the file object instead of the full CaptivateChatFileManager wrapper.
      * @param options - Configuration options for the file input.
      * @param options.file - The file to convert.
      * @param options.fileName - Optional custom file name.
@@ -165,18 +200,25 @@ export declare class CaptivateChatFileInput {
     }>;
     /**
      * Factory method to create multiple file inputs from an array of files.
-     * Processes all files in parallel and returns a single CaptivateChatFileInput with all files.
+     * Processes all files in parallel and returns a single CaptivateChatFileManager with all files.
      * @param options - Configuration options for all files.
      * @param options.files - Array of files to process.
      * @param options.storage - Whether to store the files for future reference (default: true).
      * @param options.urls - Array of URLs to reference files when storage is false (required when storage is false).
-     * @returns A promise that resolves to a CaptivateChatFileInput instance with all processed files.
+     * @returns A promise that resolves to a CaptivateChatFileManager instance with all processed files.
      */
     static createMultiple(options: {
         files: (File | Blob)[];
         storage?: boolean;
         urls?: string[];
-    }): Promise<CaptivateChatFileInput>;
+    }): Promise<CaptivateChatFileManager>;
+    /**
+     * Generates a secure URL for accessing a stored file.
+     * @param fileKey - The file key from the storage response.
+     * @param expiresIn - Expiration time in seconds (default: 7200 = 2 hours).
+     * @returns A promise that resolves to the secure URL.
+     */
+    static getSecureFileUrl(fileKey: string, expiresIn?: number): Promise<string>;
     /**
      * Converts a file to text using the file-to-text API endpoint.
      * @param file - The file to convert (File or Blob).
