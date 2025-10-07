@@ -34,7 +34,7 @@ function withSocketGuard<T extends object>(instance: T): T {
       ) {
         return async function (...args: any[]) {
           if (typeof (target as any)['isSocketActive'] === 'function' && !(target as any)['isSocketActive']()) {
-            console.log('Socket not active, attempting to reconnect...');
+            // Socket not active, attempting to reconnect
             try {
               if (typeof (target as any)['reconnect'] === 'function') {
                 await (target as any)['reconnect']();
@@ -108,14 +108,14 @@ export class CaptivateChatAPI {
         }, 10000);
 
         this.socket.onopen = () => {
-          console.log('WebSocket connected, waiting for API confirmation...');
+          // WebSocket connected, waiting for API confirmation
         };
 
         this.socket.onmessage = (event: MessageEvent) => {
           try {
             const message = JSON.parse(event.data.toString());
             if (message.event?.event_type === 'socket_connected') {
-              console.log('API Successfully Connected');
+              // API Successfully Connected
               clearTimeout(timeoutId);
               resolve();
             }
@@ -131,9 +131,9 @@ export class CaptivateChatAPI {
         };
 
         this.socket.onclose = (event) => {
-          console.log('WebSocket connection closed with', event.code);
+          // WebSocket connection closed
           if (event.code !== 1000) { 
-            console.log('Attempting to reconnect...');
+            // Attempting to reconnect
             setTimeout(() => this.connect(), 3000); // Reconnect after 3 seconds
           }
         };
@@ -417,11 +417,11 @@ export class CaptivateChatAPI {
       throw new Error(`Max reconnection attempts (${this.maxReconnectAttempts}) reached`);
     }
     this.reconnectAttempts++;
-    console.log(`Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    // Attempting to reconnect
     try {
       await this.connect();
       this.reconnectAttempts = 0; // Reset on successful connection
-      console.log('Reconnection successful');
+      // Reconnection successful
     } catch (error) {
       console.error(`Reconnection attempt ${this.reconnectAttempts} failed:`, error);
       if (this.reconnectAttempts < this.maxReconnectAttempts) {

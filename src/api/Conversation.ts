@@ -94,7 +94,6 @@ export class Conversation {
           callback(`[Error fetching large message: ${error.message}]`, 'error');
         }
       } else {
-        console.log('Not a large message error or no message_link provided');
         // Handle other general errors
         callback(`[Error: ${payload.error_desc || 'Unknown error'}]`, 'error');
       }
@@ -270,7 +269,8 @@ export class Conversation {
 
     for (const message of transcript) {
       if (message.files && message.files.length > 0) {
-        const refreshedMessageFiles = [];
+        const refreshedMessageFiles = [] as any[];
+        let anyFileRefreshed = false;
 
         for (const file of message.files) {
           if (file.storage && file.storage.fileKey) {
@@ -280,12 +280,14 @@ export class Conversation {
               const timeUntilExpiry = file.storage.expiresIn - now;
 
               if (timeUntilExpiry < 300) { // Less than 5 minutes
-                console.log(`Refreshing expired URL for file: ${file.filename}`);
-                
+                // Refreshing expired URL for file
+
                 const refreshedUrl = await CaptivateChatFileManager.getSecureFileUrl(
                   file.storage.fileKey,
                   7200 // 2 hours
                 );
+
+                anyFileRefreshed = true;
 
                 // Create updated file object with refreshed URL
                 refreshedMessageFiles.push({
@@ -308,6 +310,23 @@ export class Conversation {
           } else {
             // No storage info, keep as is
             refreshedMessageFiles.push(file);
+          }
+        }
+
+        // If any file was refreshed, send an edit to update the message on the server
+        if (anyFileRefreshed) {
+          try {
+            const messageId = message.message_id || message.id;
+            if (messageId) {
+              // Prefer existing content object if present; otherwise, construct minimal content
+              const updatedContent = message.content
+                ? { ...message.content, files: refreshedMessageFiles }
+                : { text: message.text || '', files: refreshedMessageFiles };
+
+              await this.editMessage(String(messageId), updatedContent);
+            }
+          } catch (err) {
+            console.error('Failed to push refreshed URLs via editMessage:', err);
           }
         }
 
