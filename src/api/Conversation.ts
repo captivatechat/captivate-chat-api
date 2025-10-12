@@ -13,8 +13,6 @@ export class Conversation {
   private conversationId: string;
   private socket: WebSocket;
   private listeners: Map<string, Function[]>;
-  private metadata: object | null;
-  private local_id: Number;
   private mode: 'prod' | 'dev';
   /**
    * Initializes a new Conversation instance.
@@ -29,8 +27,6 @@ export class Conversation {
     this.conversationId = conversation_id;
     this.socket = socket;
     this.listeners = new Map();
-    this.metadata = metadata || null; // If metadata is provided, use it; otherwise, set to null.
-    this.local_id = Math.floor(Math.random() * 10000); // Simple random id for local instance tracking
     this.mode = mode || 'prod'; // Default to 'prod' if not specified
 
     this.socket.onmessage = this.handleMessage.bind(this);
@@ -265,53 +261,55 @@ export class Conversation {
    * @returns A promise that resolves to the transcript with refreshed file URLs.
    */
   private async refreshExpiredFileUrls(transcript: any[]): Promise<object[]> {
-    const refreshedTranscript = [];
+    const now = Math.floor(Date.now() / 1000);
+    
+    // Process all messages in parallel
+    const refreshedMessages = await Promise.all(
+      transcript.map(async (message) => {
+        if (!message.files || message.files.length === 0) {
+          return message;
+        }
 
-    for (const message of transcript) {
-      if (message.files && message.files.length > 0) {
-        const refreshedMessageFiles = [] as any[];
-        let anyFileRefreshed = false;
+        // Process all files in parallel for this message
+        const refreshedFiles = await Promise.all(
+          message.files.map(async (file: any) => {
+            if (!file.storage || !file.storage.fileKey) {
+              return file; // No storage info, keep as is
+            }
 
-        for (const file of message.files) {
-          if (file.storage && file.storage.fileKey) {
             try {
-              // Check if URL needs refresh (less than 5 minutes remaining)
-              const now = Math.floor(Date.now() / 1000);
               const timeUntilExpiry = file.storage.expiresIn - now;
-
+              
               if (timeUntilExpiry < 300) { // Less than 5 minutes
-                // Refreshing expired URL for file
-
+                // Refresh expired URL
                 const refreshedUrl = await CaptivateChatFileManager.getSecureFileUrl(
                   file.storage.fileKey,
                   7200 // 2 hours
                 );
 
-                anyFileRefreshed = true;
-
-                // Create updated file object with refreshed URL
-                refreshedMessageFiles.push({
+                return {
                   ...file,
                   storage: {
                     ...file.storage,
                     presignedUrl: refreshedUrl,
                     expiresIn: now + 7200
                   }
-                });
+                };
               } else {
                 // URL is still valid
-                refreshedMessageFiles.push(file);
+                return file;
               }
             } catch (error) {
               console.error(`Failed to refresh file ${file.filename}:`, error);
-              // Keep original file even if refresh failed
-              refreshedMessageFiles.push(file);
+              return file; // Keep original file even if refresh failed
             }
-          } else {
-            // No storage info, keep as is
-            refreshedMessageFiles.push(file);
-          }
-        }
+          })
+        );
+
+        // Check if any files were refreshed
+        const anyFileRefreshed = refreshedFiles.some((file, index) => 
+          file !== message.files[index]
+        );
 
         // If any file was refreshed, send an edit to update the message on the server
         if (anyFileRefreshed) {
@@ -320,8 +318,8 @@ export class Conversation {
             if (messageId) {
               // Prefer existing content object if present; otherwise, construct minimal content
               const updatedContent = message.content
-                ? { ...message.content, files: refreshedMessageFiles }
-                : { text: message.text || '', files: refreshedMessageFiles };
+                ? { ...message.content, files: refreshedFiles }
+                : { text: message.text || '', files: refreshedFiles };
 
               await this.editMessage(String(messageId), updatedContent);
             }
@@ -330,16 +328,14 @@ export class Conversation {
           }
         }
 
-        refreshedTranscript.push({
+        return {
           ...message,
-          files: refreshedMessageFiles
-        });
-      } else {
-        refreshedTranscript.push(message);
-      }
-    }
+          files: refreshedFiles
+        };
+      })
+    );
 
-    return refreshedTranscript;
+    return refreshedMessages;
   }
 
   /**
@@ -416,43 +412,6 @@ export class Conversation {
   }
 
 
-  /**
-   * Converts a File object to base64 string.
-   * @param file - The File object to convert.
-   * @returns A promise that resolves to the base64 string.
-   */
-  private fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Remove the data URL prefix to get just the base64 data
-        const base64 = result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
-  /**
-   * Converts a Blob object to base64 string.
-   * @param blob - The Blob object to convert.
-   * @returns A promise that resolves to the base64 string.
-   */
-  private blobToBase64(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Remove the data URL prefix to get just the base64 data
-        const base64 = result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
 
   /**
    * Edits a message in the conversation.
@@ -490,7 +449,7 @@ export class Conversation {
       this.addListener('message_edited_success', onEditSuccess);
 
       // Timeout for failure case
-      const timerId = setTimeout(() => {
+      setTimeout(() => {
         this.removeListener('message_edited_success', onEditSuccess);
         reject(new Error('Timeout: No response for message edit'));
       }, 10000);
