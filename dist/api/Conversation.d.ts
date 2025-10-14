@@ -10,6 +10,8 @@ export declare class Conversation {
     private conversationId;
     private socket;
     private listeners;
+    private metadata;
+    private local_id;
     private mode;
     /**
      * Initializes a new Conversation instance.
