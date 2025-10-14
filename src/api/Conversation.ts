@@ -13,6 +13,8 @@ export class Conversation {
   private conversationId: string;
   private socket: WebSocket;
   private listeners: Map<string, Function[]>;
+  private metadata: object | null;
+  private local_id: number;
   private mode: 'prod' | 'dev';
   /**
    * Initializes a new Conversation instance.
@@ -27,6 +29,8 @@ export class Conversation {
     this.conversationId = conversation_id;
     this.socket = socket;
     this.listeners = new Map();
+    this.metadata = metadata || null; // If metadata is provided, use it; otherwise, set to null.
+    this.local_id = Math.floor(Math.random() * 10000); // Simple random id for local instance tracking
     this.mode = mode || 'prod'; // Default to 'prod' if not specified
 
     this.socket.onmessage = this.handleMessage.bind(this);
