@@ -1,15 +1,35 @@
 import { Conversation } from './Conversation';
 /**
- * CaptivateChatAPI class for managing conversations through WebSocket connections.
+ * CaptivateChatAPI class for managing conversations through HTTP connections for sending and WebSocket for receiving.
+ * Client-side sending uses HTTP, while server-side real-time communication uses WebSocket listeners.
  */
 export declare class CaptivateChatAPI {
     private apiKey;
     private mode;
+    /**
+     * WebSocket URL for real-time communication.
+     */
     private url;
+    /**
+     * WebSocket connection for receiving real-time messages.
+     */
     private socket;
     private conversations;
+    /**
+     * Socket ID received from socket_connected event.
+     */
+    private socketId;
+    /**
+     * WebSocket reconnection attempts counter.
+     */
     private reconnectAttempts;
+    /**
+     * Maximum number of reconnection attempts.
+     */
     private maxReconnectAttempts;
+    /**
+     * Delay between reconnection attempts.
+     */
     private reconnectDelay;
     /**
      * Creates an instance of CaptivateChatAPI.
@@ -18,12 +38,13 @@ export declare class CaptivateChatAPI {
      */
     constructor(apiKey: string, mode?: 'prod' | 'dev');
     /**
-     * Sends a message through the WebSocket connection.
+     * Sends a message via HTTP API.
      * @param message - The message object to send.
+     * @returns A promise that resolves to the response data.
      */
     private _send;
     /**
-     * Connects to the WebSocket server and waits for confirmation from the API.
+     * Connects to the WebSocket server for real-time communication.
      * @returns A promise that resolves once the connection is successfully established.
      */
     connect(): Promise<void>;
@@ -69,22 +90,30 @@ export declare class CaptivateChatAPI {
         };
     }>;
     /**
-     * Deletes all conversations for a specific user.
+     * Deletes all conversations for a specific user using HTTP request with direct response.
      * @param userId - The unique identifier for the user whose conversations will be deleted.
+     * @param options - Delete options object with softDelete property.
+     * @param options.softDelete - Whether to perform a soft delete (true) or hard delete (false). Defaults to true.
      * @returns A promise that resolves when all conversations are successfully deleted.
      */
-    deleteUserConversations(userId: string): Promise<void>;
+    deleteUserConversations(userId: string, options?: {
+        softDelete?: boolean;
+    }): Promise<void>;
     /**
-     * Public getter for the WebSocket instance.
+     * Gets the WebSocket instance for real-time communication.
      */
     getSocket(): WebSocket | null;
     /**
-     * Checks if the WebSocket connection is active and open.
+     * Gets the socket ID for HTTP requests.
+     */
+    getSocketId(): string | null;
+    /**
+     * Checks if the WebSocket connection is active and open for real-time communication.
      * @returns True if the socket is open, false otherwise.
      */
     isSocketActive(): boolean;
     /**
-     * Attempts to reconnect to the WebSocket server.
+     * Attempts to reconnect to the WebSocket server for real-time communication.
      * @returns A promise that resolves when reconnection is successful.
      */
     reconnect(): Promise<void>;

@@ -3,24 +3,43 @@ interface Action {
     data: any;
 }
 /**
- * Represents a conversation session, handling WebSocket communication and event management.
+ * Represents a conversation session, handling HTTP communication for sending and WebSocket for receiving.
+ * Client-side sending uses HTTP, while server-side real-time communication uses WebSocket listeners.
  */
 export declare class Conversation {
     apiKey: string;
     private conversationId;
+    /**
+     * WebSocket connection for receiving real-time messages from server.
+     */
     private socket;
+    /**
+     * Event listeners for real-time WebSocket communication.
+     */
     private listeners;
     private mode;
     /**
+     * Socket ID for HTTP requests.
+     */
+    private socketId;
+    /**
      * Initializes a new Conversation instance.
      * @param conversationId - The unique identifier of the conversation.
-     * @param socket - The WebSocket instance for communication.
+     * @param socket - WebSocket instance for receiving real-time messages.
      * @param metadata - Optional metadata for the conversation.
-     * @param apiKey - Optional API key for REST operations.
+     * @param apiKey - API key for HTTP communication (required).
      * @param mode - The mode of operation ('prod' or 'dev').
+     * @param socketId - Socket ID for HTTP requests.
      */
-    constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string, mode?: 'prod' | 'dev');
+    constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string, mode?: 'prod' | 'dev', socketId?: string | null);
+    /**
+     * Handles incoming WebSocket messages for real-time communication.
+     * @param event - The WebSocket message event.
+     */
     private handleMessage;
+    /**
+     * Restarts WebSocket listeners for real-time communication.
+     */
     restartListeners(): void;
     /**
      * Adds an event listener for a specific event type.
@@ -34,9 +53,9 @@ export declare class Conversation {
      */
     onMessage(callback: (message: string, type: string) => void): void;
     /**
-       * Registers a listener for receiving actions.
-       * @param callback - The function to handle incoming action.
-       */
+     * Registers a listener for receiving actions.
+     * @param callback - The function to handle incoming action.
+     */
     onActionReceived(callback: (actions: [Action]) => void): void;
     /**
      * Registers a listener for updates to the conversation.
@@ -55,7 +74,7 @@ export declare class Conversation {
      */
     sendMessage(content: object | string): Promise<void>;
     /**
-    * Sets metadata for the conversation and listens for success confirmation.
+    * Sets metadata for the conversation and uses HTTP response for confirmation.
     * @param metadata - An object containing the metadata to set.
     * @returns A promise that resolves when the metadata update is successful.
     */
@@ -85,35 +104,50 @@ export declare class Conversation {
      */
     private refreshExpiredFileUrls;
     /**
-   * Requests metadata for the conversation.
+   * Requests metadata for the conversation using HTTP request with direct response.
    * @returns A promise that resolves to the conversation metadata.
    */
     getMetadata(): Promise<object>;
     /**
-      * Deletes this conversation.
-      * @returns A promise that resolves when the conversation is deleted successfully.
-      */
-    delete(): Promise<void>;
+     * Deletes this conversation using HTTP request with direct response.
+     * @param options - Delete options object with softDelete property.
+     * @param options.softDelete - Whether to perform a soft delete (true) or hard delete (false). Defaults to true.
+     * @returns A promise that resolves when the conversation is deleted successfully.
+     */
+    delete(options?: {
+        softDelete?: boolean;
+    }): Promise<void>;
     /**
-     * Edits a message in the conversation.
+     * Edits a message in the conversation using HTTP request with direct response.
      * @param messageId - The ID of the message to edit.
      * @param content - The new content for the message (object or string).
-     * @returns A promise that resolves when the edit is confirmed by user_message_updated.
+     * @returns A promise that resolves when the edit is confirmed via HTTP response.
      */
     editMessage(messageId: string, content: object | string): Promise<void>;
     /**
-     * Sends a payload to the WebSocket.
+     * Sends a payload via HTTP API (primary method).
      * @param eventType - The type of event being sent.
      * @param payload - The payload data to include with the event.
-     * @returns A promise that resolves when the payload is sent.
+     * @returns A promise that resolves to the response data.
      */
     private sendPayload;
+    /**
+     * Sends a payload via HTTP API (primary communication method).
+     * @param message - The message to send via HTTP.
+     * @returns A promise that resolves to the response data.
+     */
+    private sendPayloadViaHttp;
     /**
      * Removes a specific event listener.
      * @param eventType - The type of event.
      * @param callback - The callback function to remove.
      */
     private removeListener;
+    /**
+     * Gets the base URL for API requests based on the current mode.
+     * @returns The base URL for the API.
+     */
+    private getBaseUrl;
     /**
      * Gets the unique identifier of the conversation.
      * @returns The conversation ID.
