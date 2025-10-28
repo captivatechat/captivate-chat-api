@@ -35,7 +35,42 @@ Client sending operations have been refactored from WebSocket to HTTP REST for i
 **Methods still using WebSocket:**
 - All event listeners (`onMessage`, `onError`, `onConversationUpdate`, `onActionReceived`) - Continue to work via WebSocket for real-time updates
 
-### Enhanced File Handling (v4.0.0)
+### Debug Mode (v5.0.0)
+
+The library now includes a debug mode that allows you to control logging output:
+
+```typescript
+import { CaptivateChatAPI } from 'captivate-chat-api';
+
+// Enable debug mode to see detailed logs
+CaptivateChatAPI.setDebugMode(true);
+
+// Create and use the API - you'll see detailed logs with [CaptivateChatAPI] prefix
+const api = await CaptivateChatAPI.create('YOUR_API_KEY');
+
+// Disable debug mode to hide logs
+CaptivateChatAPI.setDebugMode(false);
+
+// Check current debug mode status
+const isDebugEnabled = CaptivateChatAPI.getDebugMode();
+console.log('Debug mode enabled:', isDebugEnabled);
+```
+
+**Debug Mode Features:**
+- **🔍 Targeted Logging**: Only affects CaptivateChatAPI logs, not your website's console.log calls
+- **🏷️ Clear Prefixing**: All debug logs are prefixed with `[CaptivateChatAPI]` for easy identification
+- **⚡ Performance**: Debug logs are completely disabled when debug mode is off
+- **🔧 Easy Control**: Simple static methods to enable/disable debug mode globally
+
+**What Gets Logged in Debug Mode:**
+- HTTP request/response details
+- WebSocket connection events
+- Message sending confirmations
+- Metadata operations
+- Action confirmations
+- Error details
+
+**Important:** Debug mode only affects CaptivateChatAPI internal logging. Your apps console.log calls remain unaffected.
 
 The `CaptivateChatFileManager` class has been significantly improved with:
 
@@ -925,6 +960,12 @@ fileInput.length           // ✅ Array length
 
 - **`static create(apiKey: string, mode: 'prod' | 'dev' = 'prod'): Promise<CaptivateChatAPI>`**  
   **(New)** Static factory method that creates and connects a CaptivateChatAPI instance. Returns a promise that resolves to a ready-to-use, connected API instance.
+
+- **`static setDebugMode(enabled: boolean): void`**  
+  **(New)** Sets the debug mode for CaptivateChatAPI logging. When enabled, detailed logs are shown with `[CaptivateChatAPI]` prefix.
+
+- **`static getDebugMode(): boolean`**  
+  **(New)** Gets the current debug mode state. Returns true if debug mode is enabled, false otherwise.
   
 - **`connect(): Promise<void>`**  
   Connects to the WebSocket server.

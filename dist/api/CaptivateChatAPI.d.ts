@@ -1,8 +1,9 @@
 import { Conversation } from './Conversation';
-/**
- * CaptivateChatAPI class for managing conversations through HTTP connections for sending and WebSocket for receiving.
- * Client-side sending uses HTTP, while server-side real-time communication uses WebSocket listeners.
- */
+export declare const captivateLogger: {
+    log: (...args: any[]) => void;
+    warn: (...args: any[]) => void;
+    error: (...args: any[]) => void;
+};
 export declare class CaptivateChatAPI {
     private apiKey;
     private mode;
@@ -31,6 +32,16 @@ export declare class CaptivateChatAPI {
      * Delay between reconnection attempts.
      */
     private reconnectDelay;
+    /**
+     * Sets the debug mode for CaptivateChatAPI logging.
+     * @param enabled - Whether to enable debug logging for CaptivateChatAPI.
+     */
+    static setDebugMode(enabled: boolean): void;
+    /**
+     * Gets the current debug mode state for CaptivateChatAPI.
+     * @returns True if debug mode is enabled, false otherwise.
+     */
+    static getDebugMode(): boolean;
     /**
      * Creates an instance of CaptivateChatAPI.
      * @param apiKey - The API key for authentication.

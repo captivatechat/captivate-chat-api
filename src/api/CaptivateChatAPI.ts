@@ -57,6 +57,31 @@ function withSocketGuard<T extends object>(instance: T): T {
  * CaptivateChatAPI class for managing conversations through HTTP connections for sending and WebSocket for receiving.
  * Client-side sending uses HTTP, while server-side real-time communication uses WebSocket listeners.
  */
+// Global debug flag for CaptivateChatAPI only
+let captivateDebugMode = false;
+
+// Store original console methods
+const originalConsole = {
+  log: console.log,
+  warn: console.warn,
+  error: console.error
+};
+
+// Custom debug logger that only affects CaptivateChatAPI logs
+export const captivateLogger = {
+  log: (...args: any[]) => {
+    if (captivateDebugMode) {
+      originalConsole.log('[CaptivateChatAPI]', ...args);
+    }
+  },
+  warn: (...args: any[]) => {
+    originalConsole.warn('[CaptivateChatAPI]', ...args);
+  },
+  error: (...args: any[]) => {
+    originalConsole.error('[CaptivateChatAPI]', ...args);
+  }
+};
+
 export class CaptivateChatAPI {
   private apiKey: string;
   private mode: 'prod' | 'dev';
@@ -87,6 +112,22 @@ export class CaptivateChatAPI {
   private reconnectDelay: number = 3000;
 
   /**
+   * Sets the debug mode for CaptivateChatAPI logging.
+   * @param enabled - Whether to enable debug logging for CaptivateChatAPI.
+   */
+  static setDebugMode(enabled: boolean): void {
+    captivateDebugMode = enabled;
+  }
+
+  /**
+   * Gets the current debug mode state for CaptivateChatAPI.
+   * @returns True if debug mode is enabled, false otherwise.
+   */
+  static getDebugMode(): boolean {
+    return captivateDebugMode;
+  }
+
+  /**
    * Creates an instance of CaptivateChatAPI.
    * @param apiKey - The API key for authentication.
    * @param mode - The mode of operation ('prod' for production or 'dev' for development).
@@ -104,7 +145,7 @@ export class CaptivateChatAPI {
     this.socket = null;
     this.conversations = new Map();
     
-    console.log('CaptivateChatAPI: Using HTTP for sending messages and WebSocket for receiving real-time updates.');
+    captivateLogger.log('CaptivateChatAPI: Using HTTP for sending messages and WebSocket for receiving real-time updates.');
   }
 
   /**
@@ -156,7 +197,7 @@ export class CaptivateChatAPI {
       } else {
         // Handle plain text response (like "OK")
         const textResponse = await response.text();
-        console.log('Server returned plain text:', textResponse);
+        captivateLogger.log('Server returned plain text:', textResponse);
         // Return a mock response structure for plain text responses
         responseData = {
           status: 'success',
@@ -169,7 +210,7 @@ export class CaptivateChatAPI {
         };
       }
       
-      console.log('Message received from server via HTTP:', responseData);
+      captivateLogger.log('Message received from server via HTTP:', responseData);
       return responseData;
     } catch (error) {
       console.error('HTTP request failed:', error);
@@ -200,7 +241,7 @@ export class CaptivateChatAPI {
             if (message.event?.event_type === 'socket_connected') {
               // Capture socket_id from the event payload
               this.socketId = message.event.event_payload?.socket_id || null;
-              console.log('Socket connected with ID:', this.socketId);
+              captivateLogger.log('Socket connected with ID:', this.socketId);
               // API Successfully Connected
               clearTimeout(timeoutId);
               resolve();
@@ -256,7 +297,7 @@ export class CaptivateChatAPI {
         // Set up listener BEFORE sending the HTTP request to avoid race conditions
         const onMessage = (event: MessageEvent) => {
           try {
-            console.log('messagereceived:', event.data.toString());
+            captivateLogger.log('messagereceived:', event.data.toString());
             const message = JSON.parse(event.data.toString());
             if (message.event?.event_type === 'conversation_start_success') {
               const conversationId = message.event.event_payload?.conversation_id;
@@ -476,7 +517,7 @@ export class CaptivateChatAPI {
     const response = await this._send(deleteRequest);
     
     // The HTTP response confirms the conversations were deleted successfully
-    console.log(`User conversations ${softDelete ? 'soft' : 'hard'} delete confirmed via HTTP response:`, response);
+    captivateLogger.log(`User conversations ${softDelete ? 'soft' : 'hard'} delete confirmed via HTTP response:`, response);
   }
 
   /**

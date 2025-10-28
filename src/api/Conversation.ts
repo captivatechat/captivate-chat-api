@@ -1,4 +1,5 @@
 import { CaptivateChatFileManager } from './CaptivateChatFileManager';
+import { captivateLogger } from './CaptivateChatAPI';
 
 interface Action {
   id: string;
@@ -204,7 +205,7 @@ export class Conversation {
     const response = await this.sendPayloadViaHttp(metadataRequest);
     
     // The HTTP response confirms the metadata was set successfully
-    console.log('Metadata update confirmed via HTTP response:', response);
+    captivateLogger.log('Metadata update confirmed via HTTP response:', response);
   }
 
   /**
@@ -236,7 +237,7 @@ export class Conversation {
     });
     
     // The HTTP response confirms the action was sent successfully
-    console.log('Action sent confirmed via HTTP response:', response);
+    captivateLogger.log('Action sent confirmed via HTTP response:', response);
   }
 
   /**
@@ -367,7 +368,7 @@ export class Conversation {
     const response = await this.sendPayloadViaHttp(metadataRequest);
     
     // The HTTP response contains the metadata
-    console.log('Metadata retrieved via HTTP response:', response);
+    captivateLogger.log('Metadata retrieved via HTTP response:', response);
     return response.metadata || response;
   }
   /**
@@ -394,7 +395,7 @@ export class Conversation {
     const response = await this.sendPayloadViaHttp(deleteRequest);
     
     // The HTTP response confirms the conversation was deleted successfully
-    console.log(`Conversation ${softDelete ? 'soft' : 'hard'} delete confirmed via HTTP response:`, response);
+    captivateLogger.log(`Conversation ${softDelete ? 'soft' : 'hard'} delete confirmed via HTTP response:`, response);
   }
 
 
@@ -429,7 +430,7 @@ export class Conversation {
     const response = await this.sendPayloadViaHttp(editRequest);
     
     // The HTTP response confirms the message was edited successfully
-    console.log('Message edit confirmed via HTTP response:', response);
+    captivateLogger.log('Message edit confirmed via HTTP response:', response);
   }
 
   /**
@@ -495,7 +496,7 @@ export class Conversation {
       } else {
         // Handle plain text response (like "OK")
         const textResponse = await response.text();
-        console.log('Server returned plain text:', textResponse);
+        captivateLogger.log('Server returned plain text:', textResponse);
         // Return a mock response structure for plain text responses
         responseData = {
           status: 'success',
@@ -503,7 +504,7 @@ export class Conversation {
         };
       }
       
-      console.log('Payload received from server via HTTP:', responseData);
+      captivateLogger.log('Payload received from server via HTTP:', responseData);
       return responseData;
     } catch (error) {
       console.error('HTTP request failed:', error);
