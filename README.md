@@ -35,6 +35,63 @@ Client sending operations have been refactored from WebSocket to HTTP REST for i
 **Methods still using WebSocket:**
 - All event listeners (`onMessage`, `onError`, `onConversationUpdate`, `onActionReceived`) - Continue to work via WebSocket for real-time updates
 
+### Custom Endpoints (v5.0.0)
+
+The library now supports custom endpoint configuration if you need to deploy your own captivate enterprise urls, allowing you to use your own API endpoints instead of relying solely on dev/prod mode:
+
+```typescript
+import { CaptivateChatAPI, EndpointConfig } from 'captivate-chat-api';
+
+// Configure custom endpoints (WebSocket base URL only, API key added automatically)
+const customEndpoints: EndpointConfig = {
+  websocket: 'wss://your-custom-websocket.com/dev',  // Base URL only
+  http: 'https://your-custom-api.com',
+  fileToText: 'https://your-file-service.com/api/file-to-text'
+};
+
+// Use custom endpoints with the API
+const api = await CaptivateChatAPI.create('YOUR_API_KEY', 'prod', customEndpoints);
+
+// Or with constructor
+const api = new CaptivateChatAPI('YOUR_API_KEY', 'prod', customEndpoints);
+await api.connect();
+```
+
+**Simple Usage (Still Works):**
+```typescript
+// Existing code continues to work exactly as before
+const api = await CaptivateChatAPI.create('YOUR_API_KEY', 'prod');
+// or
+const api = new CaptivateChatAPI('YOUR_API_KEY', 'prod');
+await api.connect();
+
+// Even simpler - just API key (defaults to 'prod' mode)
+const api = await CaptivateChatAPI.create('YOUR_API_KEY');
+// or
+const api = new CaptivateChatAPI('YOUR_API_KEY');
+await api.connect();
+
+// Custom endpoints are completely optional
+const apiWithCustomEndpoints = await CaptivateChatAPI.create('YOUR_API_KEY', 'prod', {
+  http: 'https://staging-api.com'  // Only override what you need
+});
+```
+
+**Custom Endpoint Features:**
+- **🔧 Flexible Configuration**: Override any or all endpoints (WebSocket, HTTP, File-to-Text)
+- **🔑 Automatic API Key**: WebSocket URLs only need base URL - API key is added automatically
+- **🔄 Fallback Support**: Only specify the endpoints you want to customize - others use defaults
+- **✅ Backward Compatible**: All existing code continues to work without any changes
+- **🌐 Multi-Environment**: Perfect for staging, testing, or custom deployments
+- **📁 File Processing**: Custom file-to-text endpoints for specialized file processing
+- **🔗 WebSocket Control**: Use your own WebSocket servers for real-time communication
+
+**Use Cases:**
+- **Staging Environments**: Point to staging servers for testing
+- **Custom Deployments**: Use your own infrastructure
+- **File Processing**: Integrate with custom file processing services
+- **Load Balancing**: Route through your own API gateway
+
 ### Debug Mode (v5.0.0)
 
 The library now includes a debug mode that allows you to control logging output:
@@ -118,7 +175,7 @@ Import and initialize the API client:
 ```typescript
 import { CaptivateChatAPI } from 'captivate-chat-api';
 
-// Create and connect in one step
+// Simplest usage - just API key (defaults to 'prod' mode)
 const api = await CaptivateChatAPI.create('YOUR_API_KEY');
 // API is ready to use!
 ```
@@ -127,6 +184,7 @@ const api = await CaptivateChatAPI.create('YOUR_API_KEY');
 ```typescript
 import { CaptivateChatAPI } from 'captivate-chat-api';
 
+// Simplest usage - just API key (defaults to 'prod' mode)
 const api = new CaptivateChatAPI('YOUR_API_KEY');
 
 // Connect to the WebSocket server
@@ -681,8 +739,14 @@ const apiKeys = [
   'YOUR_API_KEY_2'
 ];
 
-// Create and connect all instances in one step
-const manager = await CaptivateChatManager.create(apiKeys, 'dev');
+// Create and connect all instances in one step with custom endpoints
+const customEndpoints = {
+  websocket: 'wss://your-websocket.com/dev',  // Base URL only
+  http: 'https://your-api.com',
+  fileToText: 'https://your-file-service.com/api/file-to-text'
+};
+
+const manager = await CaptivateChatManager.create(apiKeys, 'dev', customEndpoints);
 
 const { conversations, pagination } = await manager.getUserConversations({
   userId: '66f016f09d5961b684ce05f0',
@@ -696,6 +760,20 @@ for (const conv of conversations) {
 }
 ```
 
+**Simple Usage (Still Works):**
+```typescript
+// Existing code continues to work exactly as before
+const manager = await CaptivateChatManager.create(apiKeys, 'dev');
+
+// Even simpler - just API keys (defaults to 'prod' mode)
+const manager = await CaptivateChatManager.create(apiKeys);
+
+// Custom endpoints are completely optional
+const managerWithCustomEndpoints = await CaptivateChatManager.create(apiKeys, 'dev', {
+  http: 'https://staging-api.com'  // Only override what you need
+});
+```
+
 **Option 2: Manual instantiation and connection**
 ```typescript
 import { CaptivateChatManager } from 'captivate-chat-api';
@@ -705,7 +783,13 @@ const apiKeys = [
   'YOUR_API_KEY_2'
 ];
 
-const manager = new CaptivateChatManager(apiKeys, 'dev');
+const customEndpoints = {
+  websocket: 'wss://your-websocket.com/dev',  // Base URL only
+  http: 'https://your-api.com',
+  fileToText: 'https://your-file-service.com/api/file-to-text'
+};
+
+const manager = new CaptivateChatManager(apiKeys, 'dev', customEndpoints);
 await manager.connectAll();
 
 const { conversations, pagination } = await manager.getUserConversations({
@@ -718,6 +802,23 @@ for (const conv of conversations) {
   const transcript = await conv.getTranscript();
   console.log(`Transcript for ${conv.getConversationId()}:`, transcript);
 }
+```
+
+**Simple Usage (Still Works):**
+```typescript
+// Existing code continues to work exactly as before
+const manager = new CaptivateChatManager(apiKeys, 'dev');
+await manager.connectAll();
+
+// Even simpler - just API keys (defaults to 'prod' mode)
+const manager = new CaptivateChatManager(apiKeys);
+await manager.connectAll();
+
+// Custom endpoints are completely optional
+const managerWithCustomEndpoints = new CaptivateChatManager(apiKeys, 'dev', {
+  http: 'https://staging-api.com'  // Only override what you need
+});
+await managerWithCustomEndpoints.connectAll();
 ```
 
 - Use `CaptivateChatAPI` for single-key scenarios.
@@ -955,10 +1056,10 @@ fileInput.length           // ✅ Array length
 ### CaptivateChatAPI
 
 #### Methods
-- **`constructor(apiKey: string, mode: 'prod' | 'dev' = 'prod')`**  
-  Initializes the API with the given API key and mode.
+- **`constructor(apiKey: string, mode?: 'prod' | 'dev', endpoints?: EndpointConfig)`**  
+  Initializes the API with the given API key, optional mode (defaults to 'prod'), and optional custom endpoints.
 
-- **`static create(apiKey: string, mode: 'prod' | 'dev' = 'prod'): Promise<CaptivateChatAPI>`**  
+- **`static create(apiKey: string, mode?: 'prod' | 'dev', endpoints?: EndpointConfig): Promise<CaptivateChatAPI>`**  
   **(New)** Static factory method that creates and connects a CaptivateChatAPI instance. Returns a promise that resolves to a ready-to-use, connected API instance.
 
 - **`static setDebugMode(enabled: boolean): void`**  
@@ -966,6 +1067,12 @@ fileInput.length           // ✅ Array length
 
 - **`static getDebugMode(): boolean`**  
   **(New)** Gets the current debug mode state. Returns true if debug mode is enabled, false otherwise.
+
+- **`getHttpBaseUrl(): string`**  
+  **(New)** Gets the current HTTP base URL (custom or default).
+
+- **`getFileToTextUrl(): string`**  
+  **(New)** Gets the current file-to-text API URL (custom or default).
   
 - **`connect(): Promise<void>`**  
   Connects to the WebSocket server.
@@ -1038,10 +1145,40 @@ fileInput.length           // ✅ Array length
 - **`onActionReceived(callback: (actions:[Action]) => void): void`**  
   Handles custom actions received during the conversation.
 
+### CaptivateChatManager
+
+#### Methods
+- **`constructor(apiKeys: string[], mode?: 'prod' | 'dev', endpoints?: EndpointConfig)`**  
+  Initializes the manager with multiple API keys, optional mode (defaults to 'prod'), and optional custom endpoints.
+
+- **`static create(apiKeys: string[], mode?: 'prod' | 'dev', endpoints?: EndpointConfig): Promise<CaptivateChatManager>`**  
+  **(New)** Static factory method that creates and connects all CaptivateChatAPI instances. Returns a promise that resolves to a ready-to-use manager.
+
+- **`static setDebugMode(enabled: boolean): void`**  
+  **(New)** Sets the debug mode for all CaptivateChatAPI instances managed by this manager.
+
+- **`static getDebugMode(): boolean`**  
+  **(New)** Gets the current debug mode state for CaptivateChatAPI instances.
+
+- **`connectAll(): Promise<void>`**  
+  Connects all API instances to their respective WebSocket servers.
+
+- **`getUserConversations(options: { userId: string; apiKeys?: string[]; filter?: object; search?: object; pagination?: { page?: string | number; limit?: string | number } }): Promise<{ conversations: Conversation[]; pagination?: any }>`**  
+  Fetches conversations across multiple API keys with support for filtering, search, and pagination.
+
+- **`getApiInstance(apiKey: string): CaptivateChatAPI | undefined`**  
+  Gets a specific API instance by its API key.
+
 ## Interfaces
 ``` typescript
 interface Action {
   id: string;
   data: any;
+}
+
+interface EndpointConfig {
+  websocket?: string;  // WebSocket base URL (API key added automatically)
+  http?: string;       // HTTP API base URL
+  fileToText?: string; // File-to-text API URL
 }
 ```

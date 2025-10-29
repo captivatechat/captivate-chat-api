@@ -1,6 +1,13 @@
 // Import the Conversation class
 import { Conversation } from './Conversation';
 
+// Endpoint configuration interface
+export interface EndpointConfig {
+  websocket?: string;
+  http?: string;
+  fileToText?: string;
+}
+
 // Determine the WebSocket implementation based on the environment (browser, Node.js, or React Native)
 let WebSocketImpl: typeof WebSocket;
 
@@ -86,9 +93,21 @@ export class CaptivateChatAPI {
   private apiKey: string;
   private mode: 'prod' | 'dev';
   /**
+   * Custom endpoint configuration.
+   */
+  private endpoints: EndpointConfig;
+  /**
    * WebSocket URL for real-time communication.
    */
   private url: string;
+  /**
+   * HTTP base URL for API requests.
+   */
+  private httpBaseUrl: string;
+  /**
+   * File-to-text API URL.
+   */
+  private fileToTextUrl: string;
   /**
    * WebSocket connection for receiving real-time messages.
    */
@@ -131,21 +150,71 @@ export class CaptivateChatAPI {
    * Creates an instance of CaptivateChatAPI.
    * @param apiKey - The API key for authentication.
    * @param mode - The mode of operation ('prod' for production or 'dev' for development).
+   * @param endpoints - Optional custom endpoint configuration.
    */
-  constructor(apiKey: string, mode: 'prod' | 'dev' = 'prod') {
+  constructor(apiKey: string, mode: 'prod' | 'dev' = 'prod', endpoints?: EndpointConfig) {
     this.apiKey = apiKey;
     this.mode = mode;
+    this.endpoints = endpoints || {};
     
-    // Legacy WebSocket URL (deprecated)
-    this.url =
-      this.mode === 'prod'
-        ? `wss://channel.wss.captivatechat.ai/dev?apiKey=${apiKey}`
-        : `wss://channel-dev.wss.captivatechat.ai/dev?apiKey=${apiKey}`;
+    // Set up URLs based on custom endpoints or default mode-based URLs
+    this.url = this.endpoints.websocket ? `${this.endpoints.websocket}?apiKey=${this.apiKey}` : this.getDefaultWebSocketUrl();
+    this.httpBaseUrl = this.endpoints.http || this.getDefaultHttpUrl();
+    this.fileToTextUrl = this.endpoints.fileToText || this.getDefaultFileToTextUrl();
     
     this.socket = null;
     this.conversations = new Map();
     
     captivateLogger.log('CaptivateChatAPI: Using HTTP for sending messages and WebSocket for receiving real-time updates.');
+    if (this.endpoints.websocket || this.endpoints.http || this.endpoints.fileToText) {
+      captivateLogger.log('Custom endpoints configured:', this.endpoints);
+    }
+  }
+
+  /**
+   * Gets the default WebSocket URL based on mode.
+   * @returns The default WebSocket URL.
+   */
+  private getDefaultWebSocketUrl(): string {
+    return this.mode === 'prod'
+      ? `wss://channel.wss.captivatechat.ai/dev?apiKey=${this.apiKey}`
+      : `wss://channel-dev.wss.captivatechat.ai/dev?apiKey=${this.apiKey}`;
+  }
+
+  /**
+   * Gets the default HTTP base URL based on mode.
+   * @returns The default HTTP base URL.
+   */
+  private getDefaultHttpUrl(): string {
+    return this.mode === 'prod'
+      ? 'https://channel.prod.captivat.io'
+      : 'https://channel.dev.captivat.io';
+  }
+
+  /**
+   * Gets the default file-to-text API URL based on mode.
+   * @returns The default file-to-text API URL.
+   */
+  private getDefaultFileToTextUrl(): string {
+    return this.mode === 'prod'
+      ? 'https://file-to-text.prod.captivat.io/api/file-to-text'
+      : 'https://file-to-text.dev.captivat.io/api/file-to-text';
+  }
+
+  /**
+   * Gets the current HTTP base URL (custom or default).
+   * @returns The HTTP base URL.
+   */
+  public getHttpBaseUrl(): string {
+    return this.httpBaseUrl;
+  }
+
+  /**
+   * Gets the current file-to-text API URL (custom or default).
+   * @returns The file-to-text API URL.
+   */
+  public getFileToTextUrl(): string {
+    return this.fileToTextUrl;
   }
 
   /**
@@ -158,11 +227,7 @@ export class CaptivateChatAPI {
       throw new Error('API key is required for HTTP communication');
     }
 
-    const baseUrl = this.mode === 'prod'
-      ? 'https://channel.prod.captivat.io'
-      : 'https://channel.dev.captivat.io';
-    
-    const url = `${baseUrl}/api/custom-channel/sockets/message`;
+    const url = `${this.httpBaseUrl}/api/custom-channel/sockets/message`;
 
     // Add socket_id to the event if available
     const messageWithSocketId = {
@@ -309,7 +374,7 @@ export class CaptivateChatAPI {
               
               this.socket?.removeEventListener('message', onMessage);
               
-              const conversation = withSocketGuard(new Conversation(conversationId, this.socket!, {}, this.apiKey, this.mode, this.socketId));
+              const conversation = withSocketGuard(new Conversation(conversationId, this.socket!, {}, this.apiKey, this.mode, this.socketId, this.endpoints));
               this.conversations.set(conversationId, conversation);
               
               if (autoConversationStart === 'bot-first') {
@@ -364,7 +429,7 @@ export class CaptivateChatAPI {
       // If conversation is not found, check if socket is initialized
       if (this.socket !== null) {
         // If socket is initialized, create the conversation
-        conversation = withSocketGuard(new Conversation(conversationId, this.socket,{},this.apiKey, this.mode, this.socketId));
+        conversation = withSocketGuard(new Conversation(conversationId, this.socket,{},this.apiKey, this.mode, this.socketId, this.endpoints));
         this.conversations.set(conversationId, conversation);
       } else {
         // Handle the case where socket is not initialized
@@ -427,7 +492,7 @@ export class CaptivateChatAPI {
               for (const conv of payload) {
                 const { conversation_id, metadata, apiKey } = conv;
                 if (this.socket !== null) {
-                  conversations.push(withSocketGuard(new Conversation(conversation_id, this.socket, metadata, apiKey || this.apiKey, this.mode, this.socketId)));
+                  conversations.push(withSocketGuard(new Conversation(conversation_id, this.socket, metadata, apiKey || this.apiKey, this.mode, this.socketId, this.endpoints)));
                 }
               }
               // Extract pagination data if present
@@ -573,10 +638,11 @@ export class CaptivateChatAPI {
    * The returned instance is automatically guarded: all method calls will check socket state and auto-reconnect if needed.
    * @param apiKey - The API key for authentication.
    * @param mode - The mode of operation ('prod' or 'dev').
+   * @param endpoints - Optional custom endpoint configuration.
    * @returns A promise that resolves to a connected and guarded CaptivateChatAPI instance.
    */
-  static async create(apiKey: string, mode: 'prod' | 'dev' = 'prod'): Promise<CaptivateChatAPI> {
-    const api = new CaptivateChatAPI(apiKey, mode);
+  static async create(apiKey: string, mode: 'prod' | 'dev' = 'prod', endpoints?: EndpointConfig): Promise<CaptivateChatAPI> {
+    const api = new CaptivateChatAPI(apiKey, mode, endpoints);
     await api.connect();
     return withSocketGuard(api);
   }

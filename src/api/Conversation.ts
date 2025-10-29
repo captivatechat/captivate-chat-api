@@ -1,5 +1,5 @@
 import { CaptivateChatFileManager } from './CaptivateChatFileManager';
-import { captivateLogger } from './CaptivateChatAPI';
+import { captivateLogger, EndpointConfig } from './CaptivateChatAPI';
 
 interface Action {
   id: string;
@@ -23,6 +23,10 @@ export class Conversation {
   private listeners: Map<string, Function[]>;
   private mode: 'prod' | 'dev';
   /**
+   * Custom endpoint configuration.
+   */
+  private endpoints: EndpointConfig;
+  /**
    * Socket ID for HTTP requests.
    */
   private socketId: string | null = null;
@@ -34,14 +38,16 @@ export class Conversation {
    * @param apiKey - API key for HTTP communication (required).
    * @param mode - The mode of operation ('prod' or 'dev').
    * @param socketId - Socket ID for HTTP requests.
+   * @param endpoints - Optional custom endpoint configuration.
    */
-  constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string, mode?: 'prod' | 'dev', socketId?: string | null) {
+  constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string, mode?: 'prod' | 'dev', socketId?: string | null, endpoints?: EndpointConfig) {
     this.apiKey = apiKey || '';
     this.conversationId = conversation_id;
     this.socket = socket;
     this.listeners = new Map();
     this.mode = mode || 'prod'; // Default to 'prod' if not specified
     this.socketId = socketId || null;
+    this.endpoints = endpoints || {};
 
     // WebSocket listeners for real-time communication from server
     if (this.socket) {
@@ -295,7 +301,8 @@ export class Conversation {
                 // Refresh expired URL
                 const refreshedUrl = await CaptivateChatFileManager.getSecureFileUrl(
                   file.storage.fileKey,
-                  7200 // 2 hours
+                  7200, // 2 hours
+                  this.endpoints.fileToText
                 );
 
                 return {
@@ -528,13 +535,13 @@ export class Conversation {
   }
 
   /**
-   * Gets the base URL for API requests based on the current mode.
+   * Gets the base URL for API requests based on custom endpoints or mode.
    * @returns The base URL for the API.
    */
   private getBaseUrl(): string {
-    return this.mode === 'prod'
+    return this.endpoints.http || (this.mode === 'prod'
       ? 'https://channel.prod.captivat.io'
-      : 'https://channel.dev.captivat.io';
+      : 'https://channel.dev.captivat.io');
   }
 
   /**

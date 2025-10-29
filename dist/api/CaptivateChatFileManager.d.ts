@@ -3,8 +3,8 @@
  * Supports direct file uploads with automatic text extraction and storage management.
  */
 export declare class CaptivateChatFileManager {
-    private static readonly FILE_TO_TEXT_API_URL;
-    private static readonly PRESIGNED_URL_API_URL;
+    private static readonly DEFAULT_FILE_TO_TEXT_API_URL;
+    private static readonly DEFAULT_PRESIGNED_URL_API_URL;
     readonly type: 'files';
     readonly files: Array<{
         filename: string;
@@ -45,6 +45,7 @@ export declare class CaptivateChatFileManager {
      * @param options.fileType - Optional custom file type.
      * @param options.storage - Whether to store the file for future reference (default: true).
      * @param options.url - URL to reference the file when storage is false (required when storage is false).
+     * @param options.fileToTextUrl - Optional custom file-to-text API URL.
      * @returns A promise that resolves to a CaptivateChatFileManager instance with converted text.
      */
     static create(options: {
@@ -53,6 +54,7 @@ export declare class CaptivateChatFileManager {
         fileType?: string;
         storage?: boolean;
         url?: string;
+        fileToTextUrl?: string;
     }): Promise<CaptivateChatFileManager>;
     /**
      * Gets the first file from the files array for convenience.
@@ -216,15 +218,17 @@ export declare class CaptivateChatFileManager {
      * Generates a secure URL for accessing a stored file.
      * @param fileKey - The file key from the storage response.
      * @param expiresIn - Expiration time in seconds (default: 7200 = 2 hours).
+     * @param customFileToTextUrl - Optional custom file-to-text API URL.
      * @returns A promise that resolves to the secure URL.
      */
-    static getSecureFileUrl(fileKey: string, expiresIn?: number): Promise<string>;
+    static getSecureFileUrl(fileKey: string, expiresIn?: number, customFileToTextUrl?: string): Promise<string>;
     /**
      * Converts a file to text using the file-to-text API endpoint.
      * @param file - The file to convert (File or Blob).
      * @param fileName - The name of the file.
      * @param includeMetadata - Whether to include additional metadata in the response.
      * @param storage - Whether to store the file for future reference.
+     * @param customFileToTextUrl - Optional custom file-to-text API URL.
      * @returns A promise that resolves to the extracted text.
      */
     private static convertFileToText;

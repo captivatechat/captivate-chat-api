@@ -1,3 +1,4 @@
+import { EndpointConfig } from './CaptivateChatAPI';
 interface Action {
     id: string;
     data: any;
@@ -19,6 +20,10 @@ export declare class Conversation {
     private listeners;
     private mode;
     /**
+     * Custom endpoint configuration.
+     */
+    private endpoints;
+    /**
      * Socket ID for HTTP requests.
      */
     private socketId;
@@ -30,8 +35,9 @@ export declare class Conversation {
      * @param apiKey - API key for HTTP communication (required).
      * @param mode - The mode of operation ('prod' or 'dev').
      * @param socketId - Socket ID for HTTP requests.
+     * @param endpoints - Optional custom endpoint configuration.
      */
-    constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string, mode?: 'prod' | 'dev', socketId?: string | null);
+    constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string, mode?: 'prod' | 'dev', socketId?: string | null, endpoints?: EndpointConfig);
     /**
      * Handles incoming WebSocket messages for real-time communication.
      * @param event - The WebSocket message event.
@@ -144,7 +150,7 @@ export declare class Conversation {
      */
     private removeListener;
     /**
-     * Gets the base URL for API requests based on the current mode.
+     * Gets the base URL for API requests based on custom endpoints or mode.
      * @returns The base URL for the API.
      */
     private getBaseUrl;

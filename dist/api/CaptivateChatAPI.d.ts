@@ -1,4 +1,9 @@
 import { Conversation } from './Conversation';
+export interface EndpointConfig {
+    websocket?: string;
+    http?: string;
+    fileToText?: string;
+}
 export declare const captivateLogger: {
     log: (...args: any[]) => void;
     warn: (...args: any[]) => void;
@@ -8,9 +13,21 @@ export declare class CaptivateChatAPI {
     private apiKey;
     private mode;
     /**
+     * Custom endpoint configuration.
+     */
+    private endpoints;
+    /**
      * WebSocket URL for real-time communication.
      */
     private url;
+    /**
+     * HTTP base URL for API requests.
+     */
+    private httpBaseUrl;
+    /**
+     * File-to-text API URL.
+     */
+    private fileToTextUrl;
     /**
      * WebSocket connection for receiving real-time messages.
      */
@@ -46,8 +63,34 @@ export declare class CaptivateChatAPI {
      * Creates an instance of CaptivateChatAPI.
      * @param apiKey - The API key for authentication.
      * @param mode - The mode of operation ('prod' for production or 'dev' for development).
+     * @param endpoints - Optional custom endpoint configuration.
      */
-    constructor(apiKey: string, mode?: 'prod' | 'dev');
+    constructor(apiKey: string, mode?: 'prod' | 'dev', endpoints?: EndpointConfig);
+    /**
+     * Gets the default WebSocket URL based on mode.
+     * @returns The default WebSocket URL.
+     */
+    private getDefaultWebSocketUrl;
+    /**
+     * Gets the default HTTP base URL based on mode.
+     * @returns The default HTTP base URL.
+     */
+    private getDefaultHttpUrl;
+    /**
+     * Gets the default file-to-text API URL based on mode.
+     * @returns The default file-to-text API URL.
+     */
+    private getDefaultFileToTextUrl;
+    /**
+     * Gets the current HTTP base URL (custom or default).
+     * @returns The HTTP base URL.
+     */
+    getHttpBaseUrl(): string;
+    /**
+     * Gets the current file-to-text API URL (custom or default).
+     * @returns The file-to-text API URL.
+     */
+    getFileToTextUrl(): string;
     /**
      * Sends a message via HTTP API.
      * @param message - The message object to send.
@@ -133,7 +176,8 @@ export declare class CaptivateChatAPI {
      * The returned instance is automatically guarded: all method calls will check socket state and auto-reconnect if needed.
      * @param apiKey - The API key for authentication.
      * @param mode - The mode of operation ('prod' or 'dev').
+     * @param endpoints - Optional custom endpoint configuration.
      * @returns A promise that resolves to a connected and guarded CaptivateChatAPI instance.
      */
-    static create(apiKey: string, mode?: 'prod' | 'dev'): Promise<CaptivateChatAPI>;
+    static create(apiKey: string, mode?: 'prod' | 'dev', endpoints?: EndpointConfig): Promise<CaptivateChatAPI>;
 }

@@ -3,8 +3,8 @@
  * Supports direct file uploads with automatic text extraction and storage management.
  */
 export class CaptivateChatFileManager {
-  private static readonly FILE_TO_TEXT_API_URL = 'https://file-to-text.prod.captivat.io/api/file-to-text';
-  private static readonly PRESIGNED_URL_API_URL = 'https://file-to-text.prod.captivat.io/api/presigned-url';
+  private static readonly DEFAULT_FILE_TO_TEXT_API_URL = 'https://file-to-text.prod.captivat.io/api/file-to-text';
+  private static readonly DEFAULT_PRESIGNED_URL_API_URL = 'https://file-to-text.prod.captivat.io/api/presigned-url';
   
   public readonly type: 'files' = 'files';
   public readonly files: Array<{
@@ -60,6 +60,7 @@ export class CaptivateChatFileManager {
    * @param options.fileType - Optional custom file type.
    * @param options.storage - Whether to store the file for future reference (default: true).
    * @param options.url - URL to reference the file when storage is false (required when storage is false).
+   * @param options.fileToTextUrl - Optional custom file-to-text API URL.
    * @returns A promise that resolves to a CaptivateChatFileManager instance with converted text.
    */
   static async create(
@@ -69,6 +70,7 @@ export class CaptivateChatFileManager {
       fileType?: string;
       storage?: boolean;
       url?: string;
+      fileToTextUrl?: string;
     }
   ): Promise<CaptivateChatFileManager> {
     // Direct file upload
@@ -88,7 +90,8 @@ export class CaptivateChatFileManager {
       file, 
       finalFileName, 
       true, // Always include metadata
-      storage
+      storage,
+      options.fileToTextUrl
     );
 
     // Create and return the instance with proxy for array-like behavior
@@ -316,10 +319,11 @@ export class CaptivateChatFileManager {
    * Generates a secure URL for accessing a stored file.
    * @param fileKey - The file key from the storage response.
    * @param expiresIn - Expiration time in seconds (default: 7200 = 2 hours).
+   * @param customFileToTextUrl - Optional custom file-to-text API URL.
    * @returns A promise that resolves to the secure URL.
    */
-  static async getSecureFileUrl(fileKey: string, expiresIn: number = 7200): Promise<string> {
-    const url = CaptivateChatFileManager.PRESIGNED_URL_API_URL;
+  static async getSecureFileUrl(fileKey: string, expiresIn: number = 7200, customFileToTextUrl?: string): Promise<string> {
+    const url = customFileToTextUrl || CaptivateChatFileManager.DEFAULT_PRESIGNED_URL_API_URL;
 
     try {
       const response = await fetch(url, {
@@ -360,10 +364,11 @@ export class CaptivateChatFileManager {
    * @param fileName - The name of the file.
    * @param includeMetadata - Whether to include additional metadata in the response.
    * @param storage - Whether to store the file for future reference.
+   * @param customFileToTextUrl - Optional custom file-to-text API URL.
    * @returns A promise that resolves to the extracted text.
    */
-  private static async convertFileToText(file: File | Blob, fileName: string, includeMetadata: boolean, storage: boolean): Promise<{text: string, storageInfo?: any}> {
-    const url = CaptivateChatFileManager.FILE_TO_TEXT_API_URL;
+  private static async convertFileToText(file: File | Blob, fileName: string, includeMetadata: boolean, storage: boolean, customFileToTextUrl?: string): Promise<{text: string, storageInfo?: any}> {
+    const url = customFileToTextUrl || CaptivateChatFileManager.DEFAULT_FILE_TO_TEXT_API_URL;
 
     // Create FormData for multipart/form-data request
     const formData = new FormData();
