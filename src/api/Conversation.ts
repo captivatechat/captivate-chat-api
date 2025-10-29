@@ -1,4 +1,5 @@
 import { CaptivateChatFileManager } from './CaptivateChatFileManager';
+import { captivateLogger } from './CaptivateChatAPI';
 
 interface Action {
   id: string;
@@ -6,34 +7,60 @@ interface Action {
 }
 
 /**
- * Represents a conversation session, handling WebSocket communication and event management.
+ * Represents a conversation session, handling HTTP communication for sending and WebSocket for receiving.
+ * Client-side sending uses HTTP, while server-side real-time communication uses WebSocket listeners.
  */
 export class Conversation {
   public apiKey: string;
   private conversationId: string;
+  private metadata: object;
+  /**
+   * WebSocket connection for receiving real-time messages from server.
+   */
   private socket: WebSocket;
+  /**
+   * Event listeners for real-time WebSocket communication.
+   */
   private listeners: Map<string, Function[]>;
   private mode: 'prod' | 'dev';
   /**
+   * Socket ID for HTTP requests.
+   */
+  private socketId: string | null = null;
+  /**
    * Initializes a new Conversation instance.
    * @param conversationId - The unique identifier of the conversation.
-   * @param socket - The WebSocket instance for communication.
+   * @param socket - WebSocket instance for receiving real-time messages.
    * @param metadata - Optional metadata for the conversation.
-   * @param apiKey - Optional API key for REST operations.
+   * @param apiKey - API key for HTTP communication (required).
    * @param mode - The mode of operation ('prod' or 'dev').
+   * @param socketId - Socket ID for HTTP requests.
    */
-  constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string, mode?: 'prod' | 'dev') {
+  constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string, mode?: 'prod' | 'dev', socketId?: string | null) {
     this.apiKey = apiKey || '';
     this.conversationId = conversation_id;
     this.socket = socket;
+    this.metadata = metadata || {};
     this.listeners = new Map();
     this.mode = mode || 'prod'; // Default to 'prod' if not specified
+    this.socketId = socketId || null;
 
-    this.socket.onmessage = this.handleMessage.bind(this);
+    // WebSocket listeners for real-time communication from server
+    if (this.socket) {
+      this.socket.onmessage = this.handleMessage.bind(this);
+    }
 
+    if (!this.apiKey) {
+      console.warn('API key is required for HTTP communication. Some features may not work properly.');
+    }
   }
 
+  /**
+   * Handles incoming WebSocket messages for real-time communication.
+   * @param event - The WebSocket message event.
+   */
   private handleMessage(event: MessageEvent) {
+    
     const message = JSON.parse(event.data);
     const eventType = message.event?.event_type;
     if (eventType && this.listeners.has(eventType)) {
@@ -41,10 +68,13 @@ export class Conversation {
       this.listeners.get(eventType)?.forEach((callback) => callback(payload));
     }
   }
+
+  /**
+   * Restarts WebSocket listeners for real-time communication.
+   */
   public restartListeners() {
     // Listen to WebSocket messages and handle events.
     this.socket.onmessage = this.handleMessage.bind(this);
-
   }
 
   /**
@@ -97,9 +127,9 @@ export class Conversation {
   }
 
   /**
-     * Registers a listener for receiving actions.
-     * @param callback - The function to handle incoming action.
-     */
+   * Registers a listener for receiving actions.
+   * @param callback - The function to handle incoming action.
+   */
   public onActionReceived(callback: (actions: [Action]) => void): void {
     this.addListener('action', (payload: any) => callback(payload.actions));
   }
@@ -152,7 +182,7 @@ export class Conversation {
   }
 
   /**
-  * Sets metadata for the conversation and listens for success confirmation.
+  * Sets metadata for the conversation and uses HTTP response for confirmation.
   * @param metadata - An object containing the metadata to set.
   * @returns A promise that resolves when the metadata update is successful.
   */
@@ -161,40 +191,23 @@ export class Conversation {
       throw new Error('Metadata must be a non-null object.');
     }
 
-    return new Promise((resolve, reject) => {
-      const metadataRequest = {
-        action: 'sendMessage',
-        event: {
-          event_type: 'metadata',
-          event_payload: {
-            metadata,
-            client_msg_id: `metadata-${Date.now()}`,
-            conversation_id: this.conversationId,
-          },
+    const metadataRequest = {
+      action: 'sendMessage',
+      event: {
+        event_type: 'metadata',
+        event_payload: {
+          metadata,
+          client_msg_id: `metadata-${Date.now()}`,
+          conversation_id: this.conversationId,
         },
-      };
+      },
+    };
 
-      // Send the metadata update request
-      this.socket.send(JSON.stringify(metadataRequest));
-
-      // Listener function for metadata update success
-      const onMetadataSuccess = (payload: any) => {
-
-        if (payload.conversation_id === this.conversationId) {
-          this.removeListener('metadata_update_success', onMetadataSuccess);
-          resolve(payload);
-        }
-      };
-
-      // Add the success listener
-      this.addListener('metadata_update_success', onMetadataSuccess);
-
-      // Timeout for failure case
-      setTimeout(() => {
-        this.removeListener('metadata_update_success', onMetadataSuccess);
-        reject(new Error('Timeout: No response for metadata update'));
-      }, 15000);
-    });
+    // Send the metadata update request via HTTP and get response
+    const response = await this.sendPayloadViaHttp(metadataRequest);
+    
+    // The HTTP response confirms the metadata was set successfully
+    captivateLogger.log('Metadata update confirmed via HTTP response:', response);
   }
 
   /**
@@ -218,12 +231,15 @@ export class Conversation {
    * @returns A promise that resolves when the action is sent.
    */
   public async sendAction(actionId: string, data: object = {}): Promise<void> {
-    return this.sendPayload('action', {
+    const response = await this.sendPayload('action', {
       type: 'normal',
       id: actionId,
       data,
       conversation_id: this.conversationId,
     });
+    
+    // The HTTP response confirms the action was sent successfully
+    captivateLogger.log('Action sent confirmed via HTTP response:', response);
   }
 
   /**
@@ -234,10 +250,7 @@ export class Conversation {
     if (!this.apiKey) {
       throw new Error('API key is required to fetch transcript via REST.');
     }
-    const baseUrl = this.mode === 'prod'
-      ? 'https://channel.prod.captivat.io'
-      : 'https://channel.dev.captivat.io';
-    const url = `${baseUrl}/api/transcript?conversation_id=${encodeURIComponent(this.conversationId)}`;
+    const url = `${this.getBaseUrl()}/api/transcript?conversation_id=${encodeURIComponent(this.conversationId)}`;
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -339,85 +352,61 @@ export class Conversation {
   }
 
   /**
- * Requests metadata for the conversation.
+ * Requests metadata for the conversation using HTTP request with direct response.
  * @returns A promise that resolves to the conversation metadata.
  */
   public async getMetadata(): Promise<object> {
-    return new Promise((resolve, reject) => {
-      const metadataRequest = {
-        action: 'sendMessage',
-        event: {
-          event_type: 'metadata_request',
-          event_payload: {
-            conversation_id: this.conversationId,
-          },
+    const metadataRequest = {
+      action: 'sendMessage',
+      event: {
+        event_type: 'metadata_request',
+        event_payload: {
+          conversation_id: this.conversationId,
         },
-      };
-      this.socket.send(JSON.stringify(metadataRequest));
+      },
+    };
 
-      const onMessage = (payload: any) => {
-
-        if (payload.conversation_id === this.conversationId) {
-          this.removeListener('conversation_metadata', onMessage);
-          resolve(payload.content);
-        }
-      };
-
-      this.addListener('conversation_metadata', onMessage);
-
-      setTimeout(() => {
-        this.removeListener('conversation_metadata', onMessage);
-        reject(new Error('Timeout: No response for metadata request'));
-      }, 10000);
-    });
+    // Send the metadata request via HTTP and get response
+    const response = await this.sendPayloadViaHttp(metadataRequest);
+    
+    // The HTTP response contains the metadata
+    captivateLogger.log('Metadata retrieved via HTTP response:', response);
+    return response.metadata || response;
   }
   /**
-    * Deletes this conversation.
-    * @returns A promise that resolves when the conversation is deleted successfully.
-    */
-  public async delete(): Promise<void> {
-    return new Promise((resolve, reject) => {
+   * Deletes this conversation using HTTP request with direct response.
+   * @param options - Delete options object with softDelete property.
+   * @param options.softDelete - Whether to perform a soft delete (true) or hard delete (false). Defaults to true.
+   * @returns A promise that resolves when the conversation is deleted successfully.
+   */
+  public async delete(options: { softDelete?: boolean } = {}): Promise<void> {
+    const { softDelete = true } = options;
+    
+    const deleteRequest = {
+      action: 'sendMessage',
+      event: {
+        event_type: 'delete_conversation',
+        event_payload: { 
+          conversation_id: this.conversationId,
+          softdelete: softDelete
+        },
+      },
+    };
 
-      try {
-        const deleteRequest = {
-          action: 'sendMessage',
-          event: {
-            event_type: 'delete_conversation',
-            event_payload: { conversation_id: this.conversationId },
-          },
-        };
-        this.socket.send(JSON.stringify(deleteRequest));
-
-        const onDeleteSuccess = (event: MessageEvent) => {
-          const message = JSON.parse(event.data);
-          if (
-            message.event?.event_type === 'delete_conversation_success' &&
-            message.event.event_payload.conversation_id === this.conversationId
-          ) {
-            this.socket.removeEventListener('message', onDeleteSuccess);
-            resolve();
-          }
-        };
-
-        this.socket.addEventListener('message', onDeleteSuccess);
-
-        setTimeout(() => {
-          this.socket.removeEventListener('message', onDeleteSuccess);
-          reject(new Error(`Timeout: No response for deleting conversation ${this.conversationId}`));
-        }, 10000);
-      } catch (error) {
-        reject(error);
-      }
-    });
+    // Send the delete request via HTTP and get response
+    const response = await this.sendPayloadViaHttp(deleteRequest);
+    
+    // The HTTP response confirms the conversation was deleted successfully
+    captivateLogger.log(`Conversation ${softDelete ? 'soft' : 'hard'} delete confirmed via HTTP response:`, response);
   }
 
 
 
   /**
-   * Edits a message in the conversation.
+   * Edits a message in the conversation using HTTP request with direct response.
    * @param messageId - The ID of the message to edit.
    * @param content - The new content for the message (object or string).
-   * @returns A promise that resolves when the edit is confirmed by user_message_updated.
+   * @returns A promise that resolves when the edit is confirmed via HTTP response.
    */
   public async editMessage(messageId: string, content: object | string): Promise<void> {
     // If content is a string, wrap it in a default object
@@ -425,59 +414,104 @@ export class Conversation {
       content = { type: 'text', text: content };
     }
 
-    return new Promise((resolve, reject) => {
-      // Send the edit_message payload
-      this.sendPayload('edit_message', {
-        type: 'message_create',
-        client_msg_id: `edit-message-id-${Date.now()}`,
-        conversation_id: this.conversationId,
-        message_id: messageId,
-        content,
-      });
+    const editRequest = {
+      action: 'sendMessage',
+      event: {
+        event_type: 'edit_message',
+        event_payload: {
+          type: 'message_create',
+          client_msg_id: `edit-message-id-${Date.now()}`,
+          conversation_id: this.conversationId,
+          message_id: messageId,
+          content,
+        },
+      },
+    };
 
-      // Listener for message_edited_success event
-      const onEditSuccess = (payload: any) => {
-        if (
-          payload.conversation_id === this.conversationId &&
-          payload.message_id === messageId
-        ) {
-          this.removeListener('message_edited_success', onEditSuccess);
-          resolve();
-        }
-      };
-
-      this.addListener('message_edited_success', onEditSuccess);
-
-      // Timeout for failure case
-      setTimeout(() => {
-        this.removeListener('message_edited_success', onEditSuccess);
-        reject(new Error('Timeout: No response for message edit'));
-      }, 10000);
-    });
+    // Send the edit request via HTTP and get response
+    const response = await this.sendPayloadViaHttp(editRequest);
+    
+    // The HTTP response confirms the message was edited successfully
+    captivateLogger.log('Message edit confirmed via HTTP response:', response);
   }
 
   /**
-   * Sends a payload to the WebSocket.
+   * Sends a payload via HTTP API (primary method).
    * @param eventType - The type of event being sent.
    * @param payload - The payload data to include with the event.
-   * @returns A promise that resolves when the payload is sent.
+   * @returns A promise that resolves to the response data.
    */
-  private async sendPayload(eventType: string, payload: object): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        const message = {
-          action: 'sendMessage',
-          event: {
-            event_type: eventType,
-            event_payload: payload,
-          },
-        };
-        this.socket.send(JSON.stringify(message));
-        resolve();
-      } catch (error) {
-        reject(error);
+  private async sendPayload(eventType: string, payload: object): Promise<any> {
+    const message = {
+      action: 'sendMessage',
+      event: {
+        event_type: eventType,
+        event_payload: payload,
+      },
+    };
+
+    return this.sendPayloadViaHttp(message);
+  }
+
+  /**
+   * Sends a payload via HTTP API (primary communication method).
+   * @param message - The message to send via HTTP.
+   * @returns A promise that resolves to the response data.
+   */
+  private async sendPayloadViaHttp(message: object): Promise<any> {
+    if (!this.apiKey) {
+      throw new Error('API key is required for HTTP communication');
+    }
+
+    const url = `${this.getBaseUrl()}/api/custom-channel/sockets/message`;
+
+    // Add socket_id to the event if available
+    const messageWithSocketId = {
+      ...message,
+      event: {
+        ...(message as any).event,
+        socket_id: this.socketId
       }
-    });
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'x-api-key': this.apiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(messageWithSocketId)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP request failed: ${response.status} ${response.statusText}`);
+      }
+
+      // Check if response is JSON or plain text
+      const contentType = response.headers.get('content-type');
+      let responseData;
+      
+      if (contentType && contentType.includes('application/json')) {
+        responseData = await response.json();
+      } else {
+        // Handle plain text response (like "OK")
+        const textResponse = await response.text();
+        captivateLogger.log('Server returned plain text:', textResponse);
+        // Return a mock response structure for plain text responses
+        responseData = {
+          status: 'success',
+          message: textResponse
+        };
+      }
+      
+      captivateLogger.log('Payload received from server via HTTP:', responseData);
+      return responseData;
+    } catch (error) {
+      console.error('HTTP request failed:', error);
+      throw new Error(`Failed to send payload via HTTP: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   /**
@@ -496,10 +530,24 @@ export class Conversation {
   }
 
   /**
+   * Gets the base URL for API requests based on the current mode.
+   * @returns The base URL for the API.
+   */
+  private getBaseUrl(): string {
+    return this.mode === 'prod'
+      ? 'https://channel.prod.captivat.io'
+      : 'https://channel.dev.captivat.io';
+  }
+
+  /**
    * Gets the unique identifier of the conversation.
    * @returns The conversation ID.
    */
   public getConversationId(): string {
     return this.conversationId;
   }
+
+
+
+
 }

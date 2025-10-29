@@ -12,7 +12,65 @@ npm install captivate-chat-api
 
 ## What's New
 
-### Enhanced File Handling (v4.0.0)
+### HTTP REST Migration (v5.0.0)
+
+Client sending operations have been refactored from WebSocket to HTTP REST for improved reliability and performance:
+
+- **🔄 HTTP REST for Sending**: All client sending operations (`sendMessage`, `setMetadata`, `setPrivateMetadata`, `sendAction`) now use HTTP REST endpoints instead of WebSocket events
+- **⚡ Improved Reliability**: HTTP requests provide better error handling and retry mechanisms compared to WebSocket events
+- **📡 Hybrid Architecture**: WebSocket is still used for real-time message reception and event handling, while HTTP handles all outgoing operations
+- **🔧 Backward Compatibility**: All existing method signatures remain unchanged - no code changes required
+- **📊 Better Performance**: HTTP requests offer more predictable latency and better handling of network issues
+
+**Methods now using HTTP REST:**
+- `conversation.sendMessage()` - Sends messages via HTTP with immediate confirmation
+- `conversation.setMetadata()` - Updates metadata via HTTP with response confirmation  
+- `conversation.setPrivateMetadata()` - Updates private metadata via HTTP with response confirmation
+- `conversation.sendAction()` - Sends custom actions via HTTP with response confirmation
+
+**Methods now using HTTP REST:**
+- `conversation.getMetadata()` - Uses HTTP request with direct response (no WebSocket)
+- `conversation.editMessage()` - Uses HTTP request with direct response (no WebSocket)
+
+**Methods still using WebSocket:**
+- All event listeners (`onMessage`, `onError`, `onConversationUpdate`, `onActionReceived`) - Continue to work via WebSocket for real-time updates
+
+### Debug Mode (v5.0.0)
+
+The library now includes a debug mode that allows you to control logging output:
+
+```typescript
+import { CaptivateChatAPI } from 'captivate-chat-api';
+
+// Enable debug mode to see detailed logs
+CaptivateChatAPI.setDebugMode(true);
+
+// Create and use the API - you'll see detailed logs with [CaptivateChatAPI] prefix
+const api = await CaptivateChatAPI.create('YOUR_API_KEY');
+
+// Disable debug mode to hide logs
+CaptivateChatAPI.setDebugMode(false);
+
+// Check current debug mode status
+const isDebugEnabled = CaptivateChatAPI.getDebugMode();
+console.log('Debug mode enabled:', isDebugEnabled);
+```
+
+**Debug Mode Features:**
+- **🔍 Targeted Logging**: Only affects CaptivateChatAPI logs, not your website's console.log calls
+- **🏷️ Clear Prefixing**: All debug logs are prefixed with `[CaptivateChatAPI]` for easy identification
+- **⚡ Performance**: Debug logs are completely disabled when debug mode is off
+- **🔧 Easy Control**: Simple static methods to enable/disable debug mode globally
+
+**What Gets Logged in Debug Mode:**
+- HTTP request/response details
+- WebSocket connection events
+- Message sending confirmations
+- Metadata operations
+- Action confirmations
+- Error details
+
+**Important:** Debug mode only affects CaptivateChatAPI internal logging. Your apps console.log calls remain unaffected.
 
 The `CaptivateChatFileManager` class has been significantly improved with:
 
@@ -24,6 +82,9 @@ The `CaptivateChatFileManager` class has been significantly improved with:
 - **🔗 URL Support**: When `storage: false`, provide your own URL for `sendMessage` compatibility
 - **⚡ Performance**: Eliminated API URL duplication and optimized internal structure
 - **🔒 Backward Compatibility**: All existing code continues to work without changes
+
+
+
 
 ### Key Improvements
 
@@ -428,7 +489,7 @@ The `CaptivateChatFileManager` creates a structured object with:
 
 #### Supported File Types
 
-- **Documents**: PDF, DOCX, TXT
+- **Documents**: PDF, DOCX, TXT, XLSX, CSV
 - **Images**: PNG, JPG, JPEG (with OCR text extraction)
 - **Any file type** supported by the file-to-text API
 
@@ -516,12 +577,25 @@ console.log('Transcript:', transcript);
 
 ### Delete Conversation
 
-Delete the current conversation
+Delete the current conversation with optional soft delete:
 
 ```typescript
-const transcript = await conversation.delete();
-console.log('Deleted conversation');
+// Soft delete (default - safer option)
+await conversation.delete();
+console.log('Conversation soft deleted');
+
+// Explicit soft delete
+await conversation.delete({ softDelete: true });
+console.log('Conversation soft deleted');
+
+// Hard delete (permanent - deletes everything including transcripts)
+await conversation.delete({ softDelete: false });
+console.log('Conversation permanently deleted');
 ```
+
+**Delete Types:**
+- **Soft Delete (default)**: Marks conversation as deleted but preserves data including transcripts for potential recovery
+- **Hard Delete**: Permanently removes everything including transcripts, messages, and all associated data
 
 
 ### Retrieve User Conversations
@@ -651,15 +725,25 @@ for (const conv of conversations) {
 
 ### Delete User Conversations
 
-Delete list of conversations associated with a specific user ID:
+Delete all conversations for a specific user with optional soft delete:
 
 ```typescript
-const conversations = await api.deleteUserConversations('user123');
-console.log('Conversations Deleted successfully');
-/*
- Throws error if failed
- */
+// Soft delete (default - safer option)
+await api.deleteUserConversations('user123');
+console.log('User conversations soft deleted');
+
+// Explicit soft delete
+await api.deleteUserConversations('user123', { softDelete: true });
+console.log('User conversations soft deleted');
+
+// Hard delete (permanent - deletes everything including transcripts)
+await api.deleteUserConversations('user123', { softDelete: false });
+console.log('User conversations permanently deleted');
 ```
+
+**Delete Types:**
+- **Soft Delete (default)**: Marks all user conversations as deleted but preserves data including transcripts for potential recovery
+- **Hard Delete**: Permanently removes all user conversations including transcripts, messages, and all associated data
 
 
 ### Example: Full Workflow
@@ -729,9 +813,13 @@ import { CaptivateChatAPI, CaptivateChatFileManager } from 'captivate-chat-api';
     });
     console.log('Filtered Conversations:', filteredConversations);
 
-    // Delete the conversation
+    // Delete the conversation (soft delete by default)
     await conversation.delete();
-    console.log('Conversation deleted successfully.');
+    console.log('Conversation soft deleted successfully.');
+    
+    // Or delete permanently
+    // await conversation.delete({ softDelete: false });
+    // console.log('Conversation permanently deleted.');
 
   } catch (error) {
     console.error('Error:', error);
@@ -872,6 +960,12 @@ fileInput.length           // ✅ Array length
 
 - **`static create(apiKey: string, mode: 'prod' | 'dev' = 'prod'): Promise<CaptivateChatAPI>`**  
   **(New)** Static factory method that creates and connects a CaptivateChatAPI instance. Returns a promise that resolves to a ready-to-use, connected API instance.
+
+- **`static setDebugMode(enabled: boolean): void`**  
+  **(New)** Sets the debug mode for CaptivateChatAPI logging. When enabled, detailed logs are shown with `[CaptivateChatAPI]` prefix.
+
+- **`static getDebugMode(): boolean`**  
+  **(New)** Gets the current debug mode state. Returns true if debug mode is enabled, false otherwise.
   
 - **`connect(): Promise<void>`**  
   Connects to the WebSocket server.
@@ -888,8 +982,8 @@ fileInput.length           // ✅ Array length
 - **`getUserConversations(userIdOrOptions: string | { userId: string; filter?: object; search?: object; pagination?: { page?: string | number; limit?: string | number }; apiKeys?: string[] }): Promise<Conversation[]>`**  
   Fetches a list of conversations associated with the given user ID. Supports backward compatibility with string parameter or options object. If `filter`, `search`, `pagination`, or `apiKeys` is provided, uses the v2 API for advanced querying. Both `filter` and `search` parameters are supported for different querying needs. The `apiKeys` parameter allows grouping conversations by API key. Returns Conversation Object
 
-- **`deleteUserConversations(userId: string): Promise<void>`**  
-  Deletes all conversations associated with the given user ID
+- **`deleteUserConversations(userId: string, options?: { softDelete?: boolean }): Promise<void>`**  
+  Deletes all conversations associated with the given user ID. `options.softDelete` defaults to `true` (safer option).
 ---
 
 ### Conversation
@@ -926,8 +1020,8 @@ fileInput.length           // ✅ Array length
 - **`getTranscript(): Promise<object[]>`**  
   Retrieves the conversation transcript.
 
-- **`delete(): Promise<void>`**  
-  Deletes the current conversation
+- **`delete(options?: { softDelete?: boolean }): Promise<void>`**  
+  Deletes the current conversation. `options.softDelete` defaults to `true` (safer option).
   
 
 
