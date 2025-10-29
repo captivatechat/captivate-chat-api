@@ -9,6 +9,7 @@ interface Action {
 export declare class Conversation {
     apiKey: string;
     private conversationId;
+    private metadata;
     /**
      * WebSocket connection for receiving real-time messages from server.
      */

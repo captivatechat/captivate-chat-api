@@ -13,6 +13,7 @@ interface Action {
 export class Conversation {
   public apiKey: string;
   private conversationId: string;
+  private metadata: object;
   /**
    * WebSocket connection for receiving real-time messages from server.
    */
@@ -39,6 +40,7 @@ export class Conversation {
     this.apiKey = apiKey || '';
     this.conversationId = conversation_id;
     this.socket = socket;
+    this.metadata = metadata || {};
     this.listeners = new Map();
     this.mode = mode || 'prod'; // Default to 'prod' if not specified
     this.socketId = socketId || null;

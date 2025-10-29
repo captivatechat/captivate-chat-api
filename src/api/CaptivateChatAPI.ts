@@ -30,7 +30,7 @@ function withSocketGuard<T extends object>(instance: T): T {
       const orig = target[prop as keyof T];
       if (
         typeof orig === 'function' &&
-        !['isSocketActive', 'connect', 'reconnect', 'getSocket'].includes(prop as string)
+        !['isSocketActive', 'connect', 'reconnect', 'getSocket', 'getConversationId'].includes(prop as string)
       ) {
         return async function (...args: any[]) {
           if (typeof (target as any)['isSocketActive'] === 'function' && !(target as any)['isSocketActive']()) {
