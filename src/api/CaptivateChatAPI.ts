@@ -403,7 +403,7 @@ export class CaptivateChatAPI {
     const options = typeof userIdOrOptions === 'string' 
       ? { userId: userIdOrOptions }
       : userIdOrOptions;
-    
+
     const { userId, filter = {}, search = {}, pagination = {}, apiKeys } = options;
     const conversations: Conversation[] = [];
     let paginationData: {
@@ -415,77 +415,74 @@ export class CaptivateChatAPI {
       totalPages: number;
     } | undefined = undefined;
     const useV2 = (filter && Object.keys(filter).length > 0) || (search && Object.keys(search).length > 0) || (pagination && Object.keys(pagination).length > 0) || (apiKeys && Array.isArray(apiKeys) && apiKeys.length > 0);
-    return new Promise(async (resolve, reject) => {
-      try {
-        // Set up listener BEFORE sending the HTTP request to avoid race conditions
-        const onMessage = (event: MessageEvent) => {
-          try {
-            const message = JSON.parse(event.data.toString());
-            if (message.event?.event_type === 'user_conversations') {
-              this.socket?.removeEventListener('message', onMessage);
-              const payload = message.event.event_payload.conversations;
-              for (const conv of payload) {
-                const { conversation_id, metadata, apiKey } = conv;
-                if (this.socket !== null) {
-                  conversations.push(withSocketGuard(new Conversation(conversation_id, this.socket, metadata, apiKey || this.apiKey, this.mode, this.socketId)));
-                }
-              }
-              // Extract pagination data if present
-              if (message.event.event_payload.pagination) {
-                paginationData = message.event.event_payload.pagination;
-              }
-              resolve({ conversations, pagination: paginationData });
-            }
-          } catch (err) {
-            console.error('Error processing message:', err);
-            reject(err);
-          }
-        };
 
-        this.socket?.addEventListener('message', onMessage);
-
-        setTimeout(() => {
-          this.socket?.removeEventListener('message', onMessage);
-          reject(new Error('Timeout: No response for getUserConversations'));
-        }, 10000);
-
-        // Send HTTP request AFTER setting up the listener
-        if (useV2) {
-          const eventPayload: any = { userId };
-          if (filter && Object.keys(filter).length > 0) {
-            eventPayload.filter = filter;
-          }
-          if (search && Object.keys(search).length > 0) {
-            eventPayload.search = search;
-          }
-          if (pagination && Object.keys(pagination).length > 0) {
-            eventPayload.pagination = pagination;
-          }
-          if (apiKeys && Array.isArray(apiKeys) && apiKeys.length > 0) {
-            eventPayload.apiKeys = apiKeys;
-          }
-          await this._send({
-            action: 'sendMessage',
-            event: {
-              event_type: 'get_user_conversations_v2',
-              event_payload: eventPayload,
-            },
-          });
-        } else {
-          await this._send({
-            action: 'sendMessage',
-            event: {
-              event_type: 'get_user_conversations',
-              event_payload: {
-                userId,
-              },
-            },
-          });
+    try {
+      // Build request payload for HTTP
+      let httpResponse: any;
+      if (useV2) {
+        const eventPayload: any = { userId };
+        if (filter && Object.keys(filter).length > 0) {
+          eventPayload.filter = filter;
         }
-      } catch (error) {
-        reject(error);
+        if (search && Object.keys(search).length > 0) {
+          eventPayload.search = search;
+        }
+        if (pagination && Object.keys(pagination).length > 0) {
+          eventPayload.pagination = pagination;
+        }
+        if (apiKeys && Array.isArray(apiKeys) && apiKeys.length > 0) {
+          eventPayload.apiKeys = apiKeys;
+        }
+        httpResponse = await this._send({
+          action: 'sendMessage',
+          event: {
+            event_type: 'get_user_conversations_v2',
+            event_payload: eventPayload,
+          },
+        });
+      } else {
+        httpResponse = await this._send({
+          action: 'sendMessage',
+          event: {
+            event_type: 'get_user_conversations',
+            event_payload: {
+              userId,
+            },
+          },
+        });
       }
-    });
+
+      // Support both direct JSON responses and event-wrapped responses
+      const payload = httpResponse?.event?.event_payload || httpResponse;
+      const responseConversations = payload?.conversations || [];
+      const responsePagination = payload?.pagination;
+
+      for (const conv of responseConversations) {
+        const { conversation_id, metadata, apiKey } = conv;
+        if (this.socket !== null) {
+          conversations.push(
+            withSocketGuard(
+              new Conversation(
+                conversation_id,
+                this.socket,
+                metadata,
+                apiKey || this.apiKey,
+                this.mode,
+                this.socketId
+              )
+            )
+          );
+        }
+      }
+
+      if (responsePagination) {
+        paginationData = responsePagination;
+      }
+
+      return { conversations, pagination: paginationData };
+    } catch (error) {
+      throw error;
+    }
   }
 
   /**
