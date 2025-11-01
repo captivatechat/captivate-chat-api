@@ -182,6 +182,90 @@ export class Conversation {
   }
 
   /**
+   * File manager instance with automatic API key and conversation ID context.
+   * All file operations will automatically include the path parameter (apiKey/conversationId).
+   */
+  public get fileManager() {
+    const self = this;
+    return {
+      /**
+       * Creates a file input with automatic file-to-text conversion.
+       * Automatically uses this conversation's API key and conversation ID for the path parameter.
+       */
+      async create(options: {
+        file: File | Blob;
+        fileName?: string;
+        fileType?: string;
+        storage?: boolean;
+        url?: string;
+      }): Promise<CaptivateChatFileManager> {
+        return CaptivateChatFileManager.create({
+          file: options.file,
+          fileName: options.fileName,
+          fileType: options.fileType,
+          storage: options.storage,
+          url: options.url,
+          apiKey: self.apiKey,
+          conversationId: self.conversationId
+        } as any);
+      },
+
+      /**
+       * Creates a single file object with automatic file-to-text conversion.
+       * Automatically uses this conversation's API key and conversation ID for the path parameter.
+       */
+      async createFile(options: {
+        file: File | Blob;
+        fileName?: string;
+        fileType?: string;
+        storage?: boolean;
+        url?: string;
+      }): Promise<{
+        filename: string;
+        type: string;
+        file?: File | Blob;
+        textContent: {
+          type: 'file_content';
+          text: string;
+          metadata: {
+            source: 'file_attachment';
+            originalFileName: string;
+            storageType?: 'direct';
+          };
+        };
+      }> {
+        return CaptivateChatFileManager.createFile({
+          file: options.file,
+          fileName: options.fileName,
+          fileType: options.fileType,
+          storage: options.storage,
+          url: options.url,
+          apiKey: self.apiKey,
+          conversationId: self.conversationId
+        } as any);
+      },
+
+      /**
+       * Creates multiple file inputs from an array of files.
+       * Automatically uses this conversation's API key and conversation ID for the path parameter.
+       */
+      async createMultiple(options: {
+        files: (File | Blob)[];
+        storage?: boolean;
+        urls?: string[];
+      }): Promise<CaptivateChatFileManager> {
+        return CaptivateChatFileManager.createMultiple({
+          files: options.files,
+          storage: options.storage,
+          urls: options.urls,
+          apiKey: self.apiKey,
+          conversationId: self.conversationId
+        } as any);
+      }
+    };
+  }
+
+  /**
   * Sets metadata for the conversation and uses HTTP response for confirmation.
   * @param metadata - An object containing the metadata to set.
   * @returns A promise that resolves when the metadata update is successful.
@@ -221,6 +305,19 @@ export class Conversation {
     }
     // Reuse the setMetadata logic, but wrap in { private: ... }
     return this.setMetadata({ private: privateMeta });
+  }
+
+  /**
+   * Sets the time-to-live (TTL) for the conversation path and updates metadata.
+   * @param days - The number of days for the time-to-live.
+   * @returns A promise that resolves when the TTL is set successfully.
+   */
+  public async setTimeToLive(days: number): Promise<void> {
+    // Use the file manager method to set path TTL
+    await CaptivateChatFileManager.setTimeToLive(this.apiKey, this.conversationId, days);
+    
+    // Also set timeToLive as metadata
+    await this.setMetadata({ timeToLive: days });
   }
 
 

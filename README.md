@@ -194,21 +194,45 @@ Create a new conversation with the following options:
 
 ### File Handling with CaptivateChatFileManager
 
+> **⚠️ Important:** The **recommended way** to handle files is through `conversation.fileManager`, which automatically includes the API key and conversation ID context. The direct `CaptivateChatFileManager.create()` method will be deprecated soon and is kept only for backwards compatibility. Please migrate to using `conversation.fileManager` for new code.
+
 The `CaptivateChatFileManager` class provides automatic file-to-text conversion and structured file handling for chat messages. The class now includes several convenience methods and supports direct usage as a files array.
 
-#### Basic File Upload
+#### Basic File Upload (Recommended Way)
+
+**✅ Recommended:** Use `conversation.fileManager` which automatically includes the conversation context:
+
+```typescript
+// Upload a local file with storage (default behavior) - RECOMMENDED
+const fileInput = await conversation.fileManager.create({
+  file: file,
+  fileName: 'document.pdf'
+  // storage defaults to true - file stored by service
+  // API key and conversation ID are automatically included
+});
+
+// Send file with text message
+await conversation.sendMessage({
+  text: "Here's the document you requested",
+  files: fileInput  // 🎉 No need for .files anymore!
+});
+```
+
+#### Basic File Upload (Legacy - Deprecated Soon)
+
+**⚠️ Legacy:** Direct usage of `CaptivateChatFileManager.create()` is kept for backwards compatibility but will be deprecated:
 
 ```typescript
 import { CaptivateChatFileManager } from 'captivate-chat-api';
 
-// Upload a local file with storage (default behavior)
+// Upload a local file with storage (default behavior) - LEGACY
 const fileInput = await CaptivateChatFileManager.create({
   file: file,
   fileName: 'document.pdf'
   // storage defaults to true - file stored by service
 });
 
-// Send file with text message - NEW: You can use fileInput directly!
+// Send file with text message
 await conversation.sendMessage({
   text: "Here's the document you requested",
   files: fileInput  // 🎉 No need for .files anymore!
@@ -220,13 +244,26 @@ await conversation.sendMessage({
 The library now supports two storage modes:
 
 **1. Service Storage (Default) - `storage: true`**
+
+✅ **Recommended:**
 ```typescript
-// File stored by the service (default behavior)
+// File stored by the service (default behavior) - RECOMMENDED
+const fileInput = await conversation.fileManager.create({
+  file: file,
+  fileName: 'document.pdf'
+  // storage defaults to true - file stored by service
+});
+```
+
+⚠️ **Legacy (Deprecated Soon):**
+```typescript
+// File stored by the service (default behavior) - LEGACY
 const fileInput = await CaptivateChatFileManager.create({
   file: file,
   fileName: 'document.pdf'
   // storage defaults to true - file stored by service
 });
+```
 
 // File object includes storage information:
 // {
@@ -245,14 +282,28 @@ const fileInput = await CaptivateChatFileManager.create({
 ```
 
 **2. Developer Storage - `storage: false`**
+
+✅ **Recommended:**
 ```typescript
-// File processed without storage, provide your own URL
+// File processed without storage, provide your own URL - RECOMMENDED
+const fileInput = await conversation.fileManager.create({
+  file: file,
+  fileName: 'document.pdf',
+  storage: false,
+  url: 'https://my-bucket.s3.amazonaws.com/documents/document.pdf'  // Required
+});
+```
+
+⚠️ **Legacy (Deprecated Soon):**
+```typescript
+// File processed without storage, provide your own URL - LEGACY
 const fileInput = await CaptivateChatFileManager.create({
   file: file,
   fileName: 'document.pdf',
   storage: false,
   url: 'https://my-bucket.s3.amazonaws.com/documents/document.pdf'  // Required
 });
+```
 
 // File object includes your URL:
 // {
@@ -273,8 +324,8 @@ const fileInput = await CaptivateChatFileManager.create({
 When using service storage, you can generate fresh secure URLs for accessing stored files:
 
 ```typescript
-// Create file with storage
-const fileInput = await CaptivateChatFileManager.create({
+// Create file with storage (Recommended way)
+const fileInput = await conversation.fileManager.create({
   file: file,
   fileName: 'document.pdf'
   // storage defaults to true
@@ -302,7 +353,8 @@ const directUrl = await CaptivateChatFileManager.getSecureFileUrl(fileKey, 7200)
 The `CaptivateChatFileManager` class now includes several convenience methods for easier access to file properties:
 
 ```typescript
-const fileInput = await CaptivateChatFileManager.create({
+// Recommended way
+const fileInput = await conversation.fileManager.create({
   file: file,
   fileName: 'document.pdf'
 });
@@ -322,9 +374,10 @@ const filesArray = fileInput.toFilesArray();
 
 #### Developer Storage with URL
 
+✅ **Recommended:**
 ```typescript
-// Process file without service storage, provide your own URL
-const fileInput = await CaptivateChatFileManager.create({
+// Process file without service storage, provide your own URL - RECOMMENDED
+const fileInput = await conversation.fileManager.create({
   file: file,
   fileName: 'document.pdf',
   storage: false,
@@ -339,12 +392,12 @@ await conversation.sendMessage({
 
 #### Multiple Files
 
-**Option 1: Using the new `createMultiple()` method (Recommended)**
+**✅ Option 1: Using `conversation.fileManager.createMultiple()` (Recommended)**
 
 ```typescript
-// Process multiple files with service storage (default)
+// Process multiple files with service storage (default) - RECOMMENDED
 const files = [file1, file2, file3];
-const fileInput = await CaptivateChatFileManager.createMultiple({
+const fileInput = await conversation.fileManager.createMultiple({
   files: files
   // storage defaults to true
 });
@@ -355,10 +408,33 @@ await conversation.sendMessage({
 });
 ```
 
-**Option 2: Multiple files with developer storage**
+**✅ Option 2: Multiple files with developer storage (Recommended)**
 
 ```typescript
-// Process multiple files without service storage
+// Process multiple files without service storage - RECOMMENDED
+const files = [file1, file2, file3];
+const urls = [
+  'https://my-bucket.s3.amazonaws.com/file1.pdf',
+  'https://my-bucket.s3.amazonaws.com/file2.pdf',
+  'https://my-bucket.s3.amazonaws.com/file3.pdf'
+];
+
+const fileInput = await conversation.fileManager.createMultiple({
+  files: files,
+  storage: false,
+  urls: urls  // Required when storage is false
+});
+
+await conversation.sendMessage({
+  text: "Multiple documents from my storage",
+  files: fileInput
+});
+```
+
+**⚠️ Option 3: Using `CaptivateChatFileManager.createMultiple()` (Legacy - Deprecated Soon)**
+
+```typescript
+// Process multiple files without service storage - LEGACY
 const files = [file1, file2, file3];
 const urls = [
   'https://my-bucket.s3.amazonaws.com/file1.pdf',
@@ -378,10 +454,30 @@ await conversation.sendMessage({
 });
 ```
 
-**Option 3: Manual processing (still supported)**
+**Option 4: Manual processing (still supported)**
 
+✅ **Recommended:**
 ```typescript
-// Process multiple files manually
+// Process multiple files manually - RECOMMENDED
+const files = [file1, file2, file3];
+const fileInputs = await Promise.all(
+  files.map(file => conversation.fileManager.create({
+    file: file
+  }))
+);
+
+// Combine all files
+const allFiles = fileInputs.flatMap(input => input);
+
+await conversation.sendMessage({
+  text: "Multiple documents attached",
+  files: allFiles
+});
+```
+
+⚠️ **Legacy (Deprecated Soon):**
+```typescript
+// Process multiple files manually - LEGACY
 const files = [file1, file2, file3];
 const fileInputs = await Promise.all(
   files.map(file => CaptivateChatFileManager.create({
@@ -400,11 +496,12 @@ await conversation.sendMessage({
 
 #### Alternative: Single File Factory Method
 
-For even simpler usage when you only need one file object, you can use the new `createFile()` method:
+For even simpler usage when you only need one file object, you can use the `createFile()` method:
 
+✅ **Recommended:**
 ```typescript
-// Get just the file object directly (no wrapper) with service storage
-const fileObj = await CaptivateChatFileManager.createFile({
+// Get just the file object directly (no wrapper) with service storage - RECOMMENDED
+const fileObj = await conversation.fileManager.createFile({
   file: file,
   fileName: 'document.pdf'
   // storage defaults to true
@@ -416,7 +513,7 @@ await conversation.sendMessage({
 });
 
 // Or with developer storage
-const fileObjWithUrl = await CaptivateChatFileManager.createFile({
+const fileObjWithUrl = await conversation.fileManager.createFile({
   file: file,
   fileName: 'document.pdf',
   storage: false,
@@ -426,6 +523,21 @@ const fileObjWithUrl = await CaptivateChatFileManager.createFile({
 await conversation.sendMessage({
   text: "Here's the document from my storage",
   files: fileObjWithUrl  // 🎉 Direct usage - no array wrapping needed!
+});
+```
+
+⚠️ **Legacy (Deprecated Soon):**
+```typescript
+// Get just the file object directly (no wrapper) with service storage - LEGACY
+const fileObj = await CaptivateChatFileManager.createFile({
+  file: file,
+  fileName: 'document.pdf'
+  // storage defaults to true
+});
+
+await conversation.sendMessage({
+  text: "Here's the document",
+  files: fileObj  // 🎉 Direct usage - no array wrapping needed!
 });
 ```
 
@@ -597,6 +709,39 @@ console.log('Conversation permanently deleted');
 - **Soft Delete (default)**: Marks conversation as deleted but preserves data including transcripts for potential recovery
 - **Hard Delete**: Permanently removes everything including transcripts, messages, and all associated data
 
+### Set Time-To-Live (TTL)
+
+Set the time-to-live for the entire conversation session, which controls how long the conversation data (including chat history, files, and all associated data) will be retained on the server. The server uses this TTL value to manage the lifecycle of the entire conversation session.
+
+```typescript
+// Set TTL to 1 day
+await conversation.setTimeToLive(1);
+
+// Set TTL to 7 days
+await conversation.setTimeToLive(7);
+
+// Set TTL to 30 days
+await conversation.setTimeToLive(30);
+```
+
+**How it works:**
+1. **Path TTL**: Sets the time-to-live for the conversation path (`apiKey/conversationId`) on the file-to-text service
+2. **Metadata Update**: Automatically stores the TTL value in conversation metadata as `timeToLive`
+3. **Session Retention**: The entire conversation session (chat history, files, messages, transcripts, and all associated data) will be retained for the specified number of days
+4. **Server Behavior**: The server considers this TTL value for the current session and will manage data retention accordingly
+
+**Important Notes:**
+- The `days` parameter must be a positive integer
+- The TTL applies to the **entire conversation session**, not just files
+- This includes chat history, messages, transcripts, files, and all conversation data
+- The TTL value is stored in conversation metadata for easy reference
+- The server uses this metadata to determine data retention policies for the session
+
+**Use Cases:**
+- **Temporary Conversations**: Set short TTL (1-7 days) for temporary support sessions or one-time interactions
+- **Compliance**: Set specific TTLs based on data retention requirements and regulatory compliance
+- **Data Management**: Automatically clean up old conversation data after the TTL expires
+- **Privacy**: Ensure sensitive conversation data is automatically purged after a set period
 
 ### Retrieve User Conversations
 
@@ -780,8 +925,8 @@ import { CaptivateChatAPI, CaptivateChatFileManager } from 'captivate-chat-api';
     // Send a text message
     await conversation.sendMessage('Hello! How can I assist you today?');
 
-    // Send a file with text message
-    const fileInput = await CaptivateChatFileManager.create({
+    // Send a file with text message (Recommended way)
+    const fileInput = await conversation.fileManager.create({
       file: file,
       fileName: 'document.pdf'
     });
@@ -1022,8 +1167,18 @@ fileInput.length           // ✅ Array length
 
 - **`delete(options?: { softDelete?: boolean }): Promise<void>`**  
   Deletes the current conversation. `options.softDelete` defaults to `true` (safer option).
-  
 
+- **`setTimeToLive(days: number): Promise<void>`**  
+  **(New)** Sets the time-to-live (TTL) for the entire conversation session and updates metadata. The TTL controls how long the conversation data (including chat history, files, messages, transcripts, and all associated data) will be retained on the server. The server uses this TTL value to manage the lifecycle of the entire conversation session. Example:
+  ```typescript
+  await conversation.setTimeToLive(7); // Entire conversation session will be retained for 7 days
+  ```
+  - Sets the path TTL on the file-to-text service
+  - Automatically stores `timeToLive` in conversation metadata
+  - The server considers this TTL for the entire conversation session (not just files)
+  - The `days` parameter must be a positive integer
+
+  
 
 #### Events
 - **`onMessage(callback: (message: string, type: string) => void): void`**  
