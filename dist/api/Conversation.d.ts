@@ -1,4 +1,3 @@
-import { CaptivateChatFileManager } from './CaptivateChatFileManager';
 interface Action {
     id: string;
     data: any;
@@ -11,6 +10,7 @@ export declare class Conversation {
     apiKey: string;
     private conversationId;
     private metadata;
+    fileManager: any;
     /**
      * WebSocket connection for receiving real-time messages from server.
      */
@@ -75,56 +75,6 @@ export declare class Conversation {
      * @returns A promise that resolves when the message is sent.
      */
     sendMessage(content: object | string): Promise<void>;
-    /**
-     * File manager instance with automatic API key and conversation ID context.
-     * All file operations will automatically include the path parameter (apiKey/conversationId).
-     */
-    get fileManager(): {
-        /**
-         * Creates a file input with automatic file-to-text conversion.
-         * Automatically uses this conversation's API key and conversation ID for the path parameter.
-         */
-        create(options: {
-            file: File | Blob;
-            fileName?: string;
-            fileType?: string;
-            storage?: boolean;
-            url?: string;
-        }): Promise<CaptivateChatFileManager>;
-        /**
-         * Creates a single file object with automatic file-to-text conversion.
-         * Automatically uses this conversation's API key and conversation ID for the path parameter.
-         */
-        createFile(options: {
-            file: File | Blob;
-            fileName?: string;
-            fileType?: string;
-            storage?: boolean;
-            url?: string;
-        }): Promise<{
-            filename: string;
-            type: string;
-            file?: File | Blob;
-            textContent: {
-                type: "file_content";
-                text: string;
-                metadata: {
-                    source: "file_attachment";
-                    originalFileName: string;
-                    storageType?: "direct";
-                };
-            };
-        }>;
-        /**
-         * Creates multiple file inputs from an array of files.
-         * Automatically uses this conversation's API key and conversation ID for the path parameter.
-         */
-        createMultiple(options: {
-            files: (File | Blob)[];
-            storage?: boolean;
-            urls?: string[];
-        }): Promise<CaptivateChatFileManager>;
-    };
     /**
     * Sets metadata for the conversation and uses HTTP response for confirmation.
     * @param metadata - An object containing the metadata to set.

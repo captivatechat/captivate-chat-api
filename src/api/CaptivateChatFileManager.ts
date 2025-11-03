@@ -237,6 +237,8 @@ export class CaptivateChatFileManager {
       fileType?: string;
       storage?: boolean;
       url?: string;
+      apiKey?: string;
+      conversationId?: string;
     }
   ): Promise<{
     filename: string;
@@ -257,7 +259,9 @@ export class CaptivateChatFileManager {
       fileName: options.fileName,
       fileType: options.fileType,
       storage: options.storage,
-      url: options.url
+      url: options.url,
+      apiKey: options.apiKey,
+      conversationId: options.conversationId
     });
     return fileInput.getFirstFile()!;
   }
@@ -276,6 +280,8 @@ export class CaptivateChatFileManager {
       files: (File | Blob)[];
       storage?: boolean;
       urls?: string[];
+      apiKey?: string;
+      conversationId?: string;
     }
   ): Promise<CaptivateChatFileManager> {
     const storage = options.storage !== undefined ? options.storage : true; // Default to true
@@ -291,7 +297,9 @@ export class CaptivateChatFileManager {
       files.map((file, index) => CaptivateChatFileManager.create({
         file: file,
         storage: storage,
-        url: storage === false ? options.urls![index] : undefined
+        url: storage === false ? options.urls![index] : undefined,
+        apiKey: options.apiKey,
+        conversationId: options.conversationId
       }))
     );
 

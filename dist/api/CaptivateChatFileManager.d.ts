@@ -189,6 +189,8 @@ export declare class CaptivateChatFileManager {
         fileType?: string;
         storage?: boolean;
         url?: string;
+        apiKey?: string;
+        conversationId?: string;
     }): Promise<{
         filename: string;
         type: string;
@@ -216,6 +218,8 @@ export declare class CaptivateChatFileManager {
         files: (File | Blob)[];
         storage?: boolean;
         urls?: string[];
+        apiKey?: string;
+        conversationId?: string;
     }): Promise<CaptivateChatFileManager>;
     /**
      * Generates a secure URL for accessing a stored file.
