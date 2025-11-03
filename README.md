@@ -729,6 +729,7 @@ await conversation.setTimeToLive(30);
 2. **Metadata Update**: Automatically stores the TTL value in conversation metadata as `timeToLive`
 3. **Session Retention**: The entire conversation session (chat history, files, messages, transcripts, and all associated data) will be retained for the specified number of days
 4. **Server Behavior**: The server considers this TTL value for the current session and will manage data retention accordingly
+5. **Activity-Based**: **Important**: The TTL timer is only active from the **last activity/usage** of the conversation. Each time the conversation is used (sending messages, receiving messages, or any activity), the TTL timer resets from that point
 
 **Important Notes:**
 - The `days` parameter must be a positive integer
@@ -736,6 +737,7 @@ await conversation.setTimeToLive(30);
 - This includes chat history, messages, transcripts, files, and all conversation data
 - The TTL value is stored in conversation metadata for easy reference
 - The server uses this metadata to determine data retention policies for the session
+- **TTL is activity-based**: The countdown starts from the last activity in the conversation, not from when the TTL was set. Each new activity resets the timer
 
 **Use Cases:**
 - **Temporary Conversations**: Set short TTL (1-7 days) for temporary support sessions or one-time interactions
@@ -1169,13 +1171,14 @@ fileInput.length           // ✅ Array length
   Deletes the current conversation. `options.softDelete` defaults to `true` (safer option).
 
 - **`setTimeToLive(days: number): Promise<void>`**  
-  **(New)** Sets the time-to-live (TTL) for the entire conversation session and updates metadata. The TTL controls how long the conversation data (including chat history, files, messages, transcripts, and all associated data) will be retained on the server. The server uses this TTL value to manage the lifecycle of the entire conversation session. Example:
+  **(New)** Sets the time-to-live (TTL) for the entire conversation session and updates metadata. The TTL controls how long the conversation data (including chat history, files, messages, transcripts, and all associated data) will be retained on the server. The server uses this TTL value to manage the lifecycle of the entire conversation session. **Note**: The TTL timer is only active from the last activity/usage of the conversation - each new activity resets the timer. Example:
   ```typescript
-  await conversation.setTimeToLive(7); // Entire conversation session will be retained for 7 days
+  await conversation.setTimeToLive(7); // Entire conversation session will be retained for 7 days from last activity
   ```
   - Sets the path TTL on the file-to-text service
   - Automatically stores `timeToLive` in conversation metadata
   - The server considers this TTL for the entire conversation session (not just files)
+  - The TTL timer starts from the last activity in the conversation, not from when it was set
   - The `days` parameter must be a positive integer
 
   
