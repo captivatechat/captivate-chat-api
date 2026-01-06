@@ -12,6 +12,10 @@ npm install captivate-chat-api
 
 ## What's New
 
+### Singleton Pattern (v6.0.0)
+
+As of v6.0.0, instances are now singleton for better management. No adjustments are needed - the change is automatic and backward compatible.
+
 ### HTTP REST Migration (v5.0.0)
 
 Client sending operations have been refactored from WebSocket to HTTP REST for improved reliability and performance:
@@ -94,6 +98,48 @@ The `CaptivateChatFileManager` class has been significantly improved with:
 4. **Type Safety**: Full TypeScript support with proper type definitions
 
 ## Usage
+
+### Singleton Pattern (Automatic Instance Management)
+
+**Important:** CaptivateChatAPI automatically enforces a singleton pattern per API key and mode combination. This means:
+
+- Creating multiple instances with the same API key returns the same instance
+- Prevents duplicate WebSocket connections and resource waste
+- Works automatically with both `new CaptivateChatAPI()` and `CaptivateChatAPI.create()`
+
+```typescript
+import { CaptivateChatAPI } from 'captivate-chat-api';
+
+// First instance created
+const api1 = await CaptivateChatAPI.create('YOUR_API_KEY', 'prod');
+
+// Returns the same instance (singleton)
+const api2 = await CaptivateChatAPI.create('YOUR_API_KEY', 'prod');
+// api1 === api2 ✅
+
+// Different mode creates separate instance
+const apiDev = await CaptivateChatAPI.create('YOUR_API_KEY', 'dev');
+// apiDev !== api1 ✅
+
+// Using new also returns singleton
+const api3 = new CaptivateChatAPI('YOUR_API_KEY', 'prod');
+// api3 === api1 === api2 ✅
+
+// Cleanup when done
+api1.dispose(); // Closes socket and removes from registry
+
+// After disposal, new instance can be created
+const api4 = await CaptivateChatAPI.create('YOUR_API_KEY', 'prod');
+// api4 !== api1 ✅ (new instance)
+```
+
+**Helper Methods:**
+```typescript
+// Check if instance exists
+if (CaptivateChatAPI.hasInstance('YOUR_API_KEY', 'prod')) {
+  const api = CaptivateChatAPI.getInstance('YOUR_API_KEY', 'prod');
+}
+```
 
 ### Single API Key Usage (CaptivateChatAPI)
 
@@ -819,13 +865,19 @@ For advanced use cases where you need to fetch and interact with conversations a
 
 **Note:** Most users do not need this. Only use the manager if you need to aggregate or interact with conversations across multiple API keys.
 
+**Key Features:**
+- Automatically deduplicates API keys to prevent duplicate instances
+- Leverages singleton pattern from CaptivateChatAPI
+- Provides disposal methods for cleanup
+
 **Option 1: Using the static factory method (Recommended)**
 ```typescript
 import { CaptivateChatManager } from 'captivate-chat-api';
 
 const apiKeys = [
   'YOUR_API_KEY_1',
-  'YOUR_API_KEY_2'
+  'YOUR_API_KEY_2',
+  'YOUR_API_KEY_1' // Duplicate - automatically filtered out
 ];
 
 // Create and connect all instances in one step
@@ -841,6 +893,9 @@ for (const conv of conversations) {
   const transcript = await conv.getTranscript();
   console.log(`Transcript for ${conv.getConversationId()}:`, transcript);
 }
+
+// Cleanup when done
+manager.disposeAll(); // Closes all WebSocket connections
 ```
 
 **Option 2: Manual instantiation and connection**
@@ -865,6 +920,15 @@ for (const conv of conversations) {
   const transcript = await conv.getTranscript();
   console.log(`Transcript for ${conv.getConversationId()}:`, transcript);
 }
+```
+
+**Disposal Methods:**
+```typescript
+// Dispose single API instance
+manager.dispose('YOUR_API_KEY_1');
+
+// Dispose all instances
+manager.disposeAll();
 ```
 
 - Use `CaptivateChatAPI` for single-key scenarios.
@@ -1102,11 +1166,20 @@ fileInput.length           // ✅ Array length
 ### CaptivateChatAPI
 
 #### Methods
-- **`constructor(apiKey: string, mode: 'prod' | 'dev' = 'prod')`**  
-  Initializes the API with the given API key and mode.
+- **`constructor(apiKey: string, mode: 'prod' | 'dev' = 'prod')`**
+  Initializes the API with the given API key and mode. **Enforces singleton pattern:** returns existing instance if one already exists for the given API key/mode combination.
 
-- **`static create(apiKey: string, mode: 'prod' | 'dev' = 'prod'): Promise<CaptivateChatAPI>`**  
-  **(New)** Static factory method that creates and connects a CaptivateChatAPI instance. Returns a promise that resolves to a ready-to-use, connected API instance.
+- **`static create(apiKey: string, mode: 'prod' | 'dev' = 'prod'): Promise<CaptivateChatAPI>`**
+  Static factory method that creates and connects a CaptivateChatAPI instance. **Enforces singleton pattern:** constructor returns existing instance if one exists. Returns a promise that resolves to a ready-to-use, connected API instance.
+
+- **`static getInstance(apiKey: string, mode: 'prod' | 'dev' = 'prod'): CaptivateChatAPI | undefined`**
+  **(New)** Gets an existing instance for the given API key and mode, if one exists. Returns undefined if no instance exists.
+
+- **`static hasInstance(apiKey: string, mode: 'prod' | 'dev' = 'prod'): boolean`**
+  **(New)** Checks if an instance exists for the given API key and mode. Returns true if an instance exists, false otherwise.
+
+- **`dispose(): void`**
+  **(New)** Disposes of this instance, closing the WebSocket connection and removing it from the registry. After calling dispose(), a new instance can be created for the same API key/mode combination.
 
 - **`static setDebugMode(enabled: boolean): void`**  
   **(New)** Sets the debug mode for CaptivateChatAPI logging. When enabled, detailed logs are shown with `[CaptivateChatAPI]` prefix.

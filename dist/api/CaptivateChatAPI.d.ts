@@ -5,6 +5,18 @@ export declare const captivateLogger: {
     error: (...args: any[]) => void;
 };
 export declare class CaptivateChatAPI {
+    /**
+     * Static registry to track instances by API key and mode.
+     * Enforces singleton pattern: one instance per unique (apiKey, mode) combination.
+     */
+    private static instances;
+    /**
+     * Generates a unique instance key for the registry.
+     * @param apiKey - The API key.
+     * @param mode - The mode ('prod' or 'dev').
+     * @returns A composite key string.
+     */
+    private static getInstanceKey;
     private apiKey;
     private mode;
     /**
@@ -44,8 +56,10 @@ export declare class CaptivateChatAPI {
     static getDebugMode(): boolean;
     /**
      * Creates an instance of CaptivateChatAPI.
+     * Enforces singleton pattern: returns existing instance if one exists for the given API key and mode.
      * @param apiKey - The API key for authentication.
      * @param mode - The mode of operation ('prod' for production or 'dev' for development).
+     * @returns Either a new instance or the existing singleton instance for this API key/mode combination.
      */
     constructor(apiKey: string, mode?: 'prod' | 'dev');
     /**
@@ -130,10 +144,30 @@ export declare class CaptivateChatAPI {
     reconnect(): Promise<void>;
     /**
      * Static factory method to create and connect a CaptivateChatAPI instance.
+     * Enforces singleton pattern: constructor returns existing instance if one exists.
      * The returned instance is automatically guarded: all method calls will check socket state and auto-reconnect if needed.
      * @param apiKey - The API key for authentication.
      * @param mode - The mode of operation ('prod' or 'dev').
      * @returns A promise that resolves to a connected and guarded CaptivateChatAPI instance.
      */
     static create(apiKey: string, mode?: 'prod' | 'dev'): Promise<CaptivateChatAPI>;
+    /**
+     * Gets an existing instance for the given API key and mode, if one exists.
+     * @param apiKey - The API key.
+     * @param mode - The mode ('prod' or 'dev').
+     * @returns The existing instance, or undefined if none exists.
+     */
+    static getInstance(apiKey: string, mode?: 'prod' | 'dev'): CaptivateChatAPI | undefined;
+    /**
+     * Checks if an instance exists for the given API key and mode.
+     * @param apiKey - The API key.
+     * @param mode - The mode ('prod' or 'dev').
+     * @returns True if an instance exists, false otherwise.
+     */
+    static hasInstance(apiKey: string, mode?: 'prod' | 'dev'): boolean;
+    /**
+     * Disposes of this instance, closing the WebSocket and removing it from the registry.
+     * After calling dispose(), a new instance can be created for the same API key/mode combination.
+     */
+    dispose(): void;
 }

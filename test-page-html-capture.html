@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Context Test - Message-Based HTML Capture</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: #555;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        input[type="text"], select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        .loading {
+            color: #007bff;
+            font-style: italic;
+        }
+        
+        .page-content {
+            background-color: #fff;
+            padding: 20px;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .page-content h3 {
+            color: #007bff;
+            margin-top: 0;
+        }
+        
+        .code-block {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .metadata-preview {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .highlight-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #28a745;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            font-size: 14px;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .highlight-indicator.show {
+            display: block;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .highlighted-text {
+            background-color: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Visual indicator for when text is added to context -->
+    <div id="highlightIndicator" class="highlight-indicator">
+        ✅ Highlighted text added to context
+    </div>
+    
+    <!-- Sample page content that will be captured -->
+    <div class="page-content">
+        <h3>📄 Sample Page Content</h3>
+        <p>This is a test page to verify that the page HTML is automatically captured and sent to the backend.</p>
+        <p>The page contains various elements that should be captured:</p>
+        <ul>
+            <li>Headings and paragraphs</li>
+            <li>Lists and structured content</li>
+            <li>Buttons and interactive elements</li>
+            <li>Forms and inputs</li>
+        </ul>
+        <p><strong>Product Information:</strong></p>
+        <div style="background: #e9ecef; padding: 15px; border-radius: 4px; margin: 10px 0;">
+            <p><strong>Product Name:</strong> Test Product</p>
+            <p><strong>Price:</strong> $99.99</p>
+            <p><strong>Description:</strong> This is a sample product for testing purposes.</p>
+        </div>
+        <p><em>This content will be automatically included as context with each message (via setMetadata) if the page content has changed.</em></p>
+    </div>
+
+    <div class="container">
+        <h1>🧪 Page Context Test</h1>
+        
+        <!-- Configuration -->
+        <div class="section">
+            <h2>⚙️ Configuration</h2>
+            
+            <div class="form-group">
+                <label for="apiKey">API Key:</label>
+                <input type="text" id="apiKey" value="7NJQ4C2-727MHJP-Q8ZDXXE-DA32PH8" placeholder="Enter your API key">
+            </div>
+            
+            <div class="form-group">
+                <label for="userId">User ID:</label>
+                <input type="text" id="userId" value="test-user-123" placeholder="Enter user ID">
+            </div>
+            
+            <div class="form-group">
+                <label for="mode">Mode:</label>
+                <select id="mode">
+                    <option value="prod" selected>Production</option>
+                    <option value="dev">Development</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="includePageContext" checked> 
+                    Include page context with messages (default: enabled)
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <p style="font-size: 12px; color: #666; margin-top: 5px; padding: 10px; background: #e7f3ff; border-radius: 4px;">
+                    💡 <strong>Highlight to Add:</strong> Select any text on the page and click the "➕ Add to Chat" button that appears
+                </p>
+            </div>
+            
+            <button onclick="initializeChat()">🔗 Initialize Chat</button>
+            <button onclick="testPageContext()">📤 Test Send Message with Context</button>
+            <button onclick="testHashDetection()">🔄 Test Hash Change Detection</button>
+            <button onclick="clearResults()">🗑️ Clear Results</button>
+            
+            <div id="connectionStatus" class="result info" style="display: none;"></div>
+        </div>
+        
+        <!-- Results -->
+        <div class="section">
+            <h2>📊 Test Results</h2>
+            
+            <div id="capturedHtml" class="section" style="display: none;">
+                <h3>📄 Captured HTML Preview</h3>
+                <div class="code-block" id="htmlPreview"></div>
+                <p><strong>HTML Length:</strong> <span id="htmlLength">0</span> characters</p>
+            </div>
+            
+            <div id="metadataPreview" class="section" style="display: none;">
+                <h3>📦 Metadata Preview</h3>
+                <div class="metadata-preview">
+                    <p><strong>Note:</strong> When setting: <code>metadata.context.currentPageContent</code></p>
+                    <p>When retrieving: <code>metadata.channelMetadata.custom.context.currentPageContent</code></p>
+                    <p>This is set via setMetadata before each message is sent (only if content changed).</p>
+                </div>
+                <div class="code-block" id="metadataJson"></div>
+            </div>
+            
+            <div id="highlightedContext" class="section" style="display: none;">
+                <h3>✨ Highlighted Text Context</h3>
+                <p style="font-size: 12px; color: #666; margin-bottom: 10px;">
+                    Text you select on the page will automatically appear here and be added to context.
+                </p>
+                <div id="highlightedTextList"></div>
+            </div>
+            
+            <div id="messageTest" class="section" style="display: none;">
+                <h3>💬 Message Test</h3>
+                <div class="form-group">
+                    <label for="testMessage">Test Message:</label>
+                    <input type="text" id="testMessage" placeholder="Enter a test message" style="width: 100%; padding: 10px; margin-bottom: 10px;">
+                    <button onclick="sendTestMessage()">📤 Send Message</button>
+                </div>
+                <div id="messageResult" class="result" style="display: none;"></div>
+            </div>
+            
+            <div id="testResult" class="result" style="display: none;"></div>
+        </div>
+        
+        <!-- Log -->
+        <div class="section">
+            <h2>📋 Test Log</h2>
+            <div id="testLog" class="result info">
+                Ready to test page HTML capture...
+            </div>
+        </div>
+    </div>
+
+    <!-- Include the CaptivateChat library -->
+    <script src="dist/captivate-chat-api.js"></script>
+    
+    <script>
+        let chatAPI = null;
+        let currentConversation = null;
+        let messageCount = 0;
+        
+        // Enable debug mode to see logs
+        CaptivateChatAPI.setDebugMode(true);
+        
+        async function initializeChat() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const userId = document.getElementById('userId').value.trim();
+            const mode = document.getElementById('mode').value;
+            const includePageContext = document.getElementById('includePageContext').checked;
+            
+            if (!apiKey) {
+                showResult('connectionStatus', 'Please enter an API key.', 'error');
+                return;
+            }
+            
+            if (!userId) {
+                showResult('connectionStatus', 'Please enter a user ID.', 'error');
+                return;
+            }
+            
+            try {
+                clearResults();
+                showResult('connectionStatus', '🔄 Initializing chat connection...', 'loading');
+                logMessage('Starting chat initialization...');
+                logMessage(`Include Page Context: ${includePageContext}`);
+                
+                // Create API instance
+                chatAPI = new CaptivateChatAPI(apiKey, mode);
+                
+                // Connect to WebSocket
+                await chatAPI.connect();
+                logMessage('✅ Connected to WebSocket');
+                
+                // Create conversation with options
+                const options = {
+                    includePageContext: includePageContext
+                };
+                
+                logMessage('🔄 Creating conversation...');
+                currentConversation = await chatAPI.createConversation(
+                    userId,
+                    {}, // userBasicInfo
+                    {}, // metadata
+                    'user-first', // autoConversationStart
+                    {}, // privateMetadata
+                    options
+                );
+                
+                logMessage(`✅ Conversation created: ${currentConversation.getConversationId()}`);
+                
+                // Set up callback for when highlighted text is added to context
+                currentConversation.enableAutoHighlight((type, content) => {
+                    // Show visual indicator
+                    showHighlightIndicator();
+                    
+                    // Add to highlighted text list
+                    addHighlightedText(content);
+                    
+                    logMessage(`✨ Highlighted text added to context: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`);
+                });
+                
+                showResult('connectionStatus', '✅ Chat initialized successfully!', 'success');
+                
+                // Show message test section and highlighted context section
+                document.getElementById('messageTest').style.display = 'block';
+                document.getElementById('highlightedContext').style.display = 'block';
+                
+            } catch (error) {
+                const errorMessage = `❌ Initialization failed: ${error.message}`;
+                showResult('connectionStatus', errorMessage, 'error');
+                logMessage(`❌ Error: ${error.message}`);
+                console.error('Initialization error:', error);
+            }
+        }
+        
+        async function testPageContext() {
+            if (!currentConversation) {
+                showResult('testResult', 'Please initialize chat first.', 'error');
+                return;
+            }
+            
+            try {
+                logMessage('🧪 Testing page context with message...');
+                
+                // Capture current page HTML
+                const currentPageHtml = document.body.innerHTML;
+                logMessage(`📄 Current page HTML length: ${currentPageHtml.length} characters`);
+                
+                // Send a test message (this will trigger setMetadata if content changed)
+                logMessage('📤 Sending test message...');
+                await currentConversation.sendMessage('Test message to verify page context');
+                messageCount++;
+                logMessage(`✅ Message #${messageCount} sent`);
+                
+                // Wait a bit for metadata to be set
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Get metadata to verify the HTML was captured
+                logMessage('🔄 Retrieving metadata to verify HTML capture...');
+                const metadata = await currentConversation.getMetadata();
+                
+                logMessage('✅ Metadata retrieved');
+                logMessage(`📦 Full metadata structure: ${JSON.stringify(metadata, null, 2)}`);
+                logMessage(`📦 Metadata keys: ${Object.keys(metadata).join(', ')}`);
+                
+                // Check the correct location: metadata.channelMetadata.custom.context.currentPageContent
+                let capturedHtml = null;
+                let foundLocation = null;
+                
+                // Check metadata.channelMetadata.custom.context.currentPageContent
+                if (metadata.channelMetadata && 
+                    metadata.channelMetadata.custom && 
+                    metadata.channelMetadata.custom.context && 
+                    metadata.channelMetadata.custom.context.currentPageContent) {
+                    capturedHtml = metadata.channelMetadata.custom.context.currentPageContent;
+                    foundLocation = 'metadata.channelMetadata.custom.context.currentPageContent';
+                }
+                // Fallback: Check other possible locations for debugging
+                else if (metadata.context && metadata.context.currentPageContent) {
+                    capturedHtml = metadata.context.currentPageContent;
+                    foundLocation = 'metadata.context.currentPageContent (fallback)';
+                }
+                else if (metadata.currentPageContent) {
+                    capturedHtml = metadata.currentPageContent;
+                    foundLocation = 'metadata.currentPageContent (fallback)';
+                }
+                
+                if (capturedHtml && foundLocation) {
+                    
+                    // Display captured HTML
+                    document.getElementById('htmlPreview').textContent = capturedHtml.substring(0, 2000) + (capturedHtml.length > 2000 ? '\n... (truncated)' : '');
+                    document.getElementById('htmlLength').textContent = capturedHtml.length;
+                    document.getElementById('capturedHtml').style.display = 'block';
+                    
+                    // Display metadata preview
+                    const metadataPreview = {
+                        channelMetadata: {
+                            custom: {
+                                context: {
+                                    currentPageContent: capturedHtml.substring(0, 100) + '... (truncated for preview)'
+                                }
+                            }
+                        }
+                    };
+                    document.getElementById('metadataJson').textContent = JSON.stringify(metadataPreview, null, 2);
+                    document.getElementById('metadataPreview').style.display = 'block';
+                    
+                    // Verify it matches
+                    const matches = capturedHtml === currentPageHtml;
+                    
+                    const resultMessage = `✅ SUCCESS! Page HTML captured and stored\n\n` +
+                        `📊 Statistics:\n` +
+                        `• HTML Length: ${capturedHtml.length} characters\n` +
+                        `• Matches current page: ${matches ? '✅ Yes' : '⚠️ No (may be expected if page changed)'}\n` +
+                        `• Stored in: ${foundLocation}\n` +
+                        `• Messages sent: ${messageCount}\n\n` +
+                        `🎯 The backend now has access to the page content as context with each message!`;
+                    
+                    showResult('testResult', resultMessage, 'success');
+                    logMessage(`✅ Page HTML successfully captured and set as context at ${foundLocation}`);
+                    
+                } else {
+                    // Log the full metadata structure for debugging
+                    logMessage(`⚠️ Page HTML not found. Full metadata structure:`);
+                    logMessage(JSON.stringify(metadata, null, 2));
+                    
+                    const resultMessage = `⚠️ Page HTML not found in expected location\n\n` +
+                        `Expected location (when retrieving):\n` +
+                        `• metadata.channelMetadata.custom.context.currentPageContent\n\n` +
+                        `Also checked (fallback):\n` +
+                        `• metadata.currentPageContent\n` +
+                        `• metadata.context.currentPageContent\n\n` +
+                        `Note: We set it as <code>metadata.currentPageContent</code> but backend transforms it.\n\n` +
+                        `Possible reasons:\n` +
+                        `• includePageContext was set to false\n` +
+                        `• HTML capture failed (not in browser environment)\n` +
+                        `• setMetadata failed (check console for errors)\n` +
+                        `• Page content hash matched previous (no update needed)\n` +
+                        `• Metadata structure is different than expected\n\n` +
+                        `💡 Check the log above for the full metadata structure.`;
+                    
+                    showResult('testResult', resultMessage, 'error');
+                    logMessage('⚠️ Page HTML not found in metadata');
+                }
+                
+            } catch (error) {
+                const errorMessage = `❌ Test failed: ${error.message}`;
+                showResult('testResult', errorMessage + '\n\n' + error.stack, 'error');
+                logMessage(`❌ Error: ${error.message}`);
+                console.error('Test error:', error);
+            }
+        }
+        
+        async function testHashDetection() {
+            if (!currentConversation) {
+                showResult('testResult', 'Please initialize chat first.', 'error');
+                return;
+            }
+            
+            try {
+                logMessage('🔄 Testing MD5 hash change detection...');
+                
+                // Send first message
+                logMessage('📤 Sending first message...');
+                await currentConversation.sendMessage('First message');
+                messageCount++;
+                logMessage(`✅ Message #${messageCount} sent`);
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Send second message with same content (should skip metadata update)
+                logMessage('📤 Sending second message (same page content)...');
+                await currentConversation.sendMessage('Second message');
+                messageCount++;
+                logMessage(`✅ Message #${messageCount} sent`);
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Modify page content
+                const testDiv = document.createElement('div');
+                testDiv.id = 'hash-test-div';
+                testDiv.textContent = 'New content added at ' + new Date().toISOString();
+                document.body.appendChild(testDiv);
+                logMessage('📝 Page content modified');
+                
+                // Send third message with changed content (should update metadata)
+                logMessage('📤 Sending third message (page content changed)...');
+                await currentConversation.sendMessage('Third message after content change');
+                messageCount++;
+                logMessage(`✅ Message #${messageCount} sent`);
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Remove test div
+                document.body.removeChild(testDiv);
+                
+                const resultMessage = `✅ Hash Detection Test Complete!\n\n` +
+                    `📊 Test Results:\n` +
+                    `• Messages sent: ${messageCount}\n` +
+                    `• First message: Should set metadata (initial capture)\n` +
+                    `• Second message: Should skip metadata (content unchanged)\n` +
+                    `• Third message: Should update metadata (content changed)\n\n` +
+                    `🔍 Check the logs above to see which messages triggered metadata updates.`;
+                
+                showResult('testResult', resultMessage, 'success');
+                logMessage('✅ Hash detection test completed');
+                
+            } catch (error) {
+                const errorMessage = `❌ Hash detection test failed: ${error.message}`;
+                showResult('testResult', errorMessage + '\n\n' + error.stack, 'error');
+                logMessage(`❌ Error: ${error.message}`);
+                console.error('Test error:', error);
+            }
+        }
+        
+        async function sendTestMessage() {
+            if (!currentConversation) {
+                showResult('messageResult', 'Please initialize chat first.', 'error');
+                return;
+            }
+            
+            const message = document.getElementById('testMessage').value.trim();
+            if (!message) {
+                showResult('messageResult', 'Please enter a message.', 'error');
+                return;
+            }
+            
+            try {
+                logMessage(`📤 Sending message: "${message}"`);
+                await currentConversation.sendMessage(message);
+                messageCount++;
+                
+                showResult('messageResult', `✅ Message #${messageCount} sent successfully!\n\nPage context was automatically included if content changed.`, 'success');
+                document.getElementById('testMessage').value = '';
+                
+                // Refresh metadata display
+                setTimeout(async () => {
+                    try {
+                        const metadata = await currentConversation.getMetadata();
+                        if (metadata.context && metadata.context.currentPageContent) {
+                            const capturedHtml = metadata.context.currentPageContent;
+                            document.getElementById('htmlLength').textContent = capturedHtml.length;
+                        }
+                    } catch (e) {
+                        // Ignore errors
+                    }
+                }, 500);
+                
+            } catch (error) {
+                showResult('messageResult', `❌ Failed to send message: ${error.message}`, 'error');
+                logMessage(`❌ Error sending message: ${error.message}`);
+            }
+        }
+        
+        function clearResults() {
+            document.getElementById('capturedHtml').style.display = 'none';
+            document.getElementById('metadataPreview').style.display = 'none';
+            document.getElementById('testResult').style.display = 'none';
+            document.getElementById('messageResult').style.display = 'none';
+            document.getElementById('connectionStatus').style.display = 'none';
+            document.getElementById('messageTest').style.display = 'none';
+            document.getElementById('highlightedContext').style.display = 'none';
+            document.getElementById('highlightedTextList').innerHTML = '';
+            document.getElementById('testLog').textContent = 'Log cleared...\n';
+            messageCount = 0;
+        }
+        
+        function logMessage(message) {
+            const log = document.getElementById('testLog');
+            const timestamp = new Date().toLocaleTimeString();
+            log.textContent += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function showResult(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `result ${type}`;
+            element.style.display = 'block';
+        }
+        
+        function showHighlightIndicator() {
+            const indicator = document.getElementById('highlightIndicator');
+            indicator.classList.add('show');
+            setTimeout(() => {
+                indicator.classList.remove('show');
+            }, 3000); // Hide after 3 seconds
+        }
+        
+        function addHighlightedText(text) {
+            const list = document.getElementById('highlightedTextList');
+            const textDiv = document.createElement('div');
+            textDiv.className = 'highlighted-text';
+            textDiv.textContent = `"${text}"`;
+            list.insertBefore(textDiv, list.firstChild); // Add to top
+            
+            // Limit to last 10 highlighted texts
+            while (list.children.length > 10) {
+                list.removeChild(list.lastChild);
+            }
+        }
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            logMessage('🧪 Page Context Test Page Loaded');
+            logMessage('📄 This page contains sample content that will be captured');
+            logMessage('🔑 Configure API key and user ID, then click "Initialize Chat"');
+            logMessage('💡 Page HTML is now included with each message via setMetadata (only if content changed)');
+        });
+    </script>
+</body>
+</html>
+

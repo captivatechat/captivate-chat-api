@@ -7,7 +7,11 @@ export class CaptivateChatManager {
   private apiInstances: { [apiKey: string]: CaptivateChatAPI } = {};
 
   constructor(apiKeys: ApiKey[], mode: 'prod' | 'dev' = 'prod') {
-    for (const key of apiKeys) {
+    // Deduplicate API keys to prevent duplicate instances
+    const uniqueKeys = [...new Set(apiKeys)];
+
+    for (const key of uniqueKeys) {
+      // Constructor now returns singleton automatically
       this.apiInstances[key] = new CaptivateChatAPI(key, mode);
     }
   }
@@ -15,14 +19,19 @@ export class CaptivateChatManager {
   /**
    * Static factory method to create and connect all CaptivateChatAPI instances.
    * All apiInstances are created using CaptivateChatAPI.create, so they are guarded and connected.
+   * Automatically deduplicates API keys to prevent duplicate instances.
    * @param apiKeys - Array of API keys to create instances for.
    * @param mode - The mode of operation ('prod' or 'dev').
    * @returns A promise that resolves to a connected CaptivateChatManager instance with guarded APIs.
    */
   static async create(apiKeys: ApiKey[], mode: 'prod' | 'dev' = 'prod'): Promise<CaptivateChatManager> {
+    // Deduplicate API keys to prevent duplicate instances
+    const uniqueKeys = [...new Set(apiKeys)];
+
     const manager = Object.create(CaptivateChatManager.prototype) as CaptivateChatManager;
     manager.apiInstances = {};
-    for (const key of apiKeys) {
+    for (const key of uniqueKeys) {
+      // CaptivateChatAPI.create() now returns singleton automatically
       manager.apiInstances[key] = await CaptivateChatAPI.create(key, mode);
     }
     return manager;
@@ -69,5 +78,29 @@ export class CaptivateChatManager {
   // Optionally, expose access to individual API instances if needed
   getApiInstance(apiKey: string): CaptivateChatAPI | undefined {
     return this.apiInstances[apiKey];
+  }
+
+  /**
+   * Disposes of a single API instance by its API key.
+   * Closes the WebSocket connection and removes the instance from the manager.
+   * @param apiKey - The API key of the instance to dispose.
+   */
+  dispose(apiKey: string): void {
+    const api = this.apiInstances[apiKey];
+    if (api) {
+      api.dispose();
+      delete this.apiInstances[apiKey];
+    }
+  }
+
+  /**
+   * Disposes of all API instances managed by this manager.
+   * Closes all WebSocket connections and clears the instances registry.
+   */
+  disposeAll(): void {
+    for (const api of Object.values(this.apiInstances)) {
+      api.dispose();
+    }
+    this.apiInstances = {};
   }
 } 
