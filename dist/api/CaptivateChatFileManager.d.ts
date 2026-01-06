@@ -5,6 +5,7 @@
 export declare class CaptivateChatFileManager {
     private static readonly FILE_TO_TEXT_API_URL;
     private static readonly PRESIGNED_URL_API_URL;
+    private static readonly PATH_TTL_API_URL;
     readonly type: 'files';
     readonly files: Array<{
         filename: string;
@@ -45,6 +46,8 @@ export declare class CaptivateChatFileManager {
      * @param options.fileType - Optional custom file type.
      * @param options.storage - Whether to store the file for future reference (default: true).
      * @param options.url - URL to reference the file when storage is false (required when storage is false).
+     * @param options.apiKey - Optional API key for constructing the path parameter.
+     * @param options.conversationId - Optional conversation ID for constructing the path parameter.
      * @returns A promise that resolves to a CaptivateChatFileManager instance with converted text.
      */
     static create(options: {
@@ -53,6 +56,8 @@ export declare class CaptivateChatFileManager {
         fileType?: string;
         storage?: boolean;
         url?: string;
+        apiKey?: string;
+        conversationId?: string;
     }): Promise<CaptivateChatFileManager>;
     /**
      * Gets the first file from the files array for convenience.
@@ -184,6 +189,8 @@ export declare class CaptivateChatFileManager {
         fileType?: string;
         storage?: boolean;
         url?: string;
+        apiKey?: string;
+        conversationId?: string;
     }): Promise<{
         filename: string;
         type: string;
@@ -211,6 +218,8 @@ export declare class CaptivateChatFileManager {
         files: (File | Blob)[];
         storage?: boolean;
         urls?: string[];
+        apiKey?: string;
+        conversationId?: string;
     }): Promise<CaptivateChatFileManager>;
     /**
      * Generates a secure URL for accessing a stored file.
@@ -220,11 +229,21 @@ export declare class CaptivateChatFileManager {
      */
     static getSecureFileUrl(fileKey: string, expiresIn?: number): Promise<string>;
     /**
+     * Sets the time-to-live (TTL) for a conversation path.
+     * @param apiKey - The API key for authentication.
+     * @param conversationId - The conversation ID.
+     * @param days - The number of days for the time-to-live.
+     * @returns A promise that resolves when the TTL is set successfully.
+     */
+    static setTimeToLive(apiKey: string, conversationId: string, days: number): Promise<void>;
+    /**
      * Converts a file to text using the file-to-text API endpoint.
      * @param file - The file to convert (File or Blob).
      * @param fileName - The name of the file.
      * @param includeMetadata - Whether to include additional metadata in the response.
      * @param storage - Whether to store the file for future reference.
+     * @param apiKey - Optional API key for constructing the path parameter.
+     * @param conversationId - Optional conversation ID for constructing the path parameter.
      * @returns A promise that resolves to the extracted text.
      */
     private static convertFileToText;

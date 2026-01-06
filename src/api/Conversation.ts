@@ -14,6 +14,7 @@ export class Conversation {
   public apiKey: string;
   private conversationId: string;
   private metadata: object;
+  public fileManager: any;
   /**
    * WebSocket connection for receiving real-time messages from server.
    */
@@ -53,6 +54,70 @@ export class Conversation {
     if (!this.apiKey) {
       console.warn('API key is required for HTTP communication. Some features may not work properly.');
     }
+
+    // Instantiate fileManager bound to this conversation context
+    this.fileManager = {
+      create: async (options: {
+        file: File | Blob;
+        fileName?: string;
+        fileType?: string;
+        storage?: boolean;
+        url?: string;
+      }): Promise<CaptivateChatFileManager> => {
+        return CaptivateChatFileManager.create({
+          file: options.file,
+          fileName: options.fileName,
+          fileType: options.fileType,
+          storage: options.storage,
+          url: options.url,
+          apiKey: this.apiKey,
+          conversationId: this.conversationId
+        } as any);
+      },
+      createFile: async (options: {
+        file: File | Blob;
+        fileName?: string;
+        fileType?: string;
+        storage?: boolean;
+        url?: string;
+      }): Promise<{
+        filename: string;
+        type: string;
+        file?: File | Blob;
+        textContent: {
+          type: 'file_content';
+          text: string;
+          metadata: {
+            source: 'file_attachment';
+            originalFileName: string;
+            storageType?: 'direct';
+          };
+        };
+      }> => {
+        return CaptivateChatFileManager.createFile({
+          file: options.file,
+          fileName: options.fileName,
+          fileType: options.fileType,
+          storage: options.storage,
+          url: options.url,
+          apiKey: this.apiKey,
+          conversationId: this.conversationId
+        } as any);
+      },
+      createMultiple: async (options: {
+        files: (File | Blob)[];
+        storage?: boolean;
+        urls?: string[];
+      }): Promise<CaptivateChatFileManager> => {
+        return CaptivateChatFileManager.createMultiple({
+          files: options.files,
+          storage: options.storage,
+          urls: options.urls,
+          apiKey: this.apiKey,
+          conversationId: this.conversationId
+        } as any);
+      }
+    };
   }
 
   /**
@@ -181,6 +246,8 @@ export class Conversation {
     });
   }
 
+  
+
   /**
   * Sets metadata for the conversation and uses HTTP response for confirmation.
   * @param metadata - An object containing the metadata to set.
@@ -221,6 +288,19 @@ export class Conversation {
     }
     // Reuse the setMetadata logic, but wrap in { private: ... }
     return this.setMetadata({ private: privateMeta });
+  }
+
+  /**
+   * Sets the time-to-live (TTL) for the conversation path and updates metadata.
+   * @param days - The number of days for the time-to-live.
+   * @returns A promise that resolves when the TTL is set successfully.
+   */
+  public async setTimeToLive(days: number): Promise<void> {
+    // Use the file manager method to set path TTL
+    await CaptivateChatFileManager.setTimeToLive(this.apiKey, this.conversationId, days);
+    
+    // Also set timeToLive as metadata
+    await this.setMetadata({ timeToLive: days });
   }
 
 

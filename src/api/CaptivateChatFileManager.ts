@@ -5,6 +5,7 @@
 export class CaptivateChatFileManager {
   private static readonly FILE_TO_TEXT_API_URL = 'https://file-to-text.prod.captivat.io/api/file-to-text';
   private static readonly PRESIGNED_URL_API_URL = 'https://file-to-text.prod.captivat.io/api/presigned-url';
+  private static readonly PATH_TTL_API_URL = 'https://file-to-text.prod.captivat.io/api/path-ttl';
   
   public readonly type: 'files' = 'files';
   public readonly files: Array<{
@@ -60,6 +61,8 @@ export class CaptivateChatFileManager {
    * @param options.fileType - Optional custom file type.
    * @param options.storage - Whether to store the file for future reference (default: true).
    * @param options.url - URL to reference the file when storage is false (required when storage is false).
+   * @param options.apiKey - Optional API key for constructing the path parameter.
+   * @param options.conversationId - Optional conversation ID for constructing the path parameter.
    * @returns A promise that resolves to a CaptivateChatFileManager instance with converted text.
    */
   static async create(
@@ -69,6 +72,8 @@ export class CaptivateChatFileManager {
       fileType?: string;
       storage?: boolean;
       url?: string;
+      apiKey?: string;
+      conversationId?: string;
     }
   ): Promise<CaptivateChatFileManager> {
     // Direct file upload
@@ -88,7 +93,9 @@ export class CaptivateChatFileManager {
       file, 
       finalFileName, 
       true, // Always include metadata
-      storage
+      storage,
+      options.apiKey,
+      options.conversationId
     );
 
     // Create and return the instance with proxy for array-like behavior
@@ -230,6 +237,8 @@ export class CaptivateChatFileManager {
       fileType?: string;
       storage?: boolean;
       url?: string;
+      apiKey?: string;
+      conversationId?: string;
     }
   ): Promise<{
     filename: string;
@@ -250,7 +259,9 @@ export class CaptivateChatFileManager {
       fileName: options.fileName,
       fileType: options.fileType,
       storage: options.storage,
-      url: options.url
+      url: options.url,
+      apiKey: options.apiKey,
+      conversationId: options.conversationId
     });
     return fileInput.getFirstFile()!;
   }
@@ -269,6 +280,8 @@ export class CaptivateChatFileManager {
       files: (File | Blob)[];
       storage?: boolean;
       urls?: string[];
+      apiKey?: string;
+      conversationId?: string;
     }
   ): Promise<CaptivateChatFileManager> {
     const storage = options.storage !== undefined ? options.storage : true; // Default to true
@@ -284,7 +297,9 @@ export class CaptivateChatFileManager {
       files.map((file, index) => CaptivateChatFileManager.create({
         file: file,
         storage: storage,
-        url: storage === false ? options.urls![index] : undefined
+        url: storage === false ? options.urls![index] : undefined,
+        apiKey: options.apiKey,
+        conversationId: options.conversationId
       }))
     );
 
@@ -355,14 +370,72 @@ export class CaptivateChatFileManager {
   }
 
   /**
+   * Sets the time-to-live (TTL) for a conversation path.
+   * @param apiKey - The API key for authentication.
+   * @param conversationId - The conversation ID.
+   * @param days - The number of days for the time-to-live.
+   * @returns A promise that resolves when the TTL is set successfully.
+   */
+  static async setTimeToLive(apiKey: string, conversationId: string, days: number): Promise<void> {
+    if (!apiKey) {
+      throw new Error('API key is required');
+    }
+
+    if (!conversationId) {
+      throw new Error('Conversation ID is required');
+    }
+
+    if (typeof days !== 'number' || days <= 0 || !Number.isInteger(days)) {
+      throw new Error('Days must be a positive integer.');
+    }
+
+    const path = `${apiKey}/${conversationId}`;
+    const url = CaptivateChatFileManager.PATH_TTL_API_URL;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          path: path,
+          days: days
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`TTL update failed: ${response.status} ${response.statusText}. ${errorData.error || ''}`);
+      }
+
+      const data = await response.json().catch(() => ({ status: 'success' }));
+
+      if (data.success === false) {
+        throw new Error(`TTL update failed: ${data.error || 'Unknown error'}`);
+      }
+
+    } catch (error: any) {
+      if (error.message.includes('TTL update failed')) {
+        throw error;
+      }
+      throw new Error(`Failed to set path time-to-live: ${error.message}`);
+    }
+  }
+
+  /**
    * Converts a file to text using the file-to-text API endpoint.
    * @param file - The file to convert (File or Blob).
    * @param fileName - The name of the file.
    * @param includeMetadata - Whether to include additional metadata in the response.
    * @param storage - Whether to store the file for future reference.
+   * @param apiKey - Optional API key for constructing the path parameter.
+   * @param conversationId - Optional conversation ID for constructing the path parameter.
    * @returns A promise that resolves to the extracted text.
    */
-  private static async convertFileToText(file: File | Blob, fileName: string, includeMetadata: boolean, storage: boolean): Promise<{text: string, storageInfo?: any}> {
+  private static async convertFileToText(file: File | Blob, fileName: string, includeMetadata: boolean, storage: boolean, apiKey?: string, conversationId?: string): Promise<{text: string, storageInfo?: any}> {
     const url = CaptivateChatFileManager.FILE_TO_TEXT_API_URL;
 
     // Create FormData for multipart/form-data request
@@ -370,6 +443,12 @@ export class CaptivateChatFileManager {
     formData.append('file', file, fileName);
     formData.append('includeMetadata', includeMetadata.toString());
     formData.append('storage', storage.toString());
+    
+    // Add path parameter if both apiKey and conversationId are provided
+    if (apiKey && conversationId) {
+      const path = `${apiKey}/${conversationId}`;
+      formData.append('path', path);
+    }
 
     try {
       const response = await fetch(url, {

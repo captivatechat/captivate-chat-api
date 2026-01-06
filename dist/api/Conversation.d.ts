@@ -10,6 +10,7 @@ export declare class Conversation {
     apiKey: string;
     private conversationId;
     private metadata;
+    fileManager: any;
     /**
      * WebSocket connection for receiving real-time messages from server.
      */
@@ -86,6 +87,12 @@ export declare class Conversation {
    * @returns A promise that resolves when the metadata update is successful.
    */
     setPrivateMetadata(privateMeta: object): Promise<void>;
+    /**
+     * Sets the time-to-live (TTL) for the conversation path and updates metadata.
+     * @param days - The number of days for the time-to-live.
+     * @returns A promise that resolves when the TTL is set successfully.
+     */
+    setTimeToLive(days: number): Promise<void>;
     /**
      * Sends an action to the conversation.
      * @param actionId - The unique ID of the action to send.
