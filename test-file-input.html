@@ -193,6 +193,17 @@
                 </label>
             </div>
             
+            <div class="form-group">
+                <label for="ttlDays">Expire after (optional):</label>
+                <select id="ttlDays">
+                    <option value="">Never</option>
+                    <option value="1">1 day</option>
+                    <option value="7">7 days</option>
+                    <option value="30">30 days</option>
+                    <option value="90">90 days</option>
+                </select>
+            </div>
+            
             <div class="form-group" id="urlGroup" style="display: none;">
                 <label for="fileUrl">File URL (required when storage is false):</label>
                 <input type="url" id="fileUrl" placeholder="https://example.com/file.pdf">
@@ -225,6 +236,17 @@
                 <label>
                     <input type="checkbox" id="multipleStorage"> Store Files
                 </label>
+            </div>
+            
+            <div class="form-group">
+                <label for="multipleTtlDays">Expire after (optional):</label>
+                <select id="multipleTtlDays">
+                    <option value="">Never</option>
+                    <option value="1">1 day</option>
+                    <option value="7">7 days</option>
+                    <option value="30">30 days</option>
+                    <option value="90">90 days</option>
+                </select>
             </div>
             
             <button onclick="testMultipleFiles()">🚀 Test Multiple Files</button>
@@ -342,6 +364,9 @@
             }
             
             const file = fileInput.files[0];
+            const ttlDaysVal = document.getElementById('ttlDays').value;
+            const ttlDays = ttlDaysVal ? parseInt(ttlDaysVal, 10) : undefined;
+            const allowedTtl = [1, 7, 30, 90].includes(ttlDays) ? ttlDays : undefined;
             
             try {
                 showResult('fileResult', '🔄 Processing file...', 'loading');
@@ -351,7 +376,8 @@
                     file: file,
                     fileName: fileName || undefined,
                     storage: storage,
-                    url: storage ? undefined : fileUrl
+                    url: storage ? undefined : fileUrl,
+                    ttlDays: allowedTtl
                 });
                 
                 lastFileInput = fileInputObj;
@@ -393,6 +419,10 @@
                 return;
             }
             
+            const multipleTtlVal = document.getElementById('multipleTtlDays').value;
+            const multipleTtlDays = multipleTtlVal ? parseInt(multipleTtlVal, 10) : undefined;
+            const allowedMultipleTtl = [1, 7, 30, 90].includes(multipleTtlDays) ? multipleTtlDays : undefined;
+            
             try {
                 showResult('multipleResult', '🔄 Processing multiple files...', 'loading');
                 
@@ -401,7 +431,8 @@
                     files.map(file => 
                         CaptivateChatFileManager.create({
                             file: file,
-                            storage: storage
+                            storage: storage,
+                            ttlDays: allowedMultipleTtl
                         })
                     )
                 );
@@ -522,11 +553,6 @@
         
         // Add some sample data for testing
         document.addEventListener('DOMContentLoaded', function() {
-            // Add sample URL
-            document.getElementById('urlInput').value = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
-            document.getElementById('urlFileName').value = 'dummy.pdf';
-            document.getElementById('urlFileType').value = 'application/pdf';
-            
             // Check if CaptivateChatFileManager is available
             if (typeof CaptivateChatFileManager !== 'undefined') {
                 console.log('✅ CaptivateChatFileManager is loaded and available');

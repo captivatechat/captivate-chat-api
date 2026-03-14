@@ -1,5 +1,7 @@
-import { CaptivateChatFileManager } from './CaptivateChatFileManager';
+import { CaptivateChatFileManager, TtlDays } from './CaptivateChatFileManager';
 import { captivateLogger } from './CaptivateChatAPI';
+
+const ALLOWED_TTL_DAYS: TtlDays[] = [1, 7, 30, 90];
 
 interface Action {
   id: string;
@@ -29,6 +31,10 @@ export class Conversation {
    */
   private socketId: string | null = null;
   /**
+   * Default TTL (days) for file uploads in this conversation. Set via setTimeToLive(); used when uploading files.
+   */
+  private defaultTtlDays: TtlDays | undefined;
+  /**
    * Initializes a new Conversation instance.
    * @param conversationId - The unique identifier of the conversation.
    * @param socket - WebSocket instance for receiving real-time messages.
@@ -45,6 +51,7 @@ export class Conversation {
     this.listeners = new Map();
     this.mode = mode || 'prod'; // Default to 'prod' if not specified
     this.socketId = socketId || null;
+    this.defaultTtlDays = undefined;
 
     // WebSocket listeners for real-time communication from server
     if (this.socket) {
@@ -55,7 +62,7 @@ export class Conversation {
       console.warn('API key is required for HTTP communication. Some features may not work properly.');
     }
 
-    // Instantiate fileManager bound to this conversation context
+    // Instantiate fileManager bound to this conversation context (uses this.defaultTtlDays for uploads)
     this.fileManager = {
       create: async (options: {
         file: File | Blob;
@@ -71,7 +78,8 @@ export class Conversation {
           storage: options.storage,
           url: options.url,
           apiKey: this.apiKey,
-          conversationId: this.conversationId
+          conversationId: this.conversationId,
+          ttlDays: this.defaultTtlDays
         } as any);
       },
       createFile: async (options: {
@@ -101,7 +109,8 @@ export class Conversation {
           storage: options.storage,
           url: options.url,
           apiKey: this.apiKey,
-          conversationId: this.conversationId
+          conversationId: this.conversationId,
+          ttlDays: this.defaultTtlDays
         } as any);
       },
       createMultiple: async (options: {
@@ -114,10 +123,25 @@ export class Conversation {
           storage: options.storage,
           urls: options.urls,
           apiKey: this.apiKey,
-          conversationId: this.conversationId
+          conversationId: this.conversationId,
+          ttlDays: this.defaultTtlDays
         } as any);
       }
     };
+  }
+
+  /**
+   * Sets the default time-to-live (TTL) for file uploads in this conversation and stores it in metadata.
+   * When files are uploaded via conversation.fileManager.create(), this value is sent as ttlDays (1, 7, 30, or 90).
+   * Does not call any path-TTL API; the value is applied only at upload time.
+   * @param days - Must be 1, 7, 30, or 90. Other values are ignored.
+   */
+  public async setTimeToLive(days: number): Promise<void> {
+    const d = days as TtlDays;
+    if (ALLOWED_TTL_DAYS.includes(d)) {
+      this.defaultTtlDays = d;
+      await this.setMetadata({ timeToLive: days });
+    }
   }
 
   /**
@@ -289,20 +313,6 @@ export class Conversation {
     // Reuse the setMetadata logic, but wrap in { private: ... }
     return this.setMetadata({ private: privateMeta });
   }
-
-  /**
-   * Sets the time-to-live (TTL) for the conversation path and updates metadata.
-   * @param days - The number of days for the time-to-live.
-   * @returns A promise that resolves when the TTL is set successfully.
-   */
-  public async setTimeToLive(days: number): Promise<void> {
-    // Use the file manager method to set path TTL
-    await CaptivateChatFileManager.setTimeToLive(this.apiKey, this.conversationId, days);
-    
-    // Also set timeToLive as metadata
-    await this.setMetadata({ timeToLive: days });
-  }
-
 
   /**
    * Sends an action to the conversation.

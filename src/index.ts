@@ -1,6 +1,6 @@
 import { CaptivateChatAPI } from './api/CaptivateChatAPI';
 import { CaptivateChatManager } from './api/CaptivateChatManager';
-import { CaptivateChatFileManager } from './api/CaptivateChatFileManager';
+import { CaptivateChatFileManager, TtlDays } from './api/CaptivateChatFileManager';
 
 
 
@@ -14,4 +14,5 @@ if (typeof window !== 'undefined') {
   window.CaptivateChatFileManager = CaptivateChatFileManager;
 }
 
+export type { TtlDays };
 export { CaptivateChatAPI, CaptivateChatManager, CaptivateChatFileManager };

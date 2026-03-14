@@ -252,9 +252,10 @@ The `CaptivateChatFileManager` class provides automatic file-to-text conversion 
 // Upload a local file with storage (default behavior) - RECOMMENDED
 const fileInput = await conversation.fileManager.create({
   file: file,
-  fileName: 'document.pdf'
+  fileName: 'document.pdf',
   // storage defaults to true - file stored by service
   // API key and conversation ID are automatically included
+  // TTL: use conversation.setTimeToLive(1|7|30|90) once; uploads then use that value automatically
 });
 
 // Send file with text message
@@ -284,6 +285,30 @@ await conversation.sendMessage({
   files: fileInput  // 🎉 No need for .files anymore!
 });
 ```
+
+#### File expiration (TTL)
+
+When uploading a file with storage, you can set a time-to-live so the stored S3 object is automatically removed after a number of days. TTL is applied only at upload time (there are no path-level TTL APIs).
+
+**Recommended:** Set the default once per conversation with `conversation.setTimeToLive(days)`. All uploads via `conversation.fileManager.create()` (and `createFile` / `createMultiple`) will then use that value automatically—no need to pass `ttlDays` on each call.
+
+- **Allowed values**: `1`, `7`, `30`, or `90` days. Any other value is ignored.
+- **Optional**: If you never call `setTimeToLive()`, uploads have no expiration.
+
+```typescript
+// Set default TTL for this conversation (e.g. 7 days); also stored in metadata
+await conversation.setTimeToLive(7);
+
+// Later: uploads use 7-day TTL automatically
+const fileInput = await conversation.fileManager.create({
+  file: file,
+  fileName: 'document.pdf'
+});
+```
+
+When using `CaptivateChatFileManager.create()` directly (legacy), you can pass optional `ttlDays: 1 | 7 | 30 | 90` in the options.
+
+Generating a presigned URL for a file that was uploaded with TTL still extends its expiration (backend behavior); no frontend change is required.
 
 #### File Storage Options
 
@@ -755,42 +780,6 @@ console.log('Conversation permanently deleted');
 - **Soft Delete (default)**: Marks conversation as deleted but preserves data including transcripts for potential recovery
 - **Hard Delete**: Permanently removes everything including transcripts, messages, and all associated data
 
-### Set Time-To-Live (TTL)
-
-Set the time-to-live for the entire conversation session, which controls how long the conversation data (including chat history, files, and all associated data) will be retained on the server. The server uses this TTL value to manage the lifecycle of the entire conversation session.
-
-```typescript
-// Set TTL to 1 day
-await conversation.setTimeToLive(1);
-
-// Set TTL to 7 days
-await conversation.setTimeToLive(7);
-
-// Set TTL to 30 days
-await conversation.setTimeToLive(30);
-```
-
-**How it works:**
-1. **Path TTL**: Sets the time-to-live for the conversation path (`apiKey/conversationId`) on the file-to-text service
-2. **Metadata Update**: Automatically stores the TTL value in conversation metadata as `timeToLive`
-3. **Session Retention**: The entire conversation session (chat history, files, messages, transcripts, and all associated data) will be retained for the specified number of days
-4. **Server Behavior**: The server considers this TTL value for the current session and will manage data retention accordingly
-5. **Activity-Based**: **Important**: The TTL timer is only active from the **last activity/usage** of the conversation. Each time the conversation is used (sending messages, receiving messages, or any activity), the TTL timer resets from that point
-
-**Important Notes:**
-- The `days` parameter must be a positive integer
-- The TTL applies to the **entire conversation session**, not just files
-- This includes chat history, messages, transcripts, files, and all conversation data
-- The TTL value is stored in conversation metadata for easy reference
-- The server uses this metadata to determine data retention policies for the session
-- **TTL is activity-based**: The countdown starts from the last activity in the conversation, not from when the TTL was set. Each new activity resets the timer
-
-**Use Cases:**
-- **Temporary Conversations**: Set short TTL (1-7 days) for temporary support sessions or one-time interactions
-- **Compliance**: Set specific TTLs based on data retention requirements and regulatory compliance
-- **Data Management**: Automatically clean up old conversation data after the TTL expires
-- **Privacy**: Ensure sensitive conversation data is automatically purged after a set period
-
 ### Retrieve User Conversations
 
 Fetch a list of conversations associated with a specific user ID. This method supports both legacy (v1) and advanced (v2) usage with filter, search, and pagination. Both versions return the same response format. The method supports backward compatibility with both string and object parameters.
@@ -1240,21 +1229,11 @@ fileInput.length           // ✅ Array length
 - **`getTranscript(): Promise<object[]>`**  
   Retrieves the conversation transcript.
 
-- **`delete(options?: { softDelete?: boolean }): Promise<void>`**  
+- **`delete(options?: { softDelete?: boolean }): Promise<void>`**
   Deletes the current conversation. `options.softDelete` defaults to `true` (safer option).
 
-- **`setTimeToLive(days: number): Promise<void>`**  
-  **(New)** Sets the time-to-live (TTL) for the entire conversation session and updates metadata. The TTL controls how long the conversation data (including chat history, files, messages, transcripts, and all associated data) will be retained on the server. The server uses this TTL value to manage the lifecycle of the entire conversation session. **Note**: The TTL timer is only active from the last activity/usage of the conversation - each new activity resets the timer. Example:
-  ```typescript
-  await conversation.setTimeToLive(7); // Entire conversation session will be retained for 7 days from last activity
-  ```
-  - Sets the path TTL on the file-to-text service
-  - Automatically stores `timeToLive` in conversation metadata
-  - The server considers this TTL for the entire conversation session (not just files)
-  - The TTL timer starts from the last activity in the conversation, not from when it was set
-  - The `days` parameter must be a positive integer
-
-  
+- **`setTimeToLive(days: number): Promise<void>`**
+  Sets the default TTL for file uploads in this conversation and stores it in conversation metadata. Call with `1`, `7`, `30`, or `90`; uploads via `conversation.fileManager.create()` (and related methods) will then send that value as `ttlDays` automatically. Does not call any path-TTL API—value is applied only when uploading files.
 
 #### Events
 - **`onMessage(callback: (message: string, type: string) => void): void`**  

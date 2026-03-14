@@ -2,10 +2,11 @@
  * File manager for handling file uploads, storage, and presigned URL generation.
  * Supports direct file uploads with automatic text extraction and storage management.
  */
+/** Allowed TTL values for S3 object expiration (days). Only these values are applied; any other value is ignored. */
+export type TtlDays = 1 | 7 | 30 | 90;
 export declare class CaptivateChatFileManager {
     private static readonly FILE_TO_TEXT_API_URL;
     private static readonly PRESIGNED_URL_API_URL;
-    private static readonly PATH_TTL_API_URL;
     readonly type: 'files';
     readonly files: Array<{
         filename: string;
@@ -48,6 +49,7 @@ export declare class CaptivateChatFileManager {
      * @param options.url - URL to reference the file when storage is false (required when storage is false).
      * @param options.apiKey - Optional API key for constructing the path parameter.
      * @param options.conversationId - Optional conversation ID for constructing the path parameter.
+     * @param options.ttlDays - Optional TTL for the stored S3 object: 1, 7, 30, or 90 days. Omit for no expiration.
      * @returns A promise that resolves to a CaptivateChatFileManager instance with converted text.
      */
     static create(options: {
@@ -58,6 +60,7 @@ export declare class CaptivateChatFileManager {
         url?: string;
         apiKey?: string;
         conversationId?: string;
+        ttlDays?: TtlDays;
     }): Promise<CaptivateChatFileManager>;
     /**
      * Gets the first file from the files array for convenience.
@@ -181,6 +184,7 @@ export declare class CaptivateChatFileManager {
      * @param options.fileType - Optional custom file type.
      * @param options.storage - Whether to store the file for future reference (default: true).
      * @param options.url - URL to reference the file when storage is false (required when storage is false).
+     * @param options.ttlDays - Optional TTL for the stored S3 object: 1, 7, 30, or 90 days. Omit for no expiration.
      * @returns A promise that resolves to a single file object.
      */
     static createFile(options: {
@@ -191,6 +195,7 @@ export declare class CaptivateChatFileManager {
         url?: string;
         apiKey?: string;
         conversationId?: string;
+        ttlDays?: TtlDays;
     }): Promise<{
         filename: string;
         type: string;
@@ -212,6 +217,7 @@ export declare class CaptivateChatFileManager {
      * @param options.files - Array of files to process.
      * @param options.storage - Whether to store the files for future reference (default: true).
      * @param options.urls - Array of URLs to reference files when storage is false (required when storage is false).
+     * @param options.ttlDays - Optional TTL for stored S3 objects: 1, 7, 30, or 90 days. Omit for no expiration.
      * @returns A promise that resolves to a CaptivateChatFileManager instance with all processed files.
      */
     static createMultiple(options: {
@@ -220,6 +226,7 @@ export declare class CaptivateChatFileManager {
         urls?: string[];
         apiKey?: string;
         conversationId?: string;
+        ttlDays?: TtlDays;
     }): Promise<CaptivateChatFileManager>;
     /**
      * Generates a secure URL for accessing a stored file.
@@ -229,14 +236,6 @@ export declare class CaptivateChatFileManager {
      */
     static getSecureFileUrl(fileKey: string, expiresIn?: number): Promise<string>;
     /**
-     * Sets the time-to-live (TTL) for a conversation path.
-     * @param apiKey - The API key for authentication.
-     * @param conversationId - The conversation ID.
-     * @param days - The number of days for the time-to-live.
-     * @returns A promise that resolves when the TTL is set successfully.
-     */
-    static setTimeToLive(apiKey: string, conversationId: string, days: number): Promise<void>;
-    /**
      * Converts a file to text using the file-to-text API endpoint.
      * @param file - The file to convert (File or Blob).
      * @param fileName - The name of the file.
@@ -244,6 +243,7 @@ export declare class CaptivateChatFileManager {
      * @param storage - Whether to store the file for future reference.
      * @param apiKey - Optional API key for constructing the path parameter.
      * @param conversationId - Optional conversation ID for constructing the path parameter.
+     * @param ttlDays - Optional TTL for the stored S3 object: 1, 7, 30, or 90 days. Only these values are sent; any other is ignored.
      * @returns A promise that resolves to the extracted text.
      */
     private static convertFileToText;

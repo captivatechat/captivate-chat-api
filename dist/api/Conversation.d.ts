@@ -25,6 +25,10 @@ export declare class Conversation {
      */
     private socketId;
     /**
+     * Default TTL (days) for file uploads in this conversation. Set via setTimeToLive(); used when uploading files.
+     */
+    private defaultTtlDays;
+    /**
      * Initializes a new Conversation instance.
      * @param conversationId - The unique identifier of the conversation.
      * @param socket - WebSocket instance for receiving real-time messages.
@@ -34,6 +38,13 @@ export declare class Conversation {
      * @param socketId - Socket ID for HTTP requests.
      */
     constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string, mode?: 'prod' | 'dev', socketId?: string | null);
+    /**
+     * Sets the default time-to-live (TTL) for file uploads in this conversation and stores it in metadata.
+     * When files are uploaded via conversation.fileManager.create(), this value is sent as ttlDays (1, 7, 30, or 90).
+     * Does not call any path-TTL API; the value is applied only at upload time.
+     * @param days - Must be 1, 7, 30, or 90. Other values are ignored.
+     */
+    setTimeToLive(days: number): Promise<void>;
     /**
      * Handles incoming WebSocket messages for real-time communication.
      * @param event - The WebSocket message event.
@@ -87,12 +98,6 @@ export declare class Conversation {
    * @returns A promise that resolves when the metadata update is successful.
    */
     setPrivateMetadata(privateMeta: object): Promise<void>;
-    /**
-     * Sets the time-to-live (TTL) for the conversation path and updates metadata.
-     * @param days - The number of days for the time-to-live.
-     * @returns A promise that resolves when the TTL is set successfully.
-     */
-    setTimeToLive(days: number): Promise<void>;
     /**
      * Sends an action to the conversation.
      * @param actionId - The unique ID of the action to send.
