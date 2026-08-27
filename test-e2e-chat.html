@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -52,7 +53,7 @@
             color: #333;
         }
         
-        input[type="file"], input[type="text"], input[type="url"], select {
+        input[type="file"], input[type="text"], input[type="url"], input[type="number"], select {
             width: 100%;
             padding: 10px;
             border: 1px solid #ddd;
@@ -269,6 +270,83 @@
         .input-area {
             position: relative;
         }
+        
+        /* ---------- Benchmark UI ---------- */
+        .bench-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: flex-end;
+            margin-bottom: 15px;
+        }
+        
+        .bench-row .form-group {
+            margin-bottom: 0;
+        }
+        
+        .bench-row .form-group.narrow input {
+            width: 130px;
+        }
+        
+        .bench-row .form-group.wide input {
+            width: 320px;
+        }
+        
+        table.bench-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: monospace;
+            font-size: 12px;
+            background-color: white;
+        }
+        
+        table.bench-table th,
+        table.bench-table td {
+            border: 1px solid #dee2e6;
+            padding: 6px 8px;
+            text-align: right;
+            white-space: nowrap;
+        }
+        
+        table.bench-table th {
+            background-color: #e9ecef;
+            color: #333;
+        }
+        
+        table.bench-table th:first-child,
+        table.bench-table td:first-child {
+            text-align: left;
+        }
+        
+        table.bench-table tbody tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        
+        .bench-empty {
+            color: #666;
+            font-style: italic;
+            font-size: 13px;
+            padding: 10px 0;
+        }
+        
+        .bench-table-wrap {
+            overflow-x: auto;
+            margin-bottom: 15px;
+        }
+        
+        .metric-key {
+            font-size: 12px;
+            color: #555;
+            line-height: 1.7;
+            margin-top: 10px;
+        }
+        
+        .metric-key code {
+            background-color: #e9ecef;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
     </style>
 </head>
 <body>
@@ -387,9 +465,81 @@
             </div>
         </div>
         
+        <!-- Benchmarks -->
+        <div class="section">
+            <h2>⏱️ Benchmarks</h2>
+            <p style="font-size: 12px; color: #666; margin-bottom: 15px;">
+                Every action on this page is timed automatically. Response timings start the moment a message is sent
+                and stop when the assistant stops streaming, so the numbers below reflect what a user actually waits for.
+            </p>
+            
+            <div class="bench-row">
+                <div class="form-group narrow">
+                    <label for="responseIdleMs">Stream idle cutoff (ms):</label>
+                    <input type="number" id="responseIdleMs" value="1500" min="200" step="100">
+                </div>
+                <div class="form-group narrow">
+                    <label for="responseTimeoutMs">Response timeout (ms):</label>
+                    <input type="number" id="responseTimeoutMs" value="60000" min="1000" step="1000">
+                </div>
+                <div style="font-size: 11px; color: #666; padding-bottom: 8px;">
+                    A response counts as finished when no new chunk arrives<br>within the idle cutoff.
+                </div>
+            </div>
+            
+            <h3 style="font-size: 15px; color: #555; margin-top: 20px;">Repeat run</h3>
+            <div class="bench-row">
+                <div class="form-group narrow">
+                    <label for="loadCount">Messages:</label>
+                    <input type="number" id="loadCount" value="5" min="1" max="200">
+                </div>
+                <div class="form-group narrow">
+                    <label for="loadDelayMs">Delay between (ms):</label>
+                    <input type="number" id="loadDelayMs" value="500" min="0" step="100">
+                </div>
+                <div class="form-group wide">
+                    <label for="loadPrompt">Message to repeat ({i} = run number):</label>
+                    <input type="text" id="loadPrompt" value="Benchmark run {i}: reply with a short sentence.">
+                </div>
+            </div>
+            
+            <button onclick="runLoadTest()" id="runLoadBtn" disabled>▶️ Run repeat test</button>
+            <button onclick="stopLoadTest()" id="stopLoadBtn" disabled>⏹️ Stop</button>
+            <button onclick="Bench.reset()">🧹 Clear measurements</button>
+            <button onclick="exportBenchJSON()">⬇️ Export JSON</button>
+            <button onclick="exportBenchCSV()">⬇️ Export CSV</button>
+            <button onclick="copyBenchSummary()">📋 Copy summary</button>
+            
+            <div id="benchProgress" class="result info" style="display: none;"></div>
+            
+            <h3 style="font-size: 15px; color: #555; margin-top: 20px;">Results</h3>
+            <div class="bench-table-wrap" id="benchTableWrap">
+                <div class="bench-empty">No measurements yet — initialize the chat or send a message.</div>
+            </div>
+            
+            <div class="metric-key">
+                <strong>What each metric measures</strong><br>
+                <code>ws_connect</code> WebSocket handshake &nbsp;·&nbsp;
+                <code>conversation_create</code> conversation setup &nbsp;·&nbsp;
+                <code>ttl_set</code> time-to-live call &nbsp;·&nbsp;
+                <code>init_total</code> whole initialize sequence<br>
+                <code>text_send</code> send call returning &nbsp;·&nbsp;
+                <code>response_first_ms</code> send → first chunk &nbsp;·&nbsp;
+                <code>response_complete_ms</code> send → last chunk &nbsp;·&nbsp;
+                <code>response_stream_ms</code> first → last chunk<br>
+                <code>file_process</code> extract + upload &nbsp;·&nbsp;
+                <code>file_send</code> send call &nbsp;·&nbsp;
+                <code>file_total</code> both combined &nbsp;·&nbsp;
+                <code>transcript_fetch</code> transcript retrieval &nbsp;·&nbsp;
+                <code>loadtest_roundtrip_ms</code> per repeat-run round trip
+            </div>
+        </div>
+        
         <!-- Connection Log -->
         <div class="section">
             <h2>📋 Connection Log</h2>
+            <button onclick="downloadLog()">⬇️ Download log</button>
+            <button onclick="clearLog()">🧹 Clear log</button>
             <div id="connectionLog" class="result info">
                 Ready to initialize connection...
             </div>
@@ -404,6 +554,413 @@
         let chatAPI = null;
         let currentConversation = null;
         let messageCounter = 0;
+        const pageT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        
+        // ============================================================
+        // Benchmark instrumentation
+        // ============================================================
+        
+        const Bench = {
+            records: [],        // { metric, ms, ts, meta }
+            timers: new Map(),  // token -> { metric, t0, meta }
+            seq: 0,
+            
+            now() {
+                return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            },
+            
+            // Open a timer and get back a token to close it with
+            start(metric, meta) {
+                const token = `${metric}#${++this.seq}`;
+                this.timers.set(token, { metric: metric, t0: this.now(), meta: meta || null });
+                return token;
+            },
+            
+            // Close a timer and store the elapsed time
+            end(token, extraMeta) {
+                const timer = this.timers.get(token);
+                if (!timer) return null;
+                this.timers.delete(token);
+                const ms = this.now() - timer.t0;
+                const meta = Object.assign({}, timer.meta || {}, extraMeta || {});
+                return this.record(timer.metric, ms, meta);
+            },
+            
+            cancel(token) {
+                this.timers.delete(token);
+            },
+            
+            record(metric, ms, meta) {
+                const clean = (meta && Object.keys(meta).length) ? meta : null;
+                const rec = { metric: metric, ms: ms, ts: new Date().toISOString(), meta: clean };
+                this.records.push(rec);
+                logMessage(`⏱️ ${metric}: ${fmtMs(ms)}${clean ? ' ' + JSON.stringify(clean) : ''}`);
+                renderBenchTable();
+                return rec;
+            },
+            
+            // Time an async call, recording the result either way
+            async measure(metric, fn, meta) {
+                const token = this.start(metric, meta);
+                try {
+                    const result = await fn();
+                    this.end(token);
+                    return result;
+                } catch (error) {
+                    this.end(token, { failed: true, error: error.message || String(error) });
+                    throw error;
+                }
+            },
+            
+            stats() {
+                const grouped = new Map();
+                this.records.forEach(r => {
+                    if (!grouped.has(r.metric)) grouped.set(r.metric, []);
+                    grouped.get(r.metric).push(r.ms);
+                });
+                
+                const rows = [];
+                grouped.forEach((values, metric) => {
+                    const sorted = values.slice().sort((a, b) => a - b);
+                    const sum = sorted.reduce((a, b) => a + b, 0);
+                    rows.push({
+                        metric: metric,
+                        count: sorted.length,
+                        last: values[values.length - 1],
+                        min: sorted[0],
+                        avg: sum / sorted.length,
+                        p50: percentile(sorted, 50),
+                        p95: percentile(sorted, 95),
+                        max: sorted[sorted.length - 1]
+                    });
+                });
+                
+                rows.sort((a, b) => a.metric.localeCompare(b.metric));
+                return rows;
+            },
+            
+            reset() {
+                this.records = [];
+                this.timers.clear();
+                renderBenchTable();
+                logMessage('🧹 Measurements cleared');
+            }
+        };
+        
+        function percentile(sortedValues, p) {
+            if (!sortedValues.length) return 0;
+            const rank = Math.ceil((p / 100) * sortedValues.length) - 1;
+            const index = Math.min(sortedValues.length - 1, Math.max(0, rank));
+            return sortedValues[index];
+        }
+        
+        function fmtMs(ms) {
+            if (ms === null || ms === undefined || isNaN(ms)) return '-';
+            if (ms >= 1000) return (ms / 1000).toFixed(2) + ' s';
+            return ms.toFixed(1) + ' ms';
+        }
+        
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        
+        // ---------- Assistant response timing ----------
+        // A response is "in flight" from the moment a message is sent until
+        // no new chunk has arrived for the idle cutoff.
+        
+        let pendingResponse = null;
+        
+        function beginResponseTracking(label, meta) {
+            finalizeResponseTracking('superseded');
+            
+            const idleMs = parseInt(document.getElementById('responseIdleMs').value, 10) || 1500;
+            const timeoutMs = parseInt(document.getElementById('responseTimeoutMs').value, 10) || 60000;
+            
+            const tracker = {
+                label: label,
+                meta: meta || {},
+                t0: Bench.now(),
+                chunks: 0,
+                firstMs: null,
+                lastMs: null,
+                idleMs: idleMs,
+                idleTimer: null,
+                timeoutTimer: null,
+                waiters: []
+            };
+            
+            tracker.timeoutTimer = setTimeout(() => {
+                if (pendingResponse === tracker) {
+                    Bench.record('response_timeout', Bench.now() - tracker.t0, { label: tracker.label, chunks: tracker.chunks });
+                    finalizeResponseTracking('timeout');
+                }
+            }, timeoutMs);
+            
+            pendingResponse = tracker;
+            return tracker;
+        }
+        
+        function noteResponseChunk(type) {
+            const tracker = pendingResponse;
+            if (!tracker) return;
+            
+            const elapsed = Bench.now() - tracker.t0;
+            tracker.chunks++;
+            tracker.lastMs = elapsed;
+            
+            if (tracker.firstMs === null) {
+                tracker.firstMs = elapsed;
+                Bench.record('response_first_ms', elapsed, { label: tracker.label, type: type || undefined });
+            }
+            
+            if (tracker.idleTimer) clearTimeout(tracker.idleTimer);
+            tracker.idleTimer = setTimeout(() => finalizeResponseTracking('idle'), tracker.idleMs);
+        }
+        
+        function finalizeResponseTracking(reason) {
+            const tracker = pendingResponse;
+            if (!tracker) return;
+            
+            pendingResponse = null;
+            if (tracker.idleTimer) clearTimeout(tracker.idleTimer);
+            if (tracker.timeoutTimer) clearTimeout(tracker.timeoutTimer);
+            
+            if (tracker.chunks > 0) {
+                Bench.record('response_complete_ms', tracker.lastMs, {
+                    label: tracker.label,
+                    chunks: tracker.chunks,
+                    reason: reason
+                });
+                if (tracker.chunks > 1) {
+                    Bench.record('response_stream_ms', tracker.lastMs - tracker.firstMs, {
+                        label: tracker.label,
+                        chunks: tracker.chunks
+                    });
+                }
+            }
+            
+            const outcome = {
+                ok: tracker.chunks > 0,
+                firstMs: tracker.firstMs,
+                lastMs: tracker.lastMs,
+                chunks: tracker.chunks,
+                reason: reason
+            };
+            tracker.waiters.forEach(resolve => resolve(outcome));
+        }
+        
+        function waitForResponse() {
+            return new Promise(resolve => {
+                if (!pendingResponse) {
+                    resolve({ ok: false, chunks: 0, reason: 'not-tracking' });
+                    return;
+                }
+                pendingResponse.waiters.push(resolve);
+            });
+        }
+        
+        // ---------- Results table ----------
+        
+        function renderBenchTable() {
+            const wrap = document.getElementById('benchTableWrap');
+            if (!wrap) return;
+            
+            const stats = Bench.stats();
+            if (!stats.length) {
+                wrap.innerHTML = '<div class="bench-empty">No measurements yet — initialize the chat or send a message.</div>';
+                return;
+            }
+            
+            let html = '<table class="bench-table"><thead><tr>' +
+                '<th>Metric</th><th>n</th><th>Last</th><th>Min</th><th>Avg</th><th>p50</th><th>p95</th><th>Max</th>' +
+                '</tr></thead><tbody>';
+            
+            stats.forEach(s => {
+                html += `<tr><td>${s.metric}</td><td>${s.count}</td>` +
+                    `<td>${fmtMs(s.last)}</td><td>${fmtMs(s.min)}</td><td>${fmtMs(s.avg)}</td>` +
+                    `<td>${fmtMs(s.p50)}</td><td>${fmtMs(s.p95)}</td><td>${fmtMs(s.max)}</td></tr>`;
+            });
+            
+            html += '</tbody></table>';
+            wrap.innerHTML = html;
+        }
+        
+        // ---------- Export ----------
+        
+        function downloadBlob(content, filename, type) {
+            const blob = new Blob([content], { type: type });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+        
+        function benchFilename(extension) {
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            return `captivatechat-benchmark-${stamp}.${extension}`;
+        }
+        
+        function exportBenchJSON() {
+            if (!Bench.records.length) {
+                showResult('benchProgress', 'Nothing to export yet — run at least one action first.', 'info');
+                return;
+            }
+            const payload = {
+                exportedAt: new Date().toISOString(),
+                mode: document.getElementById('mode').value,
+                conversationId: currentConversation ? currentConversation.conversationId : null,
+                userAgent: navigator.userAgent,
+                summary: Bench.stats(),
+                records: Bench.records
+            };
+            downloadBlob(JSON.stringify(payload, null, 2), benchFilename('json'), 'application/json');
+            logMessage(`⬇️ Exported ${Bench.records.length} measurements as JSON`);
+        }
+        
+        function exportBenchCSV() {
+            if (!Bench.records.length) {
+                showResult('benchProgress', 'Nothing to export yet — run at least one action first.', 'info');
+                return;
+            }
+            const rows = [['timestamp', 'metric', 'ms', 'meta']];
+            Bench.records.forEach(r => {
+                rows.push([r.ts, r.metric, r.ms.toFixed(3), r.meta ? JSON.stringify(r.meta) : '']);
+            });
+            const csv = rows
+                .map(cols => cols.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+                .join('\n');
+            downloadBlob(csv, benchFilename('csv'), 'text/csv');
+            logMessage(`⬇️ Exported ${Bench.records.length} measurements as CSV`);
+        }
+        
+        function copyBenchSummary() {
+            const stats = Bench.stats();
+            if (!stats.length) {
+                showResult('benchProgress', 'Nothing to copy yet — run at least one action first.', 'info');
+                return;
+            }
+            const lines = ['metric,n,last,min,avg,p50,p95,max'];
+            stats.forEach(s => {
+                lines.push([
+                    s.metric, s.count,
+                    s.last.toFixed(1), s.min.toFixed(1), s.avg.toFixed(1),
+                    s.p50.toFixed(1), s.p95.toFixed(1), s.max.toFixed(1)
+                ].join(','));
+            });
+            const text = lines.join('\n');
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text)
+                    .then(() => showResult('benchProgress', 'Summary copied to clipboard.', 'success'))
+                    .catch(() => showResult('benchProgress', text, 'info'));
+            } else {
+                showResult('benchProgress', text, 'info');
+            }
+        }
+        
+        // ---------- Repeat test ----------
+        
+        let loadTestRunning = false;
+        let loadTestStopRequested = false;
+        
+        function setLoadTestButtons(running) {
+            const runBtn = document.getElementById('runLoadBtn');
+            const stopBtn = document.getElementById('stopLoadBtn');
+            runBtn.disabled = running || !currentConversation;
+            stopBtn.disabled = !running;
+        }
+        
+        function stopLoadTest() {
+            if (!loadTestRunning) return;
+            loadTestStopRequested = true;
+            logMessage('⏹️ Stop requested — finishing the current run first');
+        }
+        
+        async function runLoadTest() {
+            if (!currentConversation) {
+                showResult('benchProgress', 'Connect the chat before running the repeat test.', 'error');
+                return;
+            }
+            if (loadTestRunning) return;
+            
+            const count = parseInt(document.getElementById('loadCount').value, 10) || 1;
+            const delayMs = parseInt(document.getElementById('loadDelayMs').value, 10) || 0;
+            const template = document.getElementById('loadPrompt').value || 'Benchmark run {i}';
+            
+            loadTestRunning = true;
+            loadTestStopRequested = false;
+            setLoadTestButtons(true);
+            logMessage(`▶️ Repeat test started: ${count} message(s), ${delayMs} ms apart`);
+            
+            const outcomes = [];
+            
+            for (let i = 1; i <= count; i++) {
+                if (loadTestStopRequested) break;
+                
+                const text = template.replace(/\{i\}/g, i);
+                showResult('benchProgress', `Run ${i} of ${count} — waiting for the assistant…`, 'loading');
+                addChatMessage('user', text);
+                
+                beginResponseTracking(`loadtest_${i}`, { run: i });
+                const waiter = waitForResponse();
+                
+                try {
+                    await Bench.measure('loadtest_send', () => currentConversation.sendMessage(text), { run: i });
+                } catch (error) {
+                    finalizeResponseTracking('send-failed');
+                    logMessage(`❌ Run ${i} failed to send: ${error.message}`);
+                    outcomes.push({ ok: false, reason: 'send-failed' });
+                    continue;
+                }
+                
+                const outcome = await waiter;
+                outcomes.push(outcome);
+                
+                if (outcome.ok) {
+                    Bench.record('loadtest_roundtrip_ms', outcome.lastMs, { run: i, chunks: outcome.chunks });
+                } else {
+                    logMessage(`⚠️ Run ${i} produced no response (${outcome.reason})`);
+                }
+                
+                if (i < count && !loadTestStopRequested && delayMs > 0) {
+                    await sleep(delayMs);
+                }
+            }
+            
+            loadTestRunning = false;
+            setLoadTestButtons(false);
+            
+            const completed = outcomes.filter(o => o.ok);
+            const roundTrips = completed.map(o => o.lastMs).sort((a, b) => a - b);
+            const firsts = completed.map(o => o.firstMs).sort((a, b) => a - b);
+            
+            if (!completed.length) {
+                showResult('benchProgress', `Repeat test finished: ${outcomes.length} sent, no responses received.`, 'error');
+                logMessage('⚠️ Repeat test finished with no responses');
+                return;
+            }
+            
+            const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+            const summary =
+                `✅ Repeat test finished\n\n` +
+                `• Sent: ${outcomes.length}\n` +
+                `• Responded: ${completed.length}\n` +
+                `• Failed or timed out: ${outcomes.length - completed.length}\n\n` +
+                `First chunk — avg ${fmtMs(avg(firsts))}, p50 ${fmtMs(percentile(firsts, 50))}, p95 ${fmtMs(percentile(firsts, 95))}\n` +
+                `Round trip  — avg ${fmtMs(avg(roundTrips))}, p50 ${fmtMs(percentile(roundTrips, 50))}, p95 ${fmtMs(percentile(roundTrips, 95))}\n` +
+                `Fastest ${fmtMs(roundTrips[0])} · Slowest ${fmtMs(roundTrips[roundTrips.length - 1])}`;
+            
+            showResult('benchProgress', summary, 'success');
+            logMessage(`✅ Repeat test finished: ${completed.length}/${outcomes.length} responded`);
+        }
+        
+        // ============================================================
+        // Chat
+        // ============================================================
         
         // Initialize chat connection
         async function initializeChat() {
@@ -415,6 +972,8 @@
                 return;
             }
             
+            const initToken = Bench.start('init_total', { mode: mode });
+            
             try {
                 showResult('connectionStatus', '🔄 Connecting to CaptivateChat...', 'loading');
                 logMessage('Initializing CaptivateChat API...');
@@ -423,18 +982,18 @@
                 chatAPI = new CaptivateChatAPI(apiKey, mode);
                 
                 // Connect to WebSocket
-                await chatAPI.connect();
+                await Bench.measure('ws_connect', () => chatAPI.connect(), { mode: mode });
                 logMessage('✅ Connected to WebSocket');
                 
                 // Create a new conversation
-                currentConversation = await chatAPI.createConversation();
+                currentConversation = await Bench.measure('conversation_create', () => chatAPI.createConversation());
                 logMessage(`✅ Created conversation: ${currentConversation.conversationId}`);
                 
                 // Apply time-to-live from form if set
                 const ttlVal = document.getElementById('conversationTtl').value;
                 if (ttlVal) {
                     const days = parseInt(ttlVal, 10);
-                    await currentConversation.setTimeToLive(days);
+                    await Bench.measure('ttl_set', () => currentConversation.setTimeToLive(days), { days: days });
                     logMessage(`✅ Time to live set to ${days} day(s) for uploads`);
                 }
                 
@@ -446,11 +1005,15 @@
                 document.getElementById('sendTextBtn').disabled = false;
                 document.getElementById('sendFileBtn').disabled = false;
                 document.getElementById('testTranscriptBtn').disabled = false;
+                setLoadTestButtons(false);
+                
+                Bench.end(initToken);
                 
                 showResult('connectionStatus', '✅ Connected successfully!', 'success');
                 addChatMessage('system', 'Connected to CaptivateChat! You can now send messages and files.');
                 
             } catch (error) {
+                Bench.end(initToken, { failed: true, error: error.message || String(error) });
                 showResult('connectionStatus', `❌ Connection failed: ${error.message}`, 'error');
                 logMessage(`❌ Connection failed: ${error.message}`);
             }
@@ -462,7 +1025,7 @@
             const ttlVal = document.getElementById('conversationTtl').value;
             if (ttlVal) {
                 const days = parseInt(ttlVal, 10);
-                await currentConversation.setTimeToLive(days);
+                await Bench.measure('ttl_set', () => currentConversation.setTimeToLive(days), { days: days });
                 logMessage(`Time to live updated to ${days} day(s) for uploads`);
             }
         }
@@ -470,6 +1033,7 @@
         // Disconnect chat
         function disconnectChat() {
             if (chatAPI) {
+                finalizeResponseTracking('disconnected');
                 chatAPI.disconnect();
                 chatAPI = null;
                 currentConversation = null;
@@ -479,6 +1043,7 @@
                 document.getElementById('sendTextBtn').disabled = true;
                 document.getElementById('sendFileBtn').disabled = true;
                 document.getElementById('testTranscriptBtn').disabled = true;
+                setLoadTestButtons(false);
                 
                 showResult('connectionStatus', '🔌 Disconnected', 'info');
                 logMessage('🔌 Disconnected from CaptivateChat');
@@ -492,7 +1057,9 @@
             
             // Listen for assistant messages
             currentConversation.onMessage((message, type) => {
-                logMessage(`📨 Received message (${type}): ${message}`);
+                noteResponseChunk(type);
+                const preview = typeof message === 'string' ? message : JSON.stringify(message);
+                logMessage(`📨 Received message (${type}): ${preview}`);
                 addChatMessage('assistant', message);
             });
             
@@ -505,6 +1072,7 @@
             currentConversation.onError((error) => {
                 logMessage(`❌ Conversation error: ${error.message || error}`);
                 addChatMessage('system', `Error: ${error.message || error}`);
+                finalizeResponseTracking('error');
             });
             
             // Listen for actions
@@ -526,14 +1094,16 @@
                 // Add user message to chat
                 addChatMessage('user', message);
                 
-                // Send message to conversation
-                await currentConversation.sendMessage(message);
+                // Start the response clock, then send
+                beginResponseTracking('text_message', { chars: message.length });
+                await Bench.measure('text_send', () => currentConversation.sendMessage(message), { chars: message.length });
                 logMessage(`📤 Sent text message: "${message}"`);
                 
                 // Clear input
                 messageInput.value = '';
                 
             } catch (error) {
+                finalizeResponseTracking('send-failed');
                 logMessage(`❌ Failed to send message: ${error.message}`);
                 addChatMessage('system', `Failed to send message: ${error.message}`);
             }
@@ -559,18 +1129,32 @@
             }
             
             const file = fileInput.files[0];
+            const fileTotalToken = Bench.start('file_total', { bytes: file.size, type: file.type });
             
             try {
                 showResult('fileResult', '🔄 Processing file...', 'loading');
-                logMessage(`📁 Processing file: ${file.name}`);
+                logMessage(`📁 Processing file: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
                 
                 // Use conversation fileManager so TTL from "Time to live" in Configuration is applied
+                const processToken = Bench.start('file_process', {
+                    bytes: file.size,
+                    type: file.type,
+                    storage: storage
+                });
                 const fileInputObj = await currentConversation.fileManager.create({
                     file: file,
                     fileName: fileName || undefined,
                     storage: storage,
                     url: storage ? undefined : fileUrl
                 });
+                const processRecord = Bench.end(processToken, {
+                    extractedChars: fileInputObj.files[0].textContent.text.length
+                });
+                
+                if (processRecord && processRecord.ms > 0) {
+                    const kbps = (file.size / 1024) / (processRecord.ms / 1000);
+                    logMessage(`📈 Processing throughput: ${kbps.toFixed(1)} KB/s`);
+                }
                 
                 logMessage(`✅ File processed successfully. Text length: ${fileInputObj.files[0].textContent.text.length} characters`);
                 
@@ -593,8 +1177,11 @@
                 addChatMessage('user', combinedMessage.text, fileInputObj);
                 
                 // Send combined message to conversation
-                await currentConversation.sendMessage(combinedMessage);
+                beginResponseTracking('file_message', { bytes: file.size, filename: fileInputObj.files[0].filename });
+                await Bench.measure('file_send', () => currentConversation.sendMessage(combinedMessage), { bytes: file.size });
                 logMessage(`📤 Sent combined message with file: ${fileInputObj.files[0].filename}`);
+                
+                Bench.end(fileTotalToken);
                 
                 // Update payload preview
                 updatePayloadPreview(combinedMessage);
@@ -608,6 +1195,8 @@
                 messageInput.value = '';
                 
             } catch (error) {
+                Bench.end(fileTotalToken, { failed: true, error: error.message || String(error) });
+                finalizeResponseTracking('send-failed');
                 showResult('fileResult', `❌ Error: ${error.message}`, 'error');
                 logMessage(`❌ File processing failed: ${error.message}`);
                 addChatMessage('system', `File processing failed: ${error.message}`);
@@ -683,7 +1272,7 @@
                 logMessage('📜 Fetching conversation transcript...');
                 
                 // Get transcript - URLs are automatically refreshed if expired
-                const transcript = await currentConversation.getTranscript();
+                const transcript = await Bench.measure('transcript_fetch', () => currentConversation.getTranscript());
                 
                 logMessage(`✅ Transcript retrieved: ${transcript.length} messages`);
                 
@@ -705,11 +1294,17 @@
                     }
                 });
                 
+                const lastFetch = Bench.records.filter(r => r.metric === 'transcript_fetch').pop();
+                const perMessage = (lastFetch && transcript.length)
+                    ? fmtMs(lastFetch.ms / transcript.length)
+                    : '-';
+                
                 const resultMessage = `✅ Transcript retrieved successfully!\n\n` +
                     `📊 Statistics:\n` +
                     `• Messages: ${transcript.length}\n` +
                     `• Files: ${fileCount}\n` +
-                    `• Refreshed URLs: ${refreshedUrls}\n\n` +
+                    `• Refreshed URLs: ${refreshedUrls}\n` +
+                    `• Fetch time: ${lastFetch ? fmtMs(lastFetch.ms) : '-'} (${perMessage} per message)\n\n` +
                     `🔗 All file URLs are fresh and valid for 2 hours!`;
                 
                 showResult('fileResult', resultMessage, 'success');
@@ -733,9 +1328,32 @@
         // Log message
         function logMessage(message) {
             const log = document.getElementById('connectionLog');
-            const timestamp = new Date().toLocaleTimeString();
-            log.textContent += `[${timestamp}] ${message}\n`;
+            if (!log) return;
+            
+            const now = new Date();
+            const clock = now.toLocaleTimeString() + '.' + String(now.getMilliseconds()).padStart(3, '0');
+            const sinceLoad = ((Bench.now() - pageT0) / 1000).toFixed(3);
+            
+            log.textContent += `[${clock} +${sinceLoad}s] ${message}\n`;
+            
+            // Keep the log bounded so long benchmark runs stay responsive
+            const lines = log.textContent.split('\n');
+            if (lines.length > 2000) {
+                log.textContent = lines.slice(-2000).join('\n');
+            }
+            
             log.scrollTop = log.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('connectionLog').textContent = '';
+            logMessage('🧹 Log cleared');
+        }
+        
+        function downloadLog() {
+            const text = document.getElementById('connectionLog').textContent;
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            downloadBlob(text, `captivatechat-log-${stamp}.txt`, 'text/plain');
         }
         
         // Utility functions
@@ -785,7 +1403,8 @@
                 if (item.type.indexOf('image') !== -1) {
                     const file = item.getAsFile();
                     if (file) {
-                        logMessage(`📋 Image pasted from clipboard: ${file.name || 'clipboard-image'}`);
+                        logMessage(`📋 Image pasted from clipboard: ${file.name || 'clipboard-image'} (${(file.size / 1024).toFixed(1)} KB)`);
+                        const pasteTotalToken = Bench.start('paste_total', { bytes: file.size });
                         
                         try {
                             // Show visual indicator
@@ -795,11 +1414,11 @@
                             addChatMessage('system', '🔄 Processing pasted image...');
                             
                             // Use conversation fileManager so TTL from "Time to live" is applied
-                            const fileInputObj = await currentConversation.fileManager.create({
+                            const fileInputObj = await Bench.measure('paste_process', () => currentConversation.fileManager.create({
                                 file: file,
                                 fileName: `pasted-image-${Date.now()}.png`,
                                 storage: true
-                            });
+                            }), { bytes: file.size });
                             
                             logMessage(`✅ Pasted image processed successfully. Text length: ${fileInputObj.files[0].textContent.text.length} characters`);
                             
@@ -813,8 +1432,11 @@
                             addChatMessage('user', combinedMessage.text, fileInputObj);
                             
                             // Send combined message to conversation
-                            await currentConversation.sendMessage(combinedMessage);
+                            beginResponseTracking('pasted_image', { bytes: file.size });
+                            await Bench.measure('paste_send', () => currentConversation.sendMessage(combinedMessage), { bytes: file.size });
                             logMessage(`📤 Sent pasted image with message: ${fileInputObj.files[0].filename}`);
+                            
+                            Bench.end(pasteTotalToken);
                             
                             // Update payload preview
                             updatePayloadPreview(combinedMessage);
@@ -827,6 +1449,8 @@
                             
                             return; // Exit after processing the first image
                         } catch (error) {
+                            Bench.end(pasteTotalToken, { failed: true, error: error.message || String(error) });
+                            finalizeResponseTracking('send-failed');
                             logMessage(`❌ Failed to process pasted image: ${error.message}`);
                             addChatMessage('system', `Failed to process pasted image: ${error.message}`);
                             
@@ -867,10 +1491,14 @@
         document.addEventListener('DOMContentLoaded', function() {
             logMessage('🧪 CaptivateChat End-to-End Test Page Loaded');
             logMessage('🔑 API Key configured: ' + document.getElementById('apiKey').value);
+            logMessage('⏱️ Benchmark timers active — every action is measured');
             logMessage('ℹ️ Click "Initialize Chat" to start the end-to-end test');
             
             // Add event listener for storage checkbox
             document.getElementById('storage').addEventListener('change', toggleUrlField);
+            
+            renderBenchTable();
+            setLoadTestButtons(false);
         });
     </script>
 </body>

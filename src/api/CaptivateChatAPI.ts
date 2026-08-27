@@ -1,5 +1,5 @@
 // Import the Conversation class
-import { Conversation } from './Conversation';
+import { Conversation, ConversationSocketProvider } from './Conversation';
 
 // Determine the WebSocket implementation based on the environment (browser, Node.js, or React Native)
 let WebSocketImpl: typeof WebSocket;
@@ -21,17 +21,44 @@ else {
   }
 }
 
-// Removed unused `waitForSocketOpen` function to improve maintainability.
+/**
+ * Methods that must NOT be wrapped by withSocketGuard.
+ *
+ * The guard turns a method into an async function that reconnects first. That is right
+ * for anything doing network I/O and wrong for everything else, because it (a) changes
+ * the declared return type into a Promise and (b) can trigger a reconnect from a plain
+ * accessor.
+ *
+ * Previously `getSocketId` and `getConversation` were missing here — one character away
+ * from `getSocket` and `getConversationId`, which were present — so both silently
+ * returned Promises that contradicted their own type declarations. `dispose` was missing
+ * too, which meant disposing a dead instance first reconnected it.
+ */
+const UNGUARDED_METHODS = [
+  // connection state / accessors
+  'isSocketActive',
+  'connect',
+  'reconnect',
+  'disconnect',
+  'getSocket',
+  'getSocketId',
+  'dispose',
+  // registry + local lookups
+  'getConversation',
+  'getConversationId',
+  // local listener management
+  'restartListeners',
+  'detachListeners',
+  'removeAllListeners',
+  'off',
+];
 
 // Proxy guard function for automatic WebSocket state checking and reconnection
 function withSocketGuard<T extends object>(instance: T): T {
   return new Proxy(instance, {
     get(target, prop, receiver) {
       const orig = target[prop as keyof T];
-      if (
-        typeof orig === 'function' &&
-        !['isSocketActive', 'connect', 'reconnect', 'getSocket', 'getConversationId'].includes(prop as string)
-      ) {
+      if (typeof orig === 'function' && !UNGUARDED_METHODS.includes(prop as string)) {
         return async function (...args: any[]) {
           if (typeof (target as any)['isSocketActive'] === 'function' && !(target as any)['isSocketActive']()) {
             // Socket not active, attempting to reconnect
@@ -82,7 +109,19 @@ export const captivateLogger = {
   }
 };
 
-export class CaptivateChatAPI {
+/** Tunables. All optional; the defaults match the previous hardcoded values. */
+export interface CaptivateChatAPIOptions {
+  /** How long to wait for socket_connected during connect(). Default 10000. */
+  connectTimeoutMs?: number;
+  /** How long to wait for conversation_start_success. Default 20000. */
+  conversationStartTimeoutMs?: number;
+  /** Maximum automatic reconnection attempts. Default 5. */
+  maxReconnectAttempts?: number;
+  /** Delay between reconnection attempts, in ms. Default 3000. */
+  reconnectDelay?: number;
+}
+
+export class CaptivateChatAPI implements ConversationSocketProvider {
   /**
    * Static registry to track instances by API key and mode.
    * Enforces singleton pattern: one instance per unique (apiKey, mode) combination.
@@ -91,9 +130,6 @@ export class CaptivateChatAPI {
 
   /**
    * Generates a unique instance key for the registry.
-   * @param apiKey - The API key.
-   * @param mode - The mode ('prod' or 'dev').
-   * @returns A composite key string.
    */
   private static getInstanceKey(apiKey: string, mode: 'prod' | 'dev'): string {
     return `${apiKey}-${mode}`;
@@ -101,44 +137,29 @@ export class CaptivateChatAPI {
 
   private apiKey!: string;
   private mode!: 'prod' | 'dev';
-  /**
-   * WebSocket URL for real-time communication.
-   */
   private url!: string;
-  /**
-   * WebSocket connection for receiving real-time messages.
-   */
-  private socket!: InstanceType<typeof WebSocketImpl> | null;
+  private socket!: WebSocket | null;
   private conversations!: Map<string, Conversation>;
-  /**
-   * Socket ID received from socket_connected event.
-   */
   private socketId: string | null = null;
-  /**
-   * WebSocket reconnection attempts counter.
-   */
   private reconnectAttempts: number = 0;
-  /**
-   * Maximum number of reconnection attempts.
-   */
   private maxReconnectAttempts: number = 5;
-  /**
-   * Delay between reconnection attempts.
-   */
   private reconnectDelay: number = 3000;
-
+  private connectTimeoutMs: number = 10000;
   /**
-   * Sets the debug mode for CaptivateChatAPI logging.
-   * @param enabled - Whether to enable debug logging for CaptivateChatAPI.
+   * Default wait for conversation_start_success. Raised from the old hardcoded 10s
+   * because conversation_start routinely takes longer than that on cold paths, and the
+   * old timer also fired on success — see createConversation.
    */
+  private conversationStartTimeoutMs: number = 20000;
+  /** Set by dispose(); stops auto-reconnect and rejects further use. */
+  private isDisposed: boolean = false;
+  /** In-flight connect, so concurrent callers share one handshake. */
+  private connectPromise: Promise<void> | null = null;
+
   static setDebugMode(enabled: boolean): void {
     captivateDebugMode = enabled;
   }
 
-  /**
-   * Gets the current debug mode state for CaptivateChatAPI.
-   * @returns True if debug mode is enabled, false otherwise.
-   */
   static getDebugMode(): boolean {
     return captivateDebugMode;
   }
@@ -146,11 +167,10 @@ export class CaptivateChatAPI {
   /**
    * Creates an instance of CaptivateChatAPI.
    * Enforces singleton pattern: returns existing instance if one exists for the given API key and mode.
-   * @param apiKey - The API key for authentication.
-   * @param mode - The mode of operation ('prod' for production or 'dev' for development).
-   * @returns Either a new instance or the existing singleton instance for this API key/mode combination.
+   * Note that when an existing instance is returned, `options` is ignored — use
+   * configure() to change tunables on a live instance.
    */
-  constructor(apiKey: string, mode: 'prod' | 'dev' = 'prod') {
+  constructor(apiKey: string, mode: 'prod' | 'dev' = 'prod', options: CaptivateChatAPIOptions = {}) {
     const instanceKey = CaptivateChatAPI.getInstanceKey(apiKey, mode);
 
     // Check if instance already exists (singleton enforcement)
@@ -164,7 +184,6 @@ export class CaptivateChatAPI {
     this.apiKey = apiKey;
     this.mode = mode;
 
-    // Legacy WebSocket URL (deprecated)
     this.url =
       this.mode === 'prod'
         ? `wss://channel.wss.captivatechat.ai/dev?apiKey=${apiKey}`
@@ -172,6 +191,7 @@ export class CaptivateChatAPI {
 
     this.socket = null;
     this.conversations = new Map();
+    this.configure(options);
 
     // Store in registry
     CaptivateChatAPI.instances.set(instanceKey, this);
@@ -180,23 +200,46 @@ export class CaptivateChatAPI {
     captivateLogger.log('CaptivateChatAPI: Using HTTP for sending messages and WebSocket for receiving real-time updates.');
   }
 
+  /** Updates tunables on a live instance. */
+  public configure(options: CaptivateChatAPIOptions = {}): void {
+    if (options.connectTimeoutMs !== undefined) this.connectTimeoutMs = options.connectTimeoutMs;
+    if (options.conversationStartTimeoutMs !== undefined) this.conversationStartTimeoutMs = options.conversationStartTimeoutMs;
+    if (options.maxReconnectAttempts !== undefined) this.maxReconnectAttempts = options.maxReconnectAttempts;
+    if (options.reconnectDelay !== undefined) this.reconnectDelay = options.reconnectDelay;
+  }
+
+  private getBaseUrl(): string {
+    return this.mode === 'prod'
+      ? 'https://channel.prod.captivat.io'
+      : 'https://channel.dev.captivat.io';
+  }
+
+  /**
+   * Builds an Error carrying the HTTP status so callers can act on 401 vs 429 vs 500
+   * without string-matching. Note a rate-limited response served without CORS headers
+   * never reaches this path — the browser rejects the fetch with an opaque TypeError.
+   */
+  private buildHttpError(prefix: string, response: Response, body: string): Error {
+    const detail = body ? `: ${body.slice(0, 300)}` : '';
+    const error = new Error(`${prefix}: ${response.status} ${response.statusText}${detail}`) as Error & {
+      status?: number;
+      body?: string;
+    };
+    error.status = response.status;
+    error.body = body;
+    return error;
+  }
+
   /**
    * Sends a message via HTTP API.
-   * @param message - The message object to send.
-   * @returns A promise that resolves to the response data.
    */
   private async _send(message: object): Promise<any> {
     if (!this.apiKey) {
       throw new Error('API key is required for HTTP communication');
     }
 
-    const baseUrl = this.mode === 'prod'
-      ? 'https://channel.prod.captivat.io'
-      : 'https://channel.dev.captivat.io';
-    
-    const url = `${baseUrl}/api/custom-channel/sockets/message`;
+    const url = `${this.getBaseUrl()}/api/custom-channel/sockets/message`;
 
-    // Add socket_id to the event if available
     const messageWithSocketId = {
       ...message,
       event: {
@@ -205,8 +248,9 @@ export class CaptivateChatAPI {
       }
     };
 
+    let response: Response;
     try {
-      const response = await fetch(url, {
+      response = await fetch(url, {
         method: 'POST',
         headers: {
           'x-api-key': this.apiKey,
@@ -215,205 +259,285 @@ export class CaptivateChatAPI {
         },
         body: JSON.stringify(messageWithSocketId)
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP request failed: ${response.status} ${response.statusText}`);
-      }
-
-      // Check if response is JSON or plain text
-      const contentType = response.headers.get('content-type');
-      let responseData;
-      
-      if (contentType && contentType.includes('application/json')) {
-        responseData = await response.json();
-      } else {
-        // Handle plain text response (like "OK")
-        const textResponse = await response.text();
-        captivateLogger.log('Server returned plain text:', textResponse);
-        // Return a mock response structure for plain text responses
-        responseData = {
-          status: 'success',
-          message: textResponse,
-          event: {
-            event_payload: {
-              conversation_id: null // Will be handled by WebSocket
-            }
-          }
-        };
-      }
-      
-      captivateLogger.log('Message received from server via HTTP:', responseData);
-      return responseData;
     } catch (error) {
-      console.error('HTTP request failed:', error);
-      throw new Error(`Failed to send message via HTTP: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      captivateLogger.error('HTTP request failed:', error);
+      throw new Error(
+        `Failed to send message via HTTP: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw this.buildHttpError('HTTP request failed', response, body);
+    }
+
+    const contentType = response.headers.get('content-type');
+    let responseData;
+
+    if (contentType && contentType.includes('application/json')) {
+      responseData = await response.json();
+    } else {
+      const textResponse = await response.text();
+      captivateLogger.log('Server returned plain text:', textResponse);
+      responseData = {
+        status: 'success',
+        message: textResponse,
+        event: {
+          event_payload: {
+            conversation_id: null // Will be handled by WebSocket
+          }
+        }
+      };
+    }
+
+    captivateLogger.log('Message received from server via HTTP:', responseData);
+    return responseData;
+  }
+
+  /**
+   * Closes the current socket without triggering the auto-reconnect path.
+   */
+  private teardownSocket(reason: string): void {
+    const socket = this.socket;
+    // Null it first: the close handler checks identity against this.socket and bails
+    // when it no longer matches, which is what suppresses the auto-reconnect.
+    this.socket = null;
+    if (!socket) return;
+    try {
+      if (socket.readyState === WebSocketImpl.OPEN || socket.readyState === WebSocketImpl.CONNECTING) {
+        socket.close(1000, reason);
+      }
+    } catch (_) { /* already closing */ }
   }
 
   /**
    * Connects to the WebSocket server for real-time communication.
-   * @returns A promise that resolves once the connection is successfully established.
+   * Concurrent callers share a single handshake.
    */
   public async connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    if (this.isDisposed) {
+      throw new Error('This CaptivateChatAPI instance has been disposed. Create a new one.');
+    }
+    if (this.connectPromise) return this.connectPromise;
+
+    this.connectPromise = new Promise<void>((resolve, reject) => {
+      let settled = false;
+      let socket: WebSocket;
+
       try {
-        this.socket = new WebSocketImpl(this.url);
-
-        const timeoutId = setTimeout(() => {
-          reject(new Error('Connection timeout: socket_connected not received'));
-        }, 10000);
-
-        this.socket.onopen = () => {
-          // WebSocket connected, waiting for API confirmation
-        };
-
-        this.socket.onmessage = (event: MessageEvent) => {
-          try {
-            const message = JSON.parse(event.data.toString());
-            if (message.event?.event_type === 'socket_connected') {
-              // Capture socket_id from the event payload
-              this.socketId = message.event.event_payload?.socket_id || null;
-              captivateLogger.log('Socket connected with ID:', this.socketId);
-              // API Successfully Connected
-              clearTimeout(timeoutId);
-              resolve();
-            }
-          } catch (err) {
-            console.error('Error parsing message:', err);
-          }
-        };
-
-        this.socket.onerror = (event: any) => {
-          console.error('WebSocket Error:', event.message || event);
-          clearTimeout(timeoutId);
-          reject(new Error(event.message || 'WebSocket error'));
-        };
-
-        this.socket.onclose = (event) => {
-          // WebSocket connection closed
-          if (event.code !== 1000) { 
-            // Attempting to reconnect
-            setTimeout(() => this.connect(), 3000); // Reconnect after 3 seconds
-          }
-        };
+        this.teardownSocket('Reconnecting');
+        socket = new WebSocketImpl(this.url);
       } catch (error) {
         reject(error);
+        return;
       }
+
+      this.socket = socket;
+
+      const timeoutId = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error(`Connection timeout: socket_connected not received within ${this.connectTimeoutMs}ms`));
+      }, this.connectTimeoutMs);
+
+      // addEventListener, not `onmessage =`. Conversations attach their own handlers to
+      // this same socket; the old assignment meant the first Conversation constructed
+      // wiped this handler out, after which socketId could never be refreshed.
+      socket.addEventListener('message', (event: MessageEvent) => {
+        let message: any;
+        try {
+          message = JSON.parse(String(event.data));
+        } catch (_) {
+          return;
+        }
+        if (message?.event?.event_type !== 'socket_connected') return;
+
+        this.socketId = message.event.event_payload?.socket_id || null;
+        captivateLogger.log('Socket connected with ID:', this.socketId);
+
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve();
+      });
+
+      socket.addEventListener('error', (event: any) => {
+        captivateLogger.error('WebSocket Error:', event?.message || event);
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        reject(new Error(event?.message || 'WebSocket error'));
+      });
+
+      socket.addEventListener('close', (event: CloseEvent) => {
+        // A socket we already replaced — ignore, and never reconnect from it.
+        if (this.socket !== socket) return;
+        this.socket = null;
+        this.socketId = null;
+
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeoutId);
+          reject(new Error(`WebSocket closed during handshake (code ${event.code})`));
+          return;
+        }
+
+        if (this.isDisposed || event.code === 1000) return;
+
+        captivateLogger.warn(`WebSocket closed unexpectedly (code ${event.code}); reconnecting.`);
+        // Route through reconnect() so the attempt counter applies. The old code called
+        // connect() directly on a bare setTimeout, which bypassed the cap entirely and
+        // could loop forever against a failing endpoint.
+        void this.reconnect().catch((err) => {
+          captivateLogger.error('Automatic reconnection failed:', err);
+        });
+      });
+    }).finally(() => {
+      this.connectPromise = null;
     });
+
+    return this.connectPromise;
   }
 
   /**
    * Creates a new conversation or starts a bot-first/user-first conversation.
-   * @param userId - The unique identifier for the user.
-   * @param userBasicInfo - Basic information about the user (e.g., name, email).
-   * @param userData - Additional optional user data.
-   * @param autoConversationStart - Mode to auto-start the conversation ('bot-first' or 'user-first').
-   * @returns A promise that resolves to the created Conversation instance.
+   *
+   * @param options.timeoutMs - Overrides the instance conversationStartTimeoutMs.
    */
   public async createConversation(
     userId: string,
     userBasicInfo: object = {},
     metadata: Record<string, any> = {},
     autoConversationStart: 'bot-first' | 'user-first' = 'bot-first',
-    privateMetadata: object = {}
+    privateMetadata: object = {},
+    options: { timeoutMs?: number } = {}
   ): Promise<Conversation> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        // Merge privateMetadata into metadata under the 'private' key if provided
-        const fullMetadata: Record<string, any> = { ...metadata };
-        if (privateMetadata) {
-          fullMetadata.private = privateMetadata;
-        }
-        
-        // Listen for conversation_start_success from WebSocket to get conversation_id
-        // Set up listener BEFORE sending the HTTP request to avoid race conditions
-        const onMessage = (event: MessageEvent) => {
-          try {
-            captivateLogger.log('messagereceived:', event.data.toString());
-            const message = JSON.parse(event.data.toString());
-            if (message.event?.event_type === 'conversation_start_success') {
-              const conversationId = message.event.event_payload?.conversation_id;
-              if (!conversationId) {
-                this.socket?.removeEventListener('message', onMessage);
-                reject(new Error('No conversation_id received in WebSocket response'));
-                return;
-              }
-              
-              this.socket?.removeEventListener('message', onMessage);
-              
-              const conversation = withSocketGuard(new Conversation(conversationId, this.socket!, {}, this.apiKey, this.mode, this.socketId));
-              this.conversations.set(conversationId, conversation);
-              
-              if (autoConversationStart === 'bot-first') {
-                conversation.sendMessage({ type: 'text', text: '' })
-                  .then(() => resolve(conversation))
-                  .catch(reject);
-              } else {
-                resolve(conversation);
-              }
-            }
-          } catch (err) {
-            console.error('Error processing message:', err);
-          }
-        };
+    if (!this.isSocketActive()) {
+      await this.connect();
+    }
+    const socket = this.socket;
+    if (!socket) {
+      throw new Error('WebSocket connection not established');
+    }
 
-        this.socket?.addEventListener('message', onMessage);
-        
-        // Timeout if no WebSocket confirmation received
-        setTimeout(() => {
-          this.socket?.removeEventListener('message', onMessage);
-          reject(new Error('Timeout: No conversation_start_success received from WebSocket'));
-        }, 10000);
-        
-        // Send HTTP request AFTER setting up the listener
-        await this._send({
-          action: 'sendMessage',
-          event: {
-            event_type: 'conversation_start',
-            event_payload: {
-              userId,
-              userBasicInfo,
-              metadata: fullMetadata
-            },
+    const timeoutMs = options.timeoutMs ?? this.conversationStartTimeoutMs;
+    const fullMetadata: Record<string, any> = { ...metadata };
+    if (privateMetadata) {
+      fullMetadata.private = privateMetadata;
+    }
+
+    return new Promise<Conversation>((resolve, reject) => {
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout>;
+
+      // Single exit point. The old code armed a 10s timer and never cleared it, so a
+      // response arriving near the deadline resolved the listener AND rejected the
+      // promise — the conversation existed, was cached and had its opener sent, while
+      // the caller saw a timeout and retried, creating a second real conversation.
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        socket.removeEventListener('message', onMessage);
+        fn();
+      };
+
+      const onMessage = (event: MessageEvent) => {
+        if (settled) return;
+        let message: any;
+        try {
+          message = JSON.parse(String(event.data));
+        } catch (_) {
+          return;
+        }
+        captivateLogger.log('messagereceived:', String(event.data));
+        if (message?.event?.event_type !== 'conversation_start_success') return;
+
+        const conversationId = message.event.event_payload?.conversation_id;
+        if (!conversationId) {
+          settle(() => reject(new Error('No conversation_id received in WebSocket response')));
+          return;
+        }
+
+        // `this` is passed as the socket provider so the Conversation reads socket and
+        // socketId live instead of freezing whatever they happen to be right now.
+        const conversation = withSocketGuard(
+          new Conversation(conversationId, this.socket, {}, this.apiKey, this.mode, this.socketId, this)
+        );
+        this.conversations.set(conversationId, conversation);
+
+        // Resolve as soon as the conversation exists. The bot-first opener is dispatched
+        // in the background: waiting for its HTTP round-trip delayed every caller for no
+        // benefit, and a failure there should surface as a missing greeting, not as a
+        // failure to create the conversation.
+        settle(() => resolve(conversation));
+
+        if (autoConversationStart === 'bot-first') {
+          Promise.resolve(conversation.sendMessage({ type: 'text', text: '' })).catch((err) => {
+            captivateLogger.error('bot-first opening message failed to send:', err);
+          });
+        }
+      };
+
+      socket.addEventListener('message', onMessage);
+
+      timeoutId = setTimeout(() => {
+        settle(() =>
+          reject(new Error(`Timeout: No conversation_start_success received from WebSocket within ${timeoutMs}ms`))
+        );
+      }, timeoutMs);
+
+      this._send({
+        action: 'sendMessage',
+        event: {
+          event_type: 'conversation_start',
+          event_payload: {
+            userId,
+            userBasicInfo,
+            metadata: fullMetadata
           },
-        });
-        
-      } catch (error) {
-        reject(error);
-      }
+        },
+      }).catch((error) => {
+        settle(() => reject(error));
+      });
     });
   }
 
   /**
-   * Retrieves an existing conversation by its ID or creates a new one if not found.
-   * @param conversationId - The unique ID of the conversation.
-   * @returns The Conversation instance associated with the given ID.
+   * Retrieves an existing conversation by its ID, creating a local handle if not cached.
+   *
+   * Returns a Conversation rather than `Conversation | void`: the old union forced every
+   * caller into a null check that could never be satisfied on the success path.
    */
-  getConversation(conversationId: string): Conversation | void {
+  public getConversation(conversationId: string): Conversation {
     let conversation = this.conversations.get(conversationId);
 
     if (!conversation) {
-      // If conversation is not found, check if socket is initialized
-      if (this.socket !== null) {
-        // If socket is initialized, create the conversation
-        conversation = withSocketGuard(new Conversation(conversationId, this.socket,{},this.apiKey, this.mode, this.socketId));
-        this.conversations.set(conversationId, conversation);
-      } else {
-        // Handle the case where socket is not initialized
-        console.error('Socket is not initialized');
-        throw new Error('WebSocket connection not established');
-      }
+      conversation = withSocketGuard(
+        new Conversation(conversationId, this.socket, {}, this.apiKey, this.mode, this.socketId, this)
+      );
+      this.conversations.set(conversationId, conversation);
     }
 
-    conversation?.restartListeners();
+    conversation.restartListeners();
     return conversation;
   }
 
   /**
+   * Drops a conversation from the local cache and detaches its socket listener.
+   * Does not delete it server-side — use conversation.delete() for that.
+   */
+  public releaseConversation(conversationId: string): void {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation) return;
+    try {
+      conversation.detachListeners();
+    } catch (_) { /* ignore */ }
+    this.conversations.delete(conversationId);
+  }
+
+  /**
    * Retrieves user conversations. Uses v2 if filter, search, or pagination is provided, otherwise uses v1.
-   * Supports both legacy API (userId string) and new API (options object) for backward compatibility.
-   * @param userIdOrOptions - Either a userId string (legacy) or options object containing userId and optional filter, search, and pagination.
-   * @returns A promise resolving to an object with a list of Conversation instances and optional pagination data.
    */
   public async getUserConversations(
     userIdOrOptions: string | {
@@ -421,7 +545,7 @@ export class CaptivateChatAPI {
       filter?: object;
       search?: object;
       pagination?: { page?: string | number; limit?: string | number };
-      apiKeys?: string[]; // Restore multi-api-key support
+      apiKeys?: string[];
     }
   ): Promise<{ conversations: Conversation[]; pagination?: {
     hasNextPage: boolean;
@@ -431,8 +555,7 @@ export class CaptivateChatAPI {
     total: number;
     totalPages: number;
   } }> {
-    // Handle backward compatibility - if string is passed, treat as userId
-    const options = typeof userIdOrOptions === 'string' 
+    const options = typeof userIdOrOptions === 'string'
       ? { userId: userIdOrOptions }
       : userIdOrOptions;
 
@@ -446,83 +569,62 @@ export class CaptivateChatAPI {
       total: number;
       totalPages: number;
     } | undefined = undefined;
-    const useV2 = (filter && Object.keys(filter).length > 0) || (search && Object.keys(search).length > 0) || (pagination && Object.keys(pagination).length > 0) || (apiKeys && Array.isArray(apiKeys) && apiKeys.length > 0);
+    const useV2 = (filter && Object.keys(filter).length > 0)
+      || (search && Object.keys(search).length > 0)
+      || (pagination && Object.keys(pagination).length > 0)
+      || (apiKeys && Array.isArray(apiKeys) && apiKeys.length > 0);
 
-    try {
-      // Build request payload for HTTP
-      let httpResponse: any;
-      if (useV2) {
-        const eventPayload: any = { userId };
-        if (filter && Object.keys(filter).length > 0) {
-          eventPayload.filter = filter;
-        }
-        if (search && Object.keys(search).length > 0) {
-          eventPayload.search = search;
-        }
-        if (pagination && Object.keys(pagination).length > 0) {
-          eventPayload.pagination = pagination;
-        }
-        if (apiKeys && Array.isArray(apiKeys) && apiKeys.length > 0) {
-          eventPayload.apiKeys = apiKeys;
-        }
-        httpResponse = await this._send({
-          action: 'sendMessage',
-          event: {
-            event_type: 'get_user_conversations_v2',
-            event_payload: eventPayload,
-          },
-        });
-      } else {
-        httpResponse = await this._send({
-          action: 'sendMessage',
-          event: {
-            event_type: 'get_user_conversations',
-            event_payload: {
-              userId,
-            },
-          },
-        });
-      }
-
-      // Support both direct JSON responses and event-wrapped responses
-      const payload = httpResponse?.event?.event_payload || httpResponse;
-      const responseConversations = payload?.conversations || [];
-      const responsePagination = payload?.pagination;
-
-      for (const conv of responseConversations) {
-        const { conversation_id, metadata, apiKey } = conv;
-        if (this.socket !== null) {
-          conversations.push(
-            withSocketGuard(
-              new Conversation(
-                conversation_id,
-                this.socket,
-                metadata,
-                apiKey || this.apiKey,
-                this.mode,
-                this.socketId
-              )
-            )
-          );
-        }
-      }
-
-      if (responsePagination) {
-        paginationData = responsePagination;
-      }
-
-      return { conversations, pagination: paginationData };
-    } catch (error) {
-      throw error;
+    let httpResponse: any;
+    if (useV2) {
+      const eventPayload: any = { userId };
+      if (filter && Object.keys(filter).length > 0) eventPayload.filter = filter;
+      if (search && Object.keys(search).length > 0) eventPayload.search = search;
+      if (pagination && Object.keys(pagination).length > 0) eventPayload.pagination = pagination;
+      if (apiKeys && Array.isArray(apiKeys) && apiKeys.length > 0) eventPayload.apiKeys = apiKeys;
+      httpResponse = await this._send({
+        action: 'sendMessage',
+        event: { event_type: 'get_user_conversations_v2', event_payload: eventPayload },
+      });
+    } else {
+      httpResponse = await this._send({
+        action: 'sendMessage',
+        event: { event_type: 'get_user_conversations', event_payload: { userId } },
+      });
     }
+
+    const payload = httpResponse?.event?.event_payload || httpResponse;
+    const responseConversations = payload?.conversations || [];
+    const responsePagination = payload?.pagination;
+
+    for (const conv of responseConversations) {
+      const { conversation_id, metadata, apiKey } = conv;
+      if (!conversation_id) continue;
+
+      // Reuse the cached instance when we already have one, so listeners registered by
+      // the caller are not silently dropped and duplicate handles are not created.
+      const existing = this.conversations.get(conversation_id);
+      if (existing) {
+        existing.restartListeners();
+        conversations.push(existing);
+        continue;
+      }
+
+      const conversation = withSocketGuard(
+        new Conversation(conversation_id, this.socket, metadata, apiKey || this.apiKey, this.mode, this.socketId, this)
+      );
+      this.conversations.set(conversation_id, conversation);
+      conversations.push(conversation);
+    }
+
+    if (responsePagination) {
+      paginationData = responsePagination;
+    }
+
+    return { conversations, pagination: paginationData };
   }
 
   /**
    * Deletes all conversations for a specific user using HTTP request with direct response.
-   * @param userId - The unique identifier for the user whose conversations will be deleted.
-   * @param options - Delete options object with softDelete property.
-   * @param options.softDelete - Whether to perform a soft delete (true) or hard delete (false). Defaults to true.
-   * @returns A promise that resolves when all conversations are successfully deleted.
    */
   public async deleteUserConversations(userId: string, options: { softDelete?: boolean } = {}): Promise<void> {
     if (!userId) {
@@ -531,28 +633,26 @@ export class CaptivateChatAPI {
 
     const { softDelete = true } = options;
 
-    const deleteRequest = {
+    const response = await this._send({
       action: 'sendMessage',
       event: {
         event_type: 'delete_user_conversations',
-        event_payload: { 
-          userId: userId,
-          softdelete: softDelete
-        },
+        event_payload: { userId, softdelete: softDelete },
       },
-    };
+    });
 
-    // Send the delete request via HTTP and get response
-    const response = await this._send(deleteRequest);
-    
-    // The HTTP response confirms the conversations were deleted successfully
+    // Local handles for those conversations are now dead — drop them.
+    for (const id of [...this.conversations.keys()]) {
+      this.releaseConversation(id);
+    }
+
     captivateLogger.log(`User conversations ${softDelete ? 'soft' : 'hard'} delete confirmed via HTTP response:`, response);
   }
 
   /**
    * Gets the WebSocket instance for real-time communication.
    */
-  public getSocket() {
+  public getSocket(): WebSocket | null {
     return this.socket;
   }
 
@@ -565,48 +665,59 @@ export class CaptivateChatAPI {
 
   /**
    * Checks if the WebSocket connection is active and open for real-time communication.
-   * @returns True if the socket is open, false otherwise.
    */
   public isSocketActive(): boolean {
     return !!this.socket && this.socket.readyState === WebSocketImpl.OPEN;
   }
 
   /**
-   * Attempts to reconnect to the WebSocket server for real-time communication.
-   * @returns A promise that resolves when reconnection is successful.
+   * Attempts to reconnect to the WebSocket server, then re-binds every cached
+   * conversation to the new socket.
    */
   public async reconnect(): Promise<void> {
+    if (this.isDisposed) {
+      throw new Error('This CaptivateChatAPI instance has been disposed. Create a new one.');
+    }
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       throw new Error(`Max reconnection attempts (${this.maxReconnectAttempts}) reached`);
     }
     this.reconnectAttempts++;
-    // Attempting to reconnect
+
     try {
       await this.connect();
       this.reconnectAttempts = 0; // Reset on successful connection
-      // Reconnection successful
+
+      // connect() creates a brand-new WebSocket, so every cached conversation is still
+      // listening on the old one. Move them across, otherwise inbound messages stop
+      // arriving even though the connection looks healthy.
+      for (const conversation of this.conversations.values()) {
+        try {
+          conversation.restartListeners();
+        } catch (err) {
+          captivateLogger.error('Failed to re-bind conversation after reconnect:', err);
+        }
+      }
+      captivateLogger.log('Reconnected; re-bound', this.conversations.size, 'conversation(s).');
     } catch (error) {
-      console.error(`Reconnection attempt ${this.reconnectAttempts} failed:`, error);
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
-        // Wait before next attempt
+      captivateLogger.error(`Reconnection attempt ${this.reconnectAttempts} failed:`, error);
+      if (this.reconnectAttempts < this.maxReconnectAttempts && !this.isDisposed) {
         await new Promise(resolve => setTimeout(resolve, this.reconnectDelay));
         return this.reconnect();
-      } else {
-        throw error;
       }
+      throw error;
     }
   }
 
   /**
    * Static factory method to create and connect a CaptivateChatAPI instance.
-   * Enforces singleton pattern: constructor returns existing instance if one exists.
-   * The returned instance is automatically guarded: all method calls will check socket state and auto-reconnect if needed.
-   * @param apiKey - The API key for authentication.
-   * @param mode - The mode of operation ('prod' or 'dev').
-   * @returns A promise that resolves to a connected and guarded CaptivateChatAPI instance.
    */
-  static async create(apiKey: string, mode: 'prod' | 'dev' = 'prod'): Promise<CaptivateChatAPI> {
-    const api = new CaptivateChatAPI(apiKey, mode); // Constructor handles singleton
+  static async create(
+    apiKey: string,
+    mode: 'prod' | 'dev' = 'prod',
+    options: CaptivateChatAPIOptions = {}
+  ): Promise<CaptivateChatAPI> {
+    const api = new CaptivateChatAPI(apiKey, mode, options); // Constructor handles singleton
+    if (Object.keys(options).length > 0) api.configure(options);
 
     // Only connect if socket is not already active
     if (!api.isSocketActive()) {
@@ -616,22 +727,10 @@ export class CaptivateChatAPI {
     return withSocketGuard(api);
   }
 
-  /**
-   * Gets an existing instance for the given API key and mode, if one exists.
-   * @param apiKey - The API key.
-   * @param mode - The mode ('prod' or 'dev').
-   * @returns The existing instance, or undefined if none exists.
-   */
   static getInstance(apiKey: string, mode: 'prod' | 'dev' = 'prod'): CaptivateChatAPI | undefined {
     return this.instances.get(this.getInstanceKey(apiKey, mode));
   }
 
-  /**
-   * Checks if an instance exists for the given API key and mode.
-   * @param apiKey - The API key.
-   * @param mode - The mode ('prod' or 'dev').
-   * @returns True if an instance exists, false otherwise.
-   */
   static hasInstance(apiKey: string, mode: 'prod' | 'dev' = 'prod'): boolean {
     return this.instances.has(this.getInstanceKey(apiKey, mode));
   }
@@ -642,22 +741,21 @@ export class CaptivateChatAPI {
    */
   public dispose(): void {
     const key = CaptivateChatAPI.getInstanceKey(this.apiKey, this.mode);
+    this.isDisposed = true;
 
-    // Close WebSocket connection
-    if (this.socket) {
-      this.socket.close(1000, 'Instance disposed');
-      this.socket = null;
+    for (const conversation of this.conversations.values()) {
+      try {
+        conversation.detachListeners();
+      } catch (_) { /* ignore */ }
     }
-
-    // Clear conversations
     this.conversations.clear();
 
-    // Remove from registry
+    // Closes with code 1000, which the close handler treats as intentional.
+    this.teardownSocket('Instance disposed');
+    this.socketId = null;
+
     CaptivateChatAPI.instances.delete(key);
 
     captivateLogger.log(`Disposed CaptivateChatAPI instance for ${key}`);
   }
-
 }
-
-

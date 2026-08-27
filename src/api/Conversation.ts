@@ -9,6 +9,20 @@ interface Action {
 }
 
 /**
+ * Live view of the owning API's connection.
+ *
+ * A Conversation used to capture `socket` and `socketId` at construction time. Both are
+ * replaced whenever CaptivateChatAPI reconnects, so every Conversation built before a
+ * reconnect kept sending HTTP requests stamped with a dead socket_id — the server then
+ * called PostToConnection on a closed connection and returned 410 Gone. Reading them
+ * through a provider means a Conversation is always bound to the current connection.
+ */
+export interface ConversationSocketProvider {
+  getSocket(): WebSocket | null;
+  getSocketId(): string | null;
+}
+
+/**
  * Represents a conversation session, handling HTTP communication for sending and WebSocket for receiving.
  * Client-side sending uses HTTP, while server-side real-time communication uses WebSocket listeners.
  */
@@ -18,45 +32,71 @@ export class Conversation {
   private metadata: object;
   public fileManager: any;
   /**
-   * WebSocket connection for receiving real-time messages from server.
+   * Fallback WebSocket, used only when no provider was supplied (legacy callers).
    */
-  private socket: WebSocket;
+  private socket: WebSocket | null;
+  /**
+   * Live connection view. Preferred over the captured socket/socketId above.
+   */
+  private provider?: ConversationSocketProvider;
   /**
    * Event listeners for real-time WebSocket communication.
    */
   private listeners: Map<string, Function[]>;
   private mode: 'prod' | 'dev';
   /**
-   * Socket ID for HTTP requests.
+   * Fallback socket ID, used only when no provider was supplied (legacy callers).
    */
   private socketId: string | null = null;
+  /**
+   * Bound message handler, kept so it can be added and removed by identity.
+   */
+  private readonly boundHandleMessage: (event: MessageEvent) => void;
+  /**
+   * The socket this instance currently has a listener on, so re-attaching is idempotent.
+   */
+  private attachedSocket: WebSocket | null = null;
   /**
    * Default TTL (days) for file uploads in this conversation. Set via setTimeToLive(); used when uploading files.
    */
   private defaultTtlDays: TtlDays | undefined;
+
   /**
    * Initializes a new Conversation instance.
-   * @param conversationId - The unique identifier of the conversation.
-   * @param socket - WebSocket instance for receiving real-time messages.
+   * @param conversation_id - The unique identifier of the conversation.
+   * @param socket - WebSocket instance. Ignored when `provider` is supplied.
    * @param metadata - Optional metadata for the conversation.
    * @param apiKey - API key for HTTP communication (required).
    * @param mode - The mode of operation ('prod' or 'dev').
-   * @param socketId - Socket ID for HTTP requests.
+   * @param socketId - Socket ID. Ignored when `provider` is supplied.
+   * @param provider - Live view of the owning API's socket and socketId. Strongly preferred:
+   *                   without it this instance goes stale as soon as the API reconnects.
    */
-  constructor(conversation_id: string, socket: WebSocket, metadata?: object, apiKey?: string, mode?: 'prod' | 'dev', socketId?: string | null) {
+  constructor(
+    conversation_id: string,
+    socket: WebSocket | null,
+    metadata?: object,
+    apiKey?: string,
+    mode?: 'prod' | 'dev',
+    socketId?: string | null,
+    provider?: ConversationSocketProvider
+  ) {
     this.apiKey = apiKey || '';
     this.conversationId = conversation_id;
-    this.socket = socket;
+    this.socket = socket ?? null;
+    this.provider = provider;
     this.metadata = metadata || {};
     this.listeners = new Map();
     this.mode = mode || 'prod'; // Default to 'prod' if not specified
     this.socketId = socketId || null;
     this.defaultTtlDays = undefined;
+    this.boundHandleMessage = this.handleMessage.bind(this);
 
-    // WebSocket listeners for real-time communication from server
-    if (this.socket) {
-      this.socket.onmessage = this.handleMessage.bind(this);
-    }
+    // Attach via addEventListener, never `socket.onmessage = ...`.
+    // The old code assigned onmessage, which meant each new Conversation silently
+    // destroyed the previous one's handler AND the API's own socket_connected handler —
+    // so after the first Conversation was built the API could never refresh socketId.
+    this.attachSocketListener();
 
     if (!this.apiKey) {
       console.warn('API key is required for HTTP communication. Some features may not work properly.');
@@ -131,6 +171,20 @@ export class Conversation {
   }
 
   /**
+   * The socket this conversation should currently be listening on.
+   */
+  private get liveSocket(): WebSocket | null {
+    return this.provider ? this.provider.getSocket() : this.socket;
+  }
+
+  /**
+   * The socket ID that outbound HTTP requests should carry.
+   */
+  private get liveSocketId(): string | null {
+    return this.provider ? this.provider.getSocketId() : this.socketId;
+  }
+
+  /**
    * Sets the default time-to-live (TTL) for file uploads in this conversation and stores it in metadata.
    * When files are uploaded via conversation.fileManager.create(), this value is sent as ttlDays (1, 7, 30, or 90).
    * Does not call any path-TTL API; the value is applied only at upload time.
@@ -149,21 +203,66 @@ export class Conversation {
    * @param event - The WebSocket message event.
    */
   private handleMessage(event: MessageEvent) {
-    
-    const message = JSON.parse(event.data);
-    const eventType = message.event?.event_type;
-    if (eventType && this.listeners.has(eventType)) {
-      const payload = message.event.event_payload;
-      this.listeners.get(eventType)?.forEach((callback) => callback(payload));
+    let message: any;
+    try {
+      message = JSON.parse(String(event.data));
+    } catch (err) {
+      // Not JSON, or a frame meant for something else — ignore rather than throw
+      // out of a WebSocket event handler.
+      return;
+    }
+
+    const eventType = message?.event?.event_type;
+    if (!eventType || !this.listeners.has(eventType)) return;
+
+    const payload = message.event.event_payload;
+    // Copy before iterating: a callback may register or remove listeners.
+    const callbacks = [...(this.listeners.get(eventType) ?? [])];
+    for (const callback of callbacks) {
+      try {
+        callback(payload);
+      } catch (err) {
+        captivateLogger.error(`Listener for "${eventType}" threw:`, err);
+      }
     }
   }
 
   /**
-   * Restarts WebSocket listeners for real-time communication.
+   * Attaches the message handler to the current socket, moving it if the socket changed.
+   * Idempotent: calling this repeatedly never stacks duplicate handlers.
    */
-  public restartListeners() {
-    // Listen to WebSocket messages and handle events.
-    this.socket.onmessage = this.handleMessage.bind(this);
+  private attachSocketListener(): void {
+    const socket = this.liveSocket;
+    if (!socket) return;
+    if (this.attachedSocket === socket) return;
+
+    if (this.attachedSocket) {
+      try {
+        this.attachedSocket.removeEventListener('message', this.boundHandleMessage);
+      } catch (_) { /* socket already gone */ }
+    }
+
+    socket.addEventListener('message', this.boundHandleMessage);
+    this.attachedSocket = socket;
+  }
+
+  /**
+   * Re-binds this conversation to the current socket. Call after a reconnect.
+   * Safe to call any number of times.
+   */
+  public restartListeners(): void {
+    this.attachSocketListener();
+  }
+
+  /**
+   * Detaches this conversation's socket listener. Call when discarding the instance.
+   */
+  public detachListeners(): void {
+    if (!this.attachedSocket) return;
+    try {
+      this.attachedSocket.removeEventListener('message', this.boundHandleMessage);
+    } catch (_) { /* socket already gone */ }
+    this.attachedSocket = null;
   }
 
   /**
@@ -172,7 +271,7 @@ export class Conversation {
    * @param callback - The function to invoke when the event occurs.
    */
   private addListener(eventType: string, callback: Function): void {
-    this.restartListeners();
+    this.attachSocketListener();
     if (!this.listeners.has(eventType)) {
       this.listeners.set(eventType, []);
     }
@@ -252,6 +351,24 @@ export class Conversation {
   }
 
   /**
+   * Removes a previously registered listener.
+   * @param eventType - The type of event.
+   * @param callback - The callback function to remove.
+   */
+  public off(eventType: string, callback: Function): void {
+    const callbacks = this.listeners.get(eventType);
+    if (!callbacks) return;
+    this.listeners.set(eventType, callbacks.filter((cb) => cb !== callback));
+  }
+
+  /**
+   * Removes every listener registered on this conversation.
+   */
+  public removeAllListeners(): void {
+    this.listeners.clear();
+  }
+
+  /**
    * Sends a message to the conversation.
    * @param content - The message content to send.
    * @returns A promise that resolves when the message is sent.
@@ -269,8 +386,6 @@ export class Conversation {
       content,
     });
   }
-
-  
 
   /**
   * Sets metadata for the conversation and uses HTTP response for confirmation.
@@ -296,7 +411,7 @@ export class Conversation {
 
     // Send the metadata update request via HTTP and get response
     const response = await this.sendPayloadViaHttp(metadataRequest);
-    
+
     // The HTTP response confirms the metadata was set successfully
     captivateLogger.log('Metadata update confirmed via HTTP response:', response);
   }
@@ -327,7 +442,7 @@ export class Conversation {
       data,
       conversation_id: this.conversationId,
     });
-    
+
     // The HTTP response confirms the action was sent successfully
     captivateLogger.log('Action sent confirmed via HTTP response:', response);
   }
@@ -349,7 +464,7 @@ export class Conversation {
       }
     });
     if (!response.ok) {
-      throw new Error(`Failed to fetch transcript: ${response.status} ${response.statusText}`);
+      throw this.buildHttpError('Failed to fetch transcript', response, await response.text().catch(() => ''));
     }
     const data = await response.json();
 
@@ -364,8 +479,9 @@ export class Conversation {
    * @returns A promise that resolves to the transcript with refreshed file URLs.
    */
   private async refreshExpiredFileUrls(transcript: any[]): Promise<object[]> {
+    if (!Array.isArray(transcript)) return [];
     const now = Math.floor(Date.now() / 1000);
-    
+
     // Process all messages in parallel
     const refreshedMessages = await Promise.all(
       transcript.map(async (message) => {
@@ -382,7 +498,7 @@ export class Conversation {
 
             try {
               const timeUntilExpiry = file.storage.expiresIn - now;
-              
+
               if (timeUntilExpiry < 300) { // Less than 5 minutes
                 // Refresh expired URL
                 const refreshedUrl = await CaptivateChatFileManager.getSecureFileUrl(
@@ -410,7 +526,7 @@ export class Conversation {
         );
 
         // Check if any files were refreshed
-        const anyFileRefreshed = refreshedFiles.some((file, index) => 
+        const anyFileRefreshed = refreshedFiles.some((file, index) =>
           file !== message.files[index]
         );
 
@@ -458,11 +574,12 @@ export class Conversation {
 
     // Send the metadata request via HTTP and get response
     const response = await this.sendPayloadViaHttp(metadataRequest);
-    
+
     // The HTTP response contains the metadata
     captivateLogger.log('Metadata retrieved via HTTP response:', response);
     return response.metadata || response;
   }
+
   /**
    * Deletes this conversation using HTTP request with direct response.
    * @param options - Delete options object with softDelete property.
@@ -471,12 +588,12 @@ export class Conversation {
    */
   public async delete(options: { softDelete?: boolean } = {}): Promise<void> {
     const { softDelete = true } = options;
-    
+
     const deleteRequest = {
       action: 'sendMessage',
       event: {
         event_type: 'delete_conversation',
-        event_payload: { 
+        event_payload: {
           conversation_id: this.conversationId,
           softdelete: softDelete
         },
@@ -485,12 +602,10 @@ export class Conversation {
 
     // Send the delete request via HTTP and get response
     const response = await this.sendPayloadViaHttp(deleteRequest);
-    
+
     // The HTTP response confirms the conversation was deleted successfully
     captivateLogger.log(`Conversation ${softDelete ? 'soft' : 'hard'} delete confirmed via HTTP response:`, response);
   }
-
-
 
   /**
    * Edits a message in the conversation using HTTP request with direct response.
@@ -520,7 +635,7 @@ export class Conversation {
 
     // Send the edit request via HTTP and get response
     const response = await this.sendPayloadViaHttp(editRequest);
-    
+
     // The HTTP response confirms the message was edited successfully
     captivateLogger.log('Message edit confirmed via HTTP response:', response);
   }
@@ -544,6 +659,21 @@ export class Conversation {
   }
 
   /**
+   * Builds an Error carrying the HTTP status, so callers can distinguish 401 from 429
+   * from 500 instead of string-matching a message.
+   */
+  private buildHttpError(prefix: string, response: Response, body: string): Error {
+    const detail = body ? `: ${body.slice(0, 300)}` : '';
+    const error = new Error(`${prefix}: ${response.status} ${response.statusText}${detail}`) as Error & {
+      status?: number;
+      body?: string;
+    };
+    error.status = response.status;
+    error.body = body;
+    return error;
+  }
+
+  /**
    * Sends a payload via HTTP API (primary communication method).
    * @param message - The message to send via HTTP.
    * @returns A promise that resolves to the response data.
@@ -555,17 +685,26 @@ export class Conversation {
 
     const url = `${this.getBaseUrl()}/api/custom-channel/sockets/message`;
 
-    // Add socket_id to the event if available
+    // Read socket_id LIVE. Capturing it at construction was the cause of 410 Gone:
+    // after a reconnect the captured id pointed at a closed API Gateway connection.
+    const socketId = this.liveSocketId;
+    if (!socketId) {
+      captivateLogger.warn(
+        `No socket_id available for conversation ${this.conversationId}; the server may be unable to deliver the reply.`
+      );
+    }
+
     const messageWithSocketId = {
       ...message,
       event: {
         ...(message as any).event,
-        socket_id: this.socketId
+        socket_id: socketId
       }
     };
 
+    let response: Response;
     try {
-      const response = await fetch(url, {
+      response = await fetch(url, {
         method: 'POST',
         headers: {
           'x-api-key': this.apiKey,
@@ -574,49 +713,39 @@ export class Conversation {
         },
         body: JSON.stringify(messageWithSocketId)
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP request failed: ${response.status} ${response.statusText}`);
-      }
-
-      // Check if response is JSON or plain text
-      const contentType = response.headers.get('content-type');
-      let responseData;
-      
-      if (contentType && contentType.includes('application/json')) {
-        responseData = await response.json();
-      } else {
-        // Handle plain text response (like "OK")
-        const textResponse = await response.text();
-        captivateLogger.log('Server returned plain text:', textResponse);
-        // Return a mock response structure for plain text responses
-        responseData = {
-          status: 'success',
-          message: textResponse
-        };
-      }
-      
-      captivateLogger.log('Payload received from server via HTTP:', responseData);
-      return responseData;
     } catch (error) {
+      // Network-level failure. Note that a rate-limited response without CORS headers
+      // also lands here as an opaque TypeError, with no status available to JS.
       console.error('HTTP request failed:', error);
-      throw new Error(`Failed to send payload via HTTP: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  /**
-   * Removes a specific event listener.
-   * @param eventType - The type of event.
-   * @param callback - The callback function to remove.
-   */
-  private removeListener(eventType: string, callback: Function): void {
-    const callbacks = this.listeners.get(eventType);
-    if (callbacks) {
-      this.listeners.set(
-        eventType,
-        callbacks.filter((cb) => cb !== callback)
+      throw new Error(
+        `Failed to send payload via HTTP: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw this.buildHttpError('HTTP request failed', response, body);
+    }
+
+    // Check if response is JSON or plain text
+    const contentType = response.headers.get('content-type');
+    let responseData;
+
+    if (contentType && contentType.includes('application/json')) {
+      responseData = await response.json();
+    } else {
+      // Handle plain text response (like "OK")
+      const textResponse = await response.text();
+      captivateLogger.log('Server returned plain text:', textResponse);
+      // Return a mock response structure for plain text responses
+      responseData = {
+        status: 'success',
+        message: textResponse
+      };
+    }
+
+    captivateLogger.log('Payload received from server via HTTP:', responseData);
+    return responseData;
   }
 
   /**
@@ -636,8 +765,4 @@ export class Conversation {
   public getConversationId(): string {
     return this.conversationId;
   }
-
-
-
-
 }

@@ -1,4 +1,4 @@
-import { CaptivateChatAPI } from './CaptivateChatAPI';
+import { CaptivateChatAPI, CaptivateChatAPIOptions } from './CaptivateChatAPI';
 import { Conversation } from './Conversation';
 
 type ApiKey = string;
@@ -6,13 +6,13 @@ type ApiKey = string;
 export class CaptivateChatManager {
   private apiInstances: { [apiKey: string]: CaptivateChatAPI } = {};
 
-  constructor(apiKeys: ApiKey[], mode: 'prod' | 'dev' = 'prod') {
+  constructor(apiKeys: ApiKey[], mode: 'prod' | 'dev' = 'prod', options: CaptivateChatAPIOptions = {}) {
     // Deduplicate API keys to prevent duplicate instances
     const uniqueKeys = [...new Set(apiKeys)];
 
     for (const key of uniqueKeys) {
       // Constructor now returns singleton automatically
-      this.apiInstances[key] = new CaptivateChatAPI(key, mode);
+      this.apiInstances[key] = new CaptivateChatAPI(key, mode, options);
     }
   }
 
@@ -20,19 +20,18 @@ export class CaptivateChatManager {
    * Static factory method to create and connect all CaptivateChatAPI instances.
    * All apiInstances are created using CaptivateChatAPI.create, so they are guarded and connected.
    * Automatically deduplicates API keys to prevent duplicate instances.
-   * @param apiKeys - Array of API keys to create instances for.
-   * @param mode - The mode of operation ('prod' or 'dev').
-   * @returns A promise that resolves to a connected CaptivateChatManager instance with guarded APIs.
    */
-  static async create(apiKeys: ApiKey[], mode: 'prod' | 'dev' = 'prod'): Promise<CaptivateChatManager> {
-    // Deduplicate API keys to prevent duplicate instances
+  static async create(
+    apiKeys: ApiKey[],
+    mode: 'prod' | 'dev' = 'prod',
+    options: CaptivateChatAPIOptions = {}
+  ): Promise<CaptivateChatManager> {
     const uniqueKeys = [...new Set(apiKeys)];
 
     const manager = Object.create(CaptivateChatManager.prototype) as CaptivateChatManager;
     manager.apiInstances = {};
     for (const key of uniqueKeys) {
-      // CaptivateChatAPI.create() now returns singleton automatically
-      manager.apiInstances[key] = await CaptivateChatAPI.create(key, mode);
+      manager.apiInstances[key] = await CaptivateChatAPI.create(key, mode, options);
     }
     return manager;
   }
@@ -55,18 +54,22 @@ export class CaptivateChatManager {
     // Use the first API instance to make the merged request
     const apiKeys = options.apiKeys || Object.keys(this.apiInstances);
     const api = this.apiInstances[apiKeys[0]];
-    // Always include apiKeys in the options passed to getUserConversations
+    if (!api) throw new Error('No CaptivateChatAPI instance available for the requested API keys');
+
     const { apiKeys: _apiKeys, ...rest } = options;
     const result = await api.getUserConversations({ ...rest, apiKeys });
 
-    // Build Conversation objects with correct sockets
-    const conversations = result.conversations.map((conv: any) => {
-      const apiKey = conv.apiKey;
-      const apiInstance = this.apiInstances[apiKey];
-      if (!apiInstance) throw new Error(`No CaptivateChatAPI instance for apiKey: ${apiKey}`);
-      if (!apiInstance.getSocket()) throw new Error(`WebSocket not initialized for apiKey: ${apiKey}`);
-      // Re-create the Conversation with the correct socket if needed
-      return new Conversation(conv.conversationId, apiInstance.getSocket()!, conv.metadata, apiKey);
+    // The previous implementation rebuilt every result with
+    //   new Conversation(id, socket, metadata, apiKey)
+    // dropping `mode` and `socketId`. That silently forced mode back to 'prod' (wrong
+    // base URL on dev) and sent socket_id: null, so the server had nowhere to deliver
+    // replies. Ask each owning instance for the conversation instead — it builds them
+    // with a live socket provider and reuses cached handles.
+    const conversations = result.conversations.map((conv: Conversation) => {
+      const ownerKey = conv.apiKey || apiKeys[0];
+      const apiInstance = this.apiInstances[ownerKey];
+      if (!apiInstance) throw new Error(`No CaptivateChatAPI instance for apiKey: ${ownerKey}`);
+      return apiInstance.getConversation(conv.getConversationId());
     });
 
     return {
@@ -82,8 +85,6 @@ export class CaptivateChatManager {
 
   /**
    * Disposes of a single API instance by its API key.
-   * Closes the WebSocket connection and removes the instance from the manager.
-   * @param apiKey - The API key of the instance to dispose.
    */
   dispose(apiKey: string): void {
     const api = this.apiInstances[apiKey];
@@ -95,7 +96,6 @@ export class CaptivateChatManager {
 
   /**
    * Disposes of all API instances managed by this manager.
-   * Closes all WebSocket connections and clears the instances registry.
    */
   disposeAll(): void {
     for (const api of Object.values(this.apiInstances)) {
@@ -103,4 +103,4 @@ export class CaptivateChatManager {
     }
     this.apiInstances = {};
   }
-} 
+}
