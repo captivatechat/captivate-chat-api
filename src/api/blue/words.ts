@@ -39,6 +39,8 @@ export const WORDS = {
   dayOfAnswers: 'This chat has answered all it can for today. Please try again tomorrow.',
   /** 429 on an upload past the key's day of files. */
   dayOfFiles: "This chat can't take more files today. You can still type your question.",
+  /** 429 on a delete past the server key's day of deletes (first-channels-server-key-spec §3.3). */
+  deletesDay: 'No more conversations can be deleted today. Please try again tomorrow.',
   /** 429 `too_many_empty` on a start (gaps G7: apps own choice 8's words). */
   tooManyNew: 'Too many new conversations at once. Send a message in one first.',
   /** Any other 429. */
@@ -61,6 +63,10 @@ export const SETUP_WORDS = {
   serverKeyInApp:
     'Server keys work only on your own server, never in an app or a web page. Make a key for your app on the Channels page, and if this key was ever in an app or a page, get a new one there.',
   serverKeyNotWhole: "This server key isn't whole. Copy it again from the Channels page.",
+  /** A user's ID outside X-Blue-User's form, in server mode. */
+  serverUserForm: "On a server, each user's ID must be 1 to 128 visible characters, without spaces.",
+  /** A server-mode call naming no user: getConversation(id). */
+  nameTheUser: 'On a server, name the user on every call: getConversation(id, userId).',
   noRandomSource: 'Blue mode needs a secure random source here. Add one, or pass options.randomValues.',
   userSecretForm: 'options.userSecret must give a secret of 43 to 128 letters, digits, - or _ (base64url).',
   /** A handle from getConversation(id) whose user nothing on this device knows: each call refuses. */
@@ -87,6 +93,13 @@ export const CONSOLE_WORDS = {
     'The key was refused. Check it is a key for your app, turned on, and that this address is listed on it.',
   noWebAddress:
     "This app's pages aren't on a web address, so the key can't check where they are. Use the library from the app's main process, or register the app's own scheme and list its address on the key.",
+  // first-channels-server-key-spec §3.3: server mode's, warned once.
+  serverKeepsNothing: "Server mode keeps nothing on this machine, so storage and userSecret aren't used.",
+  serverNoUserToken: "Blue takes the customer your server names from user_id, so user_token isn't sent.",
+  /** A server key's 403 `server_only`, in place of keyRefused. */
+  serverOnly: 'This server key was refused because the request came from a web page. Use it only on your own server.',
+  /** Any other 401 or 403 in server mode, in place of keyRefused. */
+  serverKeyRefused: 'The server key was refused. Check it is the newest key from the Channels page and that it is turned on.',
   // dotnet own choice 85's words, warned once.
   listFilters: "Blue mode lists a user's conversations newest first, without filters or searches, so those were left out.",
   privateMetadata: "Blue mode doesn't keep private metadata, so it wasn't sent.",
@@ -99,7 +112,7 @@ export const CONSOLE_WORDS = {
 } as const;
 
 /** What a call was, since the same status reads differently on a send, a press or an upload. */
-export type BlueCall = 'start' | 'send' | 'press' | 'upload' | 'metadata' | 'conversation';
+export type BlueCall = 'start' | 'send' | 'press' | 'upload' | 'metadata' | 'conversation' | 'delete';
 
 /** Past this many seconds a 429's Retry-After is a day's cap, as Blue's own window reads it. */
 const DAY_CAP_SECONDS = 600;
@@ -134,6 +147,7 @@ export function refusalWords(refusal: {
     if (call === 'start' && code === 'too_many_empty') return WORDS.tooManyNew;
     if (dayCap && (call === 'send' || call === 'start')) return WORDS.dayOfAnswers;
     if (dayCap && call === 'upload') return WORDS.dayOfFiles;
+    if (dayCap && call === 'delete') return WORDS.deletesDay;
     return WORDS.tooMany;
   }
   if (status === 400 && code === 'too_many_files') return WORDS.tooManyFiles;

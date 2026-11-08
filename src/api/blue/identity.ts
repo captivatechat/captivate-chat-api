@@ -22,17 +22,20 @@ type WarnOnce = (name: string, words: string) => void;
  * The customer a call's metadata names, or undefined when it names no `user_id` (nothing to
  * change). `user_id: null` is a sign-out; an ID outside USER_ID_FORM, or a token that isn't a
  * non-empty string of at most 2,048 characters, is no one, with a warning, since the backend
- * would drop such a user whole.
+ * would drop such a user whole. In server mode a token is never sent (first-channels-server-key-spec
+ * §2.6, K-D2 (c)): the server's word names the customer, so one given is left out, with one warning.
  */
-export function customerOf(metadata: unknown, warnOnce: WarnOnce): BlueUser | undefined {
-  if (!metadata || typeof metadata !== 'object' || !('user_id' in metadata)) return undefined;
+export function customerOf(metadata: unknown, warnOnce: WarnOnce, serverMode = false): BlueUser | undefined {
+  if (!metadata || typeof metadata !== 'object') return undefined;
   const { user_id: id, user_token: token } = metadata as { user_id?: unknown; user_token?: unknown };
+  if (serverMode && token !== undefined && token !== null) warnOnce('serverNoUserToken', CONSOLE_WORDS.serverNoUserToken);
+  if (!('user_id' in metadata)) return undefined;
   if (id === null) return { id: null };
   if (typeof id !== 'string' || !USER_ID_FORM.test(id)) {
     warnOnce('userId', CONSOLE_WORDS.userId);
     return { id: null };
   }
-  if (token === undefined) return { id };
+  if (token === undefined || serverMode) return { id };
   if (typeof token !== 'string' || !token || token.length > TOKEN_MAX_CHARS) {
     warnOnce('userToken', CONSOLE_WORDS.userToken);
     return { id: null };

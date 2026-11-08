@@ -1,7 +1,7 @@
 // Import the Conversation class
 import { BlueHandle, Conversation, ConversationSocketProvider, blueStateOf, takeBlueCopy } from './Conversation';
-import { blueKeyKind } from './blue/keys';
-import { BlueUsers } from './blue/secrets';
+import { SERVER_USER_FORM, blueKeyKind, isBlueKey, keyIdOf, serverModeRefused } from './blue/keys';
+import { BlueUsers, base64url, sha256, utf8Bytes } from './blue/secrets';
 import { CorePagination, ListedConversation, copyOfListed, isRecord, keptPart, listQuery, paginationOf, tooBig } from './blue/shapes';
 import { Clock } from './blue/stream';
 import { BlueOptions, BlueTransport, blueError } from './blue/transport';
@@ -95,6 +95,16 @@ function withSocketGuard<T extends object>(instance: T): T {
 }
 
 /**
+ * Server mode's user for a call: the ID as given, checked against X-Blue-User's form before
+ * anything is sent (first-channels-server-key-spec §2.2, §3.3). A function, not a method, since
+ * withSocketGuard would make a method async.
+ */
+function serverUser(userId: unknown): string {
+  if (typeof userId !== 'string' || !SERVER_USER_FORM.test(userId)) throw new Error(SETUP_WORDS.serverUserForm);
+  return userId;
+}
+
+/**
  * CaptivateChatAPI class for managing conversations through HTTP connections for sending and WebSocket for receiving.
  * Client-side sending uses HTTP, while server-side real-time communication uses WebSocket listeners.
  */
@@ -147,10 +157,18 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
   private static instances: Map<string, CaptivateChatAPI> = new Map();
 
   /**
-   * Generates a unique instance key for the registry.
+   * Generates a unique instance key for the registry. A Blue key's is a sha256 of key and mode,
+   * so a server key's secret never sits in the registry (first-channels-server-key-spec §3.1);
+   * core's keys keep today's, which Engage reads.
    */
   private static getInstanceKey(apiKey: string, mode: 'prod' | 'dev'): string {
+    if (isBlueKey(apiKey)) return `blue:${base64url(sha256(utf8Bytes(`${apiKey}\n${mode}`)))}`;
     return `${apiKey}-${mode}`;
+  }
+
+  /** How the registry's log lines name an instance: a Blue key by its id alone, never its secret. */
+  private static nameOf(apiKey: string, mode: 'prod' | 'dev'): string {
+    return isBlueKey(apiKey) ? `${keyIdOf(apiKey)}-${mode}` : CaptivateChatAPI.getInstanceKey(apiKey, mode);
   }
 
   private apiKey!: string;
@@ -200,7 +218,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     // Check if instance already exists (singleton enforcement)
     const existingInstance = CaptivateChatAPI.instances.get(instanceKey);
     if (existingInstance) {
-      captivateLogger.log(`Reusing existing CaptivateChatAPI instance for ${instanceKey}`);
+      captivateLogger.log(`Reusing existing CaptivateChatAPI instance for ${CaptivateChatAPI.nameOf(apiKey, mode)}`);
       return existingInstance;
     }
 
@@ -214,8 +232,12 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     if (blueKind === 'website') throw new Error(SETUP_WORDS.websiteKey);
     if (blueKind === 'other') throw new Error(SETUP_WORDS.notForApps);
     if (blueKind === 'server-partial') throw new Error(SETUP_WORDS.serverKeyNotWhole);
-    // Server mode (a whole vbk_ key on the app's own server) is step K4's: until then it is refused.
-    if (blueKind === 'server') throw new Error('Server keys work only with a later version of this library.');
+    // A whole vbk_ key is server mode, refused where the library can tell it runs in an app, a page
+    // or a browser worker (first-channels-server-key-spec §3.1; K-D4 (a)).
+    if (blueKind === 'server') {
+      if (serverModeRefused()) throw new Error(SETUP_WORDS.serverKeyInApp);
+      this.blue = new BlueTransport(apiKey, mode, options, captivateLogger, true);
+    }
     if (blueKind === 'app') {
       this.blue = new BlueTransport(apiKey, mode, options, captivateLogger);
       this.blueUsers = new BlueUsers(this.blue);
@@ -233,7 +255,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     // Store in registry
     CaptivateChatAPI.instances.set(instanceKey, this);
 
-    captivateLogger.log(`Created new CaptivateChatAPI instance for ${instanceKey}`);
+    captivateLogger.log(`Created new CaptivateChatAPI instance for ${CaptivateChatAPI.nameOf(apiKey, mode)}`);
     captivateLogger.log('CaptivateChatAPI: Using HTTP for sending messages and WebSocket for receiving real-time updates.');
   }
 
@@ -549,8 +571,17 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
    *
    * Returns a Conversation rather than `Conversation | void`: the old union forced every
    * caller into a null check that could never be satisfied on the success path.
+   *
+   * @param userId - Server mode: the user the call is for, on every call. A fresh handle each
+   *                 time, never kept, so one user's request never acts as another's. Unused with
+   *                 other keys.
    */
-  public getConversation(conversationId: string): Conversation {
+  public getConversation(conversationId: string, userId?: string): Conversation {
+    if (this.blue?.serverMode) {
+      if (userId === undefined) throw new Error(SETUP_WORDS.nameTheUser);
+      const user = serverUser(userId);
+      return this.blueConversation(conversationId, { secret: user, userId: user });
+    }
     let conversation = this.conversations.get(conversationId);
 
     if (!conversation && this.blue) {
@@ -603,7 +634,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     const options = typeof userIdOrOptions === 'string'
       ? { userId: userIdOrOptions }
       : userIdOrOptions;
-    if (this.blue) return this.blueUserConversations(options);
+    if (this.blue) return this.blueUserConversations(isRecord(options) ? options : { userId: options as unknown as string });
 
     const { userId, filter = {}, search = {}, pagination = {}, apiKeys } = options;
     const conversations: Conversation[] = [];
@@ -676,6 +707,8 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     userId: string,
     options: { softDelete?: boolean } = {}
   ): Promise<void | { deleted: number; busy: number }> {
+    // Server mode checks the user's ID in its own words (first-channels-server-key-spec §3.3).
+    if (this.blue?.serverMode) return this.deleteBlueUserConversations(userId);
     if (!userId) {
       throw new Error('User ID must be provided.');
     }
@@ -751,16 +784,17 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     privateMetadata: object,
     options: { timeoutMs?: number }
   ): Promise<Conversation> {
-    if (typeof userId !== 'string' || !userId) throw new Error('User ID must be provided.');
     const transport = this.blue!;
-    const users = this.blueUsers!;
+    const server = transport.serverMode;
+    if (server) serverUser(userId);
+    else if (typeof userId !== 'string' || !userId) throw new Error('User ID must be provided.');
     const given = isRecord(metadata) ? { ...metadata } : {};
     const kept = keptPart(given);
     if (tooBig(kept)) throw new Error(METADATA_TOO_BIG);
     if (isRecord(privateMetadata) && Object.keys(privateMetadata).length > 0) {
       transport.warnOnce('privateMetadata', CONSOLE_WORDS.privateMetadata);
     }
-    const secret = (await users.secretFor(userId, true))!;
+    const secret = server ? userId : (await this.blueUsers!.secretFor(userId, true))!;
     const answer = await transport.request<{
       conversationId?: unknown;
       greeting?: { text?: unknown; starters?: unknown } | null;
@@ -784,8 +818,10 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
         : null;
     const details = Array.isArray(answer?.details) ? answer!.details.filter((d): d is string => typeof d === 'string') : [];
     const conversation = this.blueConversation(conversationId, { secret, userId, copy: { kept }, greeting, given, details });
+    // Server mode keeps no handle: it lasts the request that made it.
+    if (server) return conversation;
     this.conversations.set(conversationId, conversation);
-    await users.bind([conversationId], userId);
+    await this.blueUsers!.bind([conversationId], userId);
     return conversation;
   }
 
@@ -802,14 +838,16 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     apiKeys?: string[];
   }): Promise<{ conversations: Conversation[]; pagination: CorePagination }> {
     const { userId, filter, search, apiKeys } = options;
-    if (typeof userId !== 'string' || !userId) throw new Error('User ID must be provided.');
+    const server = this.blue!.serverMode;
+    if (server) serverUser(userId);
+    else if (typeof userId !== 'string' || !userId) throw new Error('User ID must be provided.');
     const asked = (value: unknown) => isRecord(value) && Object.keys(value).length > 0;
     if (asked(filter) || asked(search) || (Array.isArray(apiKeys) && apiKeys.length > 0)) {
       this.blue!.warnOnce('listFilters', CONSOLE_WORDS.listFilters);
     }
     const query = listQuery(options.pagination);
-    const users = this.blueUsers!;
-    const secret = await users.secretFor(userId, false);
+    const users = this.blueUsers;
+    const secret = server ? userId : await users!.secretFor(userId, false);
     if (secret === null) return { conversations: [], pagination: paginationOf(0, query.page, query.limit) };
     const answer = await this.blue!.request<{ total?: unknown; page?: unknown; pageSize?: unknown; items?: unknown }>(
       'GET',
@@ -821,6 +859,8 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     );
     const conversations = items.map((item) => {
       const copy = copyOfListed(item);
+      // Server mode: fresh handles carrying this user, kept nowhere.
+      if (server) return this.blueConversation(item.conversationId, { secret, userId, copy });
       const existing = this.conversations.get(item.conversationId);
       if (existing) {
         const state = blueStateOf(existing);
@@ -835,7 +875,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
       this.conversations.set(item.conversationId, conversation);
       return conversation;
     });
-    await users.bind(items.map((item) => item.conversationId), userId);
+    if (users) await users.bind(items.map((item) => item.conversationId), userId);
     const number = (value: unknown, fallback: number) => (typeof value === 'number' && Number.isFinite(value) ? value : fallback);
     return {
       conversations,
@@ -845,14 +885,14 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
 
   /** Blue's deleteUserConversations (§2.2; gaps G13): every one of the user's, those still answering left and counted in `busy`. */
   private async deleteBlueUserConversations(userId: string): Promise<{ deleted: number; busy: number }> {
-    const users = this.blueUsers!;
-    const secret = await users.secretFor(userId, false);
+    const users = this.blueUsers;
+    const secret = users ? await users.secretFor(userId, false) : serverUser(userId);
     if (secret === null) return { deleted: 0, busy: 0 };
     const done = await this.blue!.request<{ deleted?: unknown; busy?: unknown }>('DELETE', '/v1/chat/conversations', {
-      call: 'conversation',
+      call: 'delete',
       secret,
     });
-    const theirs = new Set(users.conversationsOf(userId));
+    const theirs = new Set(users?.conversationsOf(userId) ?? []);
     for (const [id, conversation] of [...this.conversations]) {
       if (theirs.has(id) || blueStateOf(conversation)?.userId === userId) this.releaseConversation(id);
     }
@@ -958,6 +998,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
    */
   public dispose(): void {
     const key = CaptivateChatAPI.getInstanceKey(this.apiKey, this.mode);
+    const name = CaptivateChatAPI.nameOf(this.apiKey, this.mode);
     this.isDisposed = true;
     // Ends every Blue call in flight; the answers themselves go on in the backend.
     this.blue?.dispose();
@@ -977,6 +1018,6 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
 
     CaptivateChatAPI.instances.delete(key);
 
-    captivateLogger.log(`Disposed CaptivateChatAPI instance for ${key}`);
+    captivateLogger.log(`Disposed CaptivateChatAPI instance for ${name}`);
   }
 }

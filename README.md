@@ -197,7 +197,8 @@ In Blue mode no socket is opened: `connect()` and `reconnect()` resolve at once,
 |---|---|
 | `vba_…`, a key for your app | Blue mode |
 | `vbw_…`, a website key | Refused: "Website keys work only in Blue's own chat window. Make a key for your app on the Channels page." |
-| `vbk_…`, a server key | For your own server, never an app or a page. A server key that isn't whole is refused: "This server key isn't whole. Copy it again from the Channels page." |
+| `vbk_…`, a whole server key | Server mode, on your own server alone: see [On your own server](#on-your-own-server). In an app, a web page or a browser worker it is refused: "Server keys work only on your own server, never in an app or a web page. Make a key for your app on the Channels page, and if this key was ever in an app or a page, get a new one there." |
+| `vbk_…` cut short | Refused: "This server key isn't whole. Copy it again from the Channels page." |
 | Any other `vb…_` key | Refused: "This key isn't for apps. Make a key for your app on the Channels page." |
 | Anything else | Captivate's gateway, as before |
 
@@ -325,6 +326,50 @@ Blue mode's errors carry words your app can show as they are, never the server's
 A key Blue refuses (`401` or `403`) shows "This app can't reach its assistant right now." to the user and writes once to the console: "The key was refused. Check it is a key for your app, turned on, and that this address is listed on it."
 
 A page that isn't on a web address (a `file:` page, or an Origin of `null`) gets one console warning, since the key can't check where it is: use the library from the app's main process, or register the app's own scheme and list its address on the key.
+
+### On your own server
+
+A server that talks to the bot for its own users (a web app's server routes, a support tool, a backend for your mobile app) uses a server key from the Channels page ("On your own server": `vbk_`, its id and a long secret). The whole key picks server mode, where your server names, on every call, which of its users it is talking for, and each user has their own conversations and their own limits.
+
+```typescript
+// Once per server process: the key from the server's settings, never in a page, an app or a log.
+const api = await CaptivateChatAPI.create(process.env.BLUE_SERVER_KEY, 'prod');
+
+// In each request, for its signed-in user:
+const conversation = conversationId
+  ? api.getConversation(conversationId, user.id)                                   // the user on every call
+  : await api.createConversation(user.id, {}, { user_id: user.id }, 'user-first');
+const answered = new Promise((resolve, reject) => { conversation.onAnswer(resolve); conversation.onError(reject); });
+conversation.onDelta((draft) => send({ draft }));                                  // the answer so far: replace, never append
+await conversation.sendMessage(text);                                              // resolves once the answer has begun
+send({ answer: await answered }); end();
+```
+
+**First, the user's ID is your server's word.** Blue can't check it: it trusts the ID your server sends, and binds each conversation to the key and that ID. So:
+
+- Never let a user choose the ID your server sends, or each user can reach the others' conversations.
+- Use an ID nobody can guess: a random ID from your own user records, never an email address or a running number. Anyone holding the key could otherwise read and delete a guessed user's conversations.
+- The ID is 1 to 128 visible characters, without spaces. Anything else is refused before sending: "On a server, each user's ID must be 1 to 128 visible characters, without spaces."
+
+**The key is a secret.** Keep it in your server's settings, never in a web page, an app or a log, and keep the `Authorization` header out of your request logs and monitoring. The library never logs the key, the `Authorization` header or a user's ID, even with `setDebugMode(true)`: its lines name a key by its id alone. If the key gets out, press "Get a new key" on the Channels page: the old key stops at once, and your users' conversations stay with the new one.
+
+**Where it runs.** Node 20.15 and later, Deno, Bun and Cloudflare Workers. The library refuses a server key where it can tell it isn't on a server: a web page, a browser worker, React Native and Electron (an Electron app, even its main process, uses a key for your app). A server passing on a browser's request must not copy the browser's `Origin`: Blue refuses any call with a server key that carries one.
+
+**One instance, a handle per request.** Make one instance for the server and share it. It keeps nothing between requests, so one user's request never acts as another's and memory doesn't grow with your users:
+
+- `createConversation(userId, …)`, `getConversation(id, userId)` and `getUserConversations(userId)` give fresh handles carrying that user. A handle and its listeners are for the request that made them: make a new one in the next request.
+- `getConversation(id)` without a user throws: "On a server, name the user on every call: getConversation(id, userId)."
+- `deleteUserConversations(userId)` and `conversation.delete()` delete a user's conversations, at most 200 calls a key a day: past that, "No more conversations can be deleted today. Please try again tomorrow."
+- `forgetUser` and `releaseConversation` do nothing, since nothing is kept.
+- Nothing is stored on the machine: `options.storage` and `options.userSecret` aren't used, with one console warning ("Server mode keeps nothing on this machine, so storage and userSecret aren't used.").
+
+**Who the customer is.** The user your server names (`userId`) says whose conversations and limits they are. The customer goes in the metadata's `user_id`, as from an app, but never with a token: `user_token` isn't sent, with one console warning ("Blue takes the customer your server names from user_id, so user_token isn't sent."). Blue trusts that `user_id` for a look-up of the customer's own records (an order's status, say) only on a key whose "Your server tells Blue who's signed in" switch the owner turned on; otherwise a look-up shows only what isn't personal. A course agent takes it as sent.
+
+**Limits.** Each user their own: 10 messages a minute, and as many starts, reads and Stops. The key has 600 a minute across its users, and a day (UTC) of 5,000 answers, 1,000 new conversations and 2 GB of files; past a day's cap, "This chat has answered all it can for today. Please try again tomorrow."
+
+**Refusals.** Your users see the same words as from an app (the table above). The console says why, once: "This server key was refused because the request came from a web page. Use it only on your own server." when a call carried an `Origin`, and "The server key was refused. Check it is the newest key from the Channels page and that it is turned on." for any other refusal of the key.
+
+**Without the library,** every call to Blue's `/v1/chat` routes carries `Authorization: Bearer vbk_…` and `X-Blue-User: <your server's ID for the user>`, and never an `Origin`. A message needs a conversation first: `POST /v1/chat/conversations`, then `POST /v1/chat` with its `conversationId`.
 
 ## Connection Lifecycle
 
@@ -1143,8 +1188,8 @@ File-to-text conversion is handled by the external API endpoint:
 - **`createConversation(userId: string, userBasicInfo?: object, metadata?: object, autoConversationStart?: 'bot-first' | 'user-first', privateMetadata?: object, options?: { timeoutMs?: number }): Promise<Conversation>`**
   Creates a new conversation. Connects first if the socket is not active.
 
-- **`getConversation(conversationId: string): Conversation`**
-  Retrieves a conversation by ID, creating a local handle if not cached. **(v6.1.0)** No longer returns `void`.
+- **`getConversation(conversationId: string, userId?: string): Conversation`**
+  Retrieves a conversation by ID, creating a local handle if not cached. **(v6.1.0)** No longer returns `void`. With a server key, `userId` names the user on every call and the handle is a fresh one, never cached ([On your own server](#on-your-own-server)).
 
 - **`releaseConversation(conversationId: string): void`**
   **(v6.1.0)** Drops a conversation from the local cache and detaches its socket listener. Does not delete it server-side.

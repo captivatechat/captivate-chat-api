@@ -94,7 +94,7 @@ export interface StreamRequest {
   path: string;
   /** Sent as JSON. */
   body: unknown;
-  /** The user's secret, as X-Blue-Conversation. */
+  /** The user's secret, as X-Blue-Conversation; in server mode the user's ID, as X-Blue-User. */
   secret?: string;
   way: BlueReadWay;
   /** A send with files, for its 413's words. */

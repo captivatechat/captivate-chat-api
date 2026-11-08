@@ -33,3 +33,26 @@ export function blueKeyKind(apiKey: unknown): BlueKeyKind | null {
   if (key.startsWith('vbw_')) return 'website';
   return 'other';
 }
+
+/**
+ * A server user's ID, as X-Blue-User carries it: 1 to 128 visible ASCII characters, no spaces
+ * (first-channels-server-key-spec §2.2). Checked before anything is sent.
+ */
+export const SERVER_USER_FORM = /^[\x21-\x7E]{1,128}$/;
+
+/**
+ * True where a server key must not run (server key spec §3.1): a page, a browser worker, React
+ * Native or Electron. Not WorkerGlobalScope, which Cloudflare Workers define too; a scope with no
+ * `process` (Workers without nodejs_compat) passes, as do Node, Deno and Bun.
+ */
+export function serverModeRefused(scope: any = globalThis): boolean {
+  if (typeof scope.document !== 'undefined') return true;
+  if (typeof scope.importScripts === 'function') return true;
+  if (typeof scope.navigator !== 'undefined' && scope.navigator?.product === 'ReactNative') return true;
+  return typeof scope.process !== 'undefined' && !!scope.process?.versions?.electron;
+}
+
+/** What a log line may name of a Blue key: its kind and id (`vbk_` and 24 hex), never its secret. */
+export function keyIdOf(apiKey: string): string {
+  return /^vb[a-z]_[0-9a-f]{24}/.exec(apiKey)?.[0] ?? `${apiKey.slice(0, 4)}…`;
+}

@@ -75,11 +75,13 @@ test('create() refuses a refused key before connecting anything', async () => {
   assert.equal(fake.requests.length, 0);
 });
 
-test('a whole server key opens no socket and is refused until server mode is built (step K4)', () => {
+test('a whole server key on a server is server mode and opens no socket (server-mode.test.ts has the rest)', () => {
   const key = serverKey();
-  assert.throws(() => new CaptivateChatAPI(key, 'prod'));
-  assert.equal(CaptivateChatAPI.hasInstance(key, 'prod'), false);
+  const api = new CaptivateChatAPI(key, 'prod');
+  assert.equal(transportOf(api)!.serverMode, true);
+  assert.equal(CaptivateChatAPI.hasInstance(key, 'prod'), true);
   assert.equal(FakeWebSocket.instances.length, 0);
+  api.dispose();
 });
 
 test('core keys keep core path: no Blue transport, the socket address as today', async () => {

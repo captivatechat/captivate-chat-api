@@ -34,7 +34,7 @@ interface Action {
 /** What a Blue conversation's handle is made with (first-channels-library-spec §2.2). */
 export interface BlueHandle {
   transport: BlueTransport;
-  /** The user's secret, as X-Blue-Conversation; without it, found by findSecret at the handle's first call. */
+  /** The user's secret, as X-Blue-Conversation (in server mode the user's ID, as X-Blue-User); without it, found by findSecret at the handle's first call. */
   secret?: string;
   /** The user's ID, when the call that made the handle named one. */
   userId?: string | null;
@@ -193,7 +193,7 @@ export class Conversation {
         user: { id: null },
       };
       const warnOnce = (name: string, words: string) => blue.transport.warnOnce(name, words);
-      state.user = customerOf(state.given, warnOnce) ?? { id: null };
+      state.user = customerOf(state.given, warnOnce, blue.transport.serverMode) ?? { id: null };
       this.blueState = state;
       this.blueTransport = blue.transport;
       this.findBlueSecret = blue.findSecret;
@@ -810,7 +810,7 @@ export class Conversation {
     const { softDelete = true } = options;
     // A delete is a delete in Blue (apps own choice 12).
     if (this.blueTransport) {
-      await this.blueTransport.request('DELETE', this.bluePath, { call: 'conversation', secret: await this.blueSecret() });
+      await this.blueTransport.request('DELETE', this.bluePath, { call: 'delete', secret: await this.blueSecret() });
       return;
     }
 
@@ -1019,7 +1019,8 @@ export class Conversation {
     const state = this.blueState!;
     state.given = { ...state.given, ...metadata };
     // A call naming user_id names the customer anew (a token left out is no token); one that doesn't keeps them.
-    const user = customerOf(metadata, (name, words) => this.blueTransport!.warnOnce(name, words));
+    const transport = this.blueTransport!;
+    const user = customerOf(metadata, (name, words) => transport.warnOnce(name, words), transport.serverMode);
     if (user) state.user = user;
     const sent = keptPart(metadata);
     const details = new Set(state.details ?? []);

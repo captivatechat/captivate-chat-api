@@ -107,7 +107,7 @@ export interface BlueRequest {
   call: BlueCall;
   /** Sent as JSON. */
   body?: unknown;
-  /** The user's secret, as X-Blue-Conversation. */
+  /** The user's secret, as X-Blue-Conversation; in server mode the user's ID, as X-Blue-User. */
   secret?: string;
   /** How long the whole call may take; CALL_MS by default. */
   timeoutMs?: number;
@@ -120,15 +120,22 @@ export type Logger = { log: (...args: any[]) => void; warn: (...args: any[]) => 
 export class BlueTransport {
   readonly apiKey: string;
   readonly mode: 'prod' | 'dev';
+  /**
+   * Server mode (first-channels-server-key-spec §3.1): a whole vbk_ key on the app's own server.
+   * Every call names its user by X-Blue-User where app mode sends the user's secret, and nothing
+   * is kept on the machine.
+   */
+  readonly serverMode: boolean;
   private options: BlueOptions = {};
   private disposed = false;
   private readonly inFlight = new Set<{ abort(): void }>();
   private readonly warned = new Set<string>();
   readonly logger: Logger;
 
-  constructor(apiKey: string, mode: 'prod' | 'dev', options: BlueOptions, logger: Logger) {
+  constructor(apiKey: string, mode: 'prod' | 'dev', options: BlueOptions, logger: Logger, serverMode = false) {
     this.apiKey = apiKey;
     this.mode = mode;
+    this.serverMode = serverMode;
     this.logger = logger;
     this.configure(options);
     // A secret for each user, and an id for each message, need one (§2.6, §2.5).
@@ -137,7 +144,7 @@ export class BlueTransport {
     }
     // A page with no web address sends Origin "null", which no key can list (§2.10).
     const location = (globalThis as any).location;
-    if (location && (location.protocol === 'file:' || location.origin === 'null')) {
+    if (!serverMode && location && (location.protocol === 'file:' || location.origin === 'null')) {
       this.warnOnce('noWebAddress', CONSOLE_WORDS.noWebAddress);
     }
   }
@@ -149,6 +156,10 @@ export class BlueTransport {
       if (options[name] !== undefined) (next as any)[name] = options[name];
     }
     this.options = next;
+    // Server mode stores no secret, so these would only mislead (server key spec §3.3).
+    if (this.serverMode && (options.storage !== undefined || options.userSecret !== undefined)) {
+      this.warnOnce('serverKeepsNothing', CONSOLE_WORDS.serverKeepsNothing);
+    }
   }
 
   /** The options as they stand, for the reader and the user's secret. */
@@ -171,11 +182,15 @@ export class BlueTransport {
     return (globalThis as any).crypto.getRandomValues(bytes);
   }
 
-  /** The only headers Blue's preflight allows: Authorization, Content-Type and X-Blue-Conversation (§2.3). */
+  /**
+   * The only headers Blue's preflight allows: Authorization, Content-Type and X-Blue-Conversation
+   * (§2.3); in server mode X-Blue-User, the user's ID, in place of the secret, on every call.
+   */
   headers(secret?: string, json = false): Record<string, string> {
+    if (this.serverMode && secret === undefined) throw new Error(SETUP_WORDS.nameTheUser);
     const headers: Record<string, string> = { Authorization: `Bearer ${this.apiKey}` };
     if (json) headers['Content-Type'] = 'application/json';
-    if (secret !== undefined) headers['X-Blue-Conversation'] = secret;
+    if (secret !== undefined) headers[this.serverMode ? 'X-Blue-User' : 'X-Blue-Conversation'] = secret;
     return headers;
   }
 
@@ -194,6 +209,7 @@ export class BlueTransport {
     if (this.disposed) throw new Error(DISPOSED);
     const fetchImpl = this.fetchImpl;
     if (!fetchImpl) throw blueError(WORDS.couldntAnswer);
+    const headers = this.headers(request.secret, request.body !== undefined);
 
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
     let timedOut = false;
@@ -204,7 +220,7 @@ export class BlueTransport {
     const call = (async () => {
       const response = await fetchImpl(`${this.baseUrl}${path}`, {
         method,
-        headers: this.headers(request.secret, request.body !== undefined),
+        headers,
         body: request.body === undefined ? undefined : JSON.stringify(request.body),
         credentials: 'omit',
         signal: controller?.signal,
@@ -250,7 +266,11 @@ export class BlueTransport {
   refused(response: { status: number; statusText?: string; headers?: { get(name: string): string | null } }, text: string, request: BlueRequest): BlueError {
     const { code, fields } = refusalOf(text);
     const retryAfter = response.status === 429 ? retryAfterOf(response.headers?.get('retry-after')) : undefined;
-    if (response.status === 401 || response.status === 403) this.warnOnce('keyRefused', CONSOLE_WORDS.keyRefused);
+    if (response.status === 401 || response.status === 403) {
+      if (!this.serverMode) this.warnOnce('keyRefused', CONSOLE_WORDS.keyRefused);
+      else if (code === 'server_only') this.warnOnce('serverOnly', CONSOLE_WORDS.serverOnly);
+      else this.warnOnce('keyRefused', CONSOLE_WORDS.serverKeyRefused);
+    }
     const words = refusalWords({ status: response.status, call: request.call, code, fields, retryAfter, withFiles: request.withFiles });
     return blueError(words, { status: response.status, statusText: response.statusText, code, retryAfter, fields });
   }

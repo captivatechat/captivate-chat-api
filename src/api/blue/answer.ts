@@ -64,7 +64,7 @@ export interface BlueErrorEvent {
 export interface BlueConversationHost {
   transport: BlueTransport;
   conversationId: string;
-  /** The user's secret, as X-Blue-Conversation. */
+  /** The user's secret, as X-Blue-Conversation; in server mode the user's ID, as X-Blue-User. */
   secret: string;
   /** Calls each listener of a list. */
   emit: (name: BlueEventName, ...args: unknown[]) => void;
