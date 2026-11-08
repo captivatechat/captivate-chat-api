@@ -181,6 +181,49 @@ const conversation = await api.createConversation(
 );
 ```
 
+## Blue mode
+
+The same library talks to a Vienna Blue bot when it is given a key for your app from Blue's Channels page (`vba_` and 24 letters and digits). The key picks the mode when the instance is made; every other key keeps the path through Captivate's gateway described in the rest of this README, unchanged.
+
+```typescript
+const api = await CaptivateChatAPI.create('vba_…', 'prod');
+```
+
+In Blue mode no socket is opened: `connect()` and `reconnect()` resolve at once, `isSocketActive()` is true until `dispose()`, and `getSocket()` and `getSocketId()` return `null`. Each call is one HTTPS request to Blue, which waits at most 30 seconds (an answer being written has its own time).
+
+### Keys
+
+| Key | What happens |
+|---|---|
+| `vba_…`, a key for your app | Blue mode |
+| `vbw_…`, a website key | Refused: "Website keys work only in Blue's own chat window. Make a key for your app on the Channels page." |
+| `vbk_…`, a server key | For your own server, never an app or a page. A server key that isn't whole is refused: "This server key isn't whole. Copy it again from the Channels page." |
+| Any other `vb…_` key | Refused: "This key isn't for apps. Make a key for your app on the Channels page." |
+| Anything else | Captivate's gateway, as before |
+
+`isBlueKey(key)` (exported) tells you whether a key is shaped like one of Blue's.
+
+### Options
+
+Given when the instance is made, beside the tunables above, or later with `configure()`. All are optional and read for Blue's keys alone.
+
+| Option | What it is |
+|---|---|
+| `blueUrl` | Blue's address. `prod` uses `https://vienna-blue-backend.prod.captivat.io`, `dev` `https://vienna-blue-backend.dev.captivat.io` |
+| `fetch` | A fetch to use in place of the global one: `expo/fetch`, Electron's `net.fetch` or a polyfill |
+| `stream` | How answers are read: `"auto"` (the default), `"fetch"`, `"xhr"` or `"whole"` |
+| `storage` | Where each user's secret is kept: `{ get, set, remove }`, each may return a Promise (React Native's AsyncStorage fits). `localStorage`, else memory, without it |
+| `randomValues` | `(bytes: Uint8Array) => Uint8Array`, a secure random source where `crypto.getRandomValues` is missing (React Native: `expo-crypto`). Without either, the instance isn't made: "Blue mode needs a secure random source here. Add one, or pass options.randomValues." |
+| `userSecret` | `(userId) => string \| Promise<string>`: the user's secret from your own server, so a user has one list on every device |
+
+### Errors
+
+Blue mode's errors carry words your app can show as they are, never the server's own: `error.errorDesc` (and `onError`'s `errorDesc`) holds them, `error.status` the HTTP status (none when Blue couldn't be reached or the call ran out of time), `error.retryAfter` a `429`'s wait in seconds, and `error.fields` the names of a form's refused fields. The message reads like the gateway's: `HTTP request failed: 404 Not Found: This conversation isn't available any more. Start a new one.` None of the words contains "410" or "gone".
+
+A key Blue refuses (`401` or `403`) shows "This app can't reach its assistant right now." to the user and writes once to the console: "The key was refused. Check it is a key for your app, turned on, and that this address is listed on it."
+
+A page that isn't on a web address (a `file:` page, or an Origin of `null`) gets one console warning, since the key can't check where it is: use the library from the app's main process, or register the app's own scheme and list its address on the key.
+
 ## Connection Lifecycle
 
 Worth understanding if you are building anything long-lived:

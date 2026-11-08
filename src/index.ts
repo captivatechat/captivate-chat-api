@@ -1,6 +1,7 @@
 import { CaptivateChatAPI } from './api/CaptivateChatAPI';
 import { CaptivateChatManager } from './api/CaptivateChatManager';
 import { CaptivateChatFileManager, TtlDays } from './api/CaptivateChatFileManager';
+import { isBlueKey } from './api/blue/keys';
 
 
 
@@ -15,4 +16,4 @@ if (typeof window !== 'undefined') {
 }
 
 export type { TtlDays };
-export { CaptivateChatAPI, CaptivateChatManager, CaptivateChatFileManager };
+export { CaptivateChatAPI, CaptivateChatManager, CaptivateChatFileManager, isBlueKey };

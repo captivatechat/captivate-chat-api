@@ -1,5 +1,8 @@
 // Import the Conversation class
 import { Conversation, ConversationSocketProvider } from './Conversation';
+import { blueKeyKind } from './blue/keys';
+import { BlueOptions, BlueTransport } from './blue/transport';
+import { SETUP_WORDS } from './blue/words';
 
 // Determine the WebSocket implementation based on the environment (browser, Node.js, or React Native)
 let WebSocketImpl: typeof WebSocket;
@@ -51,6 +54,12 @@ const UNGUARDED_METHODS = [
   'detachListeners',
   'removeAllListeners',
   'off',
+  // Blue mode's listeners and its local calls: synchronous, as their types say
+  'onDelta',
+  'onAnswer',
+  'onStep',
+  'resume',
+  'forgetUser',
 ];
 
 // Proxy guard function for automatic WebSocket state checking and reconnection
@@ -109,8 +118,12 @@ export const captivateLogger = {
   }
 };
 
-/** Tunables. All optional; the defaults match the previous hardcoded values. */
-export interface CaptivateChatAPIOptions {
+/**
+ * Tunables. All optional; the defaults match the previous hardcoded values. Blue mode's
+ * members (blueUrl, fetch, stream, storage, randomValues, userSecret) are read for Blue's
+ * keys alone.
+ */
+export interface CaptivateChatAPIOptions extends BlueOptions {
   /** How long to wait for socket_connected during connect(). Default 10000. */
   connectTimeoutMs?: number;
   /** How long to wait for conversation_start_success. Default 20000. */
@@ -155,6 +168,8 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
   private isDisposed: boolean = false;
   /** In-flight connect, so concurrent callers share one handshake. */
   private connectPromise: Promise<void> | null = null;
+  /** Blue mode's transport, set when the key is one of Blue's: no socket is opened then. */
+  private blue: BlueTransport | null = null;
 
   static setDebugMode(enabled: boolean): void {
     captivateDebugMode = enabled;
@@ -184,6 +199,16 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     this.apiKey = apiKey;
     this.mode = mode;
 
+    // A key shaped vb?_ is one of Blue's (first-channels-library-spec §2.1); every other key
+    // keeps core's path below. A refused key is never registered.
+    const blueKind = blueKeyKind(apiKey);
+    if (blueKind === 'website') throw new Error(SETUP_WORDS.websiteKey);
+    if (blueKind === 'other') throw new Error(SETUP_WORDS.notForApps);
+    if (blueKind === 'server-partial') throw new Error(SETUP_WORDS.serverKeyNotWhole);
+    // Server mode (a whole vbk_ key on the app's own server) is step K4's: until then it is refused.
+    if (blueKind === 'server') throw new Error('Server keys work only with a later version of this library.');
+    if (blueKind === 'app') this.blue = new BlueTransport(apiKey, mode, options, captivateLogger);
+
     this.url =
       this.mode === 'prod'
         ? `wss://channel.wss.captivatechat.ai/dev?apiKey=${apiKey}`
@@ -202,6 +227,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
 
   /** Updates tunables on a live instance. */
   public configure(options: CaptivateChatAPIOptions = {}): void {
+    if (this.blue) this.blue.configure(options);
     if (options.connectTimeoutMs !== undefined) this.connectTimeoutMs = options.connectTimeoutMs;
     if (options.conversationStartTimeoutMs !== undefined) this.conversationStartTimeoutMs = options.conversationStartTimeoutMs;
     if (options.maxReconnectAttempts !== undefined) this.maxReconnectAttempts = options.maxReconnectAttempts;
@@ -318,6 +344,8 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     if (this.isDisposed) {
       throw new Error('This CaptivateChatAPI instance has been disposed. Create a new one.');
     }
+    // Blue mode has no socket to open.
+    if (this.blue) return;
     if (this.connectPromise) return this.connectPromise;
 
     this.connectPromise = new Promise<void>((resolve, reject) => {
@@ -653,6 +681,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
    * Gets the WebSocket instance for real-time communication.
    */
   public getSocket(): WebSocket | null {
+    if (this.blue) return null;
     return this.socket;
   }
 
@@ -660,6 +689,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
    * Gets the socket ID for HTTP requests.
    */
   public getSocketId(): string | null {
+    if (this.blue) return null;
     return this.socketId;
   }
 
@@ -667,6 +697,9 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
    * Checks if the WebSocket connection is active and open for real-time communication.
    */
   public isSocketActive(): boolean {
+    // In Blue mode it stays true until dispose(), so the guard never reconnects and apps on
+    // 7.0 that stop sending while it's false keep sending (§0, rule 4).
+    if (this.blue) return !this.isDisposed;
     return !!this.socket && this.socket.readyState === WebSocketImpl.OPEN;
   }
 
@@ -678,6 +711,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     if (this.isDisposed) {
       throw new Error('This CaptivateChatAPI instance has been disposed. Create a new one.');
     }
+    if (this.blue) return;
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       throw new Error(`Max reconnection attempts (${this.maxReconnectAttempts}) reached`);
     }
@@ -742,6 +776,8 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
   public dispose(): void {
     const key = CaptivateChatAPI.getInstanceKey(this.apiKey, this.mode);
     this.isDisposed = true;
+    // Ends every Blue call in flight; the answers themselves go on in the backend.
+    this.blue?.dispose();
 
     for (const conversation of this.conversations.values()) {
       try {
@@ -750,8 +786,10 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     }
     this.conversations.clear();
 
-    // Closes with code 1000, which the close handler treats as intentional.
-    this.teardownSocket('Instance disposed');
+    // Closes with code 1000, which the close handler treats as intentional. Blue mode has no
+    // socket, and on a guarded instance the call would go through the guard, which reconnects
+    // a disposed instance and rejects with nobody to hear it.
+    if (!this.blue) this.teardownSocket('Instance disposed');
     this.socketId = null;
 
     CaptivateChatAPI.instances.delete(key);
