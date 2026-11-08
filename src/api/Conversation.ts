@@ -1,6 +1,7 @@
 import { CaptivateChatFileManager, TtlDays } from './CaptivateChatFileManager';
 import { captivateLogger } from './CaptivateChatAPI';
 import { BLUE_EVENTS, BlueAnswer, BlueAnswers } from './blue/answer';
+import { BlueUser, customerOf, detailsOf } from './blue/identity';
 import {
   BlueCopy,
   BlueGreeting,
@@ -62,6 +63,8 @@ export interface BlueState {
    */
   given: Record<string, unknown>;
   details: string[] | null;
+  /** The customer the metadata last named (§2.7): sent with every send and press, `{ id: null }` for none. */
+  user: BlueUser;
 }
 
 /** A Blue handle's state, read past withSocketGuard (which passes fields through as they are); null for core's. */
@@ -186,7 +189,10 @@ export class Conversation {
         greeting: blue.greeting ?? null,
         given: { ...(blue.given ?? {}) },
         details: blue.details ?? null,
+        user: { id: null },
       };
+      const warnOnce = (name: string, words: string) => blue.transport.warnOnce(name, words);
+      state.user = customerOf(state.given, warnOnce) ?? { id: null };
       this.blueState = state;
       this.blueTransport = blue.transport;
       this.findBlueSecret = blue.findSecret;
@@ -201,6 +207,10 @@ export class Conversation {
         },
         emit: (name, ...args) => this.emitBlue(name, args),
         has: (name) => (this.listeners.get(name)?.length ?? 0) > 0,
+        customer: () => {
+          const details = detailsOf(state.given, state.details, warnOnce);
+          return { user: state.user, ...(details ? { details } : {}) };
+        },
       });
       // On the next tick, so an app that registers onMessage once createConversation resolves gets it (§2.2).
       const greeting = state.greeting;
@@ -625,6 +635,11 @@ export class Conversation {
    * @returns A promise that resolves when the action is sent.
    */
   public async sendAction(actionId: string, data: object = {}): Promise<void> {
+    // Blue mode: a press on one of the bot's offers, `{ choice, values }` (§2.8).
+    if (this.blue) {
+      await this.blueSecret();
+      return this.blue.press(actionId, data);
+    }
     const response = await this.sendPayload('action', {
       type: 'normal',
       id: actionId,
@@ -983,6 +998,8 @@ export class Conversation {
       (await this.blueTransport!.request<ReadBack>('GET', this.bluePath, { call: 'conversation', secret: await this.blueSecret() })) ?? {};
     takeBlueCopy(this, copyOfReadBack(back));
     if (Array.isArray(back.details)) this.blueState!.details = back.details.filter((d) => typeof d === 'string');
+    // A press on an offer read back knows its kind and fields.
+    for (const message of Array.isArray(back.messages) ? back.messages : []) this.blue?.remember((message as any)?.offer);
     return back;
   }
 
@@ -994,6 +1011,9 @@ export class Conversation {
   private async setBlueMetadata(metadata: Record<string, unknown>): Promise<void> {
     const state = this.blueState!;
     state.given = { ...state.given, ...metadata };
+    // A call naming user_id names the customer anew (a token left out is no token); one that doesn't keeps them.
+    const user = customerOf(metadata, (name, words) => this.blueTransport!.warnOnce(name, words));
+    if (user) state.user = user;
     const sent = keptPart(metadata);
     const details = new Set(state.details ?? []);
     if (Object.keys(sent).every((name) => details.has(name))) return;

@@ -202,7 +202,9 @@ test('the send: the message, the conversation and a clientId of 22 base64url cha
   await flush();
   const [first, second] = fake.requests;
   assert.equal(first.url, 'https://blue.example/v1/chat');
-  assert.deepEqual(Object.keys(first.json).sort(), ['clientId', 'conversationId', 'message']);
+  // With no onActionReceived and no user named: the customer as no one, no accepts and no details (L5).
+  assert.deepEqual(Object.keys(first.json).sort(), ['clientId', 'conversationId', 'message', 'user']);
+  assert.deepEqual(first.json.user, { id: null });
   assert.equal(first.json.conversationId, ID);
   assert.equal(first.json.message, 'Hello');
   assert.equal(second.json.message, 'Hello again');

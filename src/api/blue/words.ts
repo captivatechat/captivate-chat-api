@@ -58,6 +58,8 @@ export const SETUP_WORDS = {
   userUnknown: "This conversation's user isn't known on this device. List the user's conversations first.",
   /** CaptivateChatManager merges lists on core's server, which knows no Blue key. */
   managerBlueKey: "Use one CaptivateChatAPI for each app key. CaptivateChatManager is for Captivate's own keys.",
+  /** sendAction's send on a link offer (gaps G5): a link opens in the browser. */
+  linkOffer: "This offer is a link: open its link.url in the browser. There's nothing to send.",
 } as const;
 
 /** What Blue mode doesn't do: thrown as an Error with status 501. */
@@ -77,6 +79,12 @@ export const CONSOLE_WORDS = {
   // dotnet own choice 85's words, warned once.
   listFilters: "Blue mode lists a user's conversations newest first, without filters or searches, so those were left out.",
   privateMetadata: "Blue mode doesn't keep private metadata, so it wasn't sent.",
+  notAnOffer: "That action isn't one of the bot's forms, so nothing was sent.",
+  // §2.7's, Blue's loader's (its userOf) without the name of the call, since the metadata may be createConversation's.
+  userId: "user_id must be letters, digits and - _ . : (at most 64), so the chat goes on without knowing who's signed in.",
+  userToken: "user_token isn't a token the chat can use, so it goes on without knowing who's signed in.",
+  // gaps G12: a detail over 200 characters is dropped.
+  detailTooLong: "A detail the bot reads was over 200 characters, so it wasn't sent.",
 } as const;
 
 /** What a call was, since the same status reads differently on a send, a press or an upload. */

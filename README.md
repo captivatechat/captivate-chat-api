@@ -279,6 +279,32 @@ The library checks only its form: 43 to 128 letters, digits, `-` or `_`. Anythin
 - `conversation.getTranscript()` gives the conversation's messages as `{ message_id, sender, from, content, text, sources, timestamp, createdAt, files?, stopped? }`, `sender` and `from` `'user'` or `'bot'`.
 - Not in Blue mode: `setPrivateMetadata` sends nothing (one warning: "Blue mode doesn't keep private metadata, so it wasn't sent."); `setTimeToLive(90)` resolves, since files sent in a chat are kept with it for 90 days, and any other number is refused with status `501`; `editMessage` is refused with status `501`, "Editing a message isn't available here."; `CaptivateChatManager` refuses Blue's keys: "Use one CaptivateChatAPI for each app key. CaptivateChatManager is for Captivate's own keys."
 
+### Who the customer is, forms and quick replies
+
+```typescript
+const conversation = await api.createConversation('user-1', {}, { user_id: 'C-1042', user_token: tokenFromYourServer, order_number: 'A-1001' });
+conversation.onActionReceived(([{ id, data }]) => showForm(id, data));    // the bot's forms, look-ups and links
+await conversation.sendAction(id, { choice: 'send', values: { email: 'sam@example.com' } });
+await conversation.setMetadata({ user_id: null });                        // at sign-out
+```
+
+**Who's signed in.** Name your signed-in customer in the metadata, as Blue's website chat does: `user_id`, their ID in your own system (letters, digits and `- _ . :`, at most 64; an email address isn't one), and `user_token`, a token your server signed for it. `createConversation`'s metadata names them first, then each `setMetadata` that has a `user_id` (one without a `user_token` names the ID alone); `user_id: null` says no one is signed in. They go with every message and every press as `user: { id, token }`, and are held in memory only: never stored on the device or with the conversation, and never logged. An ID outside that form, or a token that isn't text of at most 2,048 characters, counts as no one, with one console warning ("user_id must be letters, digits and - _ . : (at most 64), so the chat goes on without knowing who's signed in."). `createConversation`'s first argument names whose list the conversation is in, and is never sent as the customer's ID.
+
+- **The token** is a JWT your server signs as it does for the website chat: HS256 with your app key's signing key, `sub` the ID, `aud` your `vba_` key, `iat`, and `exp` at most an hour later. Keep the signing key on your server. Never put it in the app. Once it expires Blue no longer knows who's signed in: give a fresh one with `setMetadata({ user_id, user_token })`. The library never asks for one itself.
+- **What Blue trusts it for:** a look-up of the customer's own records (an order's status, say) runs only for a signed ID. A course agent makes its course for the `user_id` as sent, signed or not, with the conversation's kept `client_name`, so your app's users can name another ID for a course.
+
+**Details.** Some bots look things up with what your app already knows (an order number, a plan). Blue tells the library the names its look-ups read, and the library sends those alone with each message and press, from the metadata's top level, when the value is text or a number of at most 200 characters (a longer one is left out, with one console warning). Nothing else of the metadata goes with a message: it is only kept with the conversation, where no model reads it. `user_id` and `user_token` are never details. A handle from `getConversation(id)` learns the names when it first reads the conversation back (`getTranscript()`, `getMetadata()`).
+
+**Forms.** While an `onActionReceived` listener is registered, the bot may offer a form under an answer: the listener gets `[{ id, data }]`, `data` the offer as Blue sends it (`kind`, `title`, `intro`, `fields`, `consent`, `sendLabel`, `cancelLabel`, `lookUp`, `link`), and `onAnswer`'s `offer` holds it too. Without the listener the bot gives its by-hand words instead, or asks a look-up's details in the chat. Draw the fields, then send them:
+
+- `sendAction(id, { choice: 'send', values })` sends the form (`choice: 'cancel'` closes it). `values` are by field name, as text: numbers go as their digits, `true` and `false` as "yes" and "no"; anything else is refused before sending. The bot's reply comes to `onMessage` as one message, and to `onAnswer` as `{ text, sources: [], offer }`, `offer` the press's own answer.
+- A look-up (`lookUp: true`) answers with what it found: its rows come as lines of the same message ("Status: Shipped"), before the bot's words. When it found nothing, or couldn't check, its words for the customer are the message ("I couldn't find that. Check the details and press Check again."), so label its button with the offer's `sendLabel`, which is "Check".
+- A link (`kind: 'link'`) opens in the browser: open `link.url`, its `params` filled from the fields. There's nothing to send, so `sendAction` with `'send'` on it is refused before sending: "This offer is a link: open its link.url in the browser. There's nothing to send."
+- A refused press rejects, and goes to `onError`, in words the user can see: "Sign in again in the app, then try once more." when the look-up needs a signed-in customer; "This can't be done any more. Ask again in the chat." when the form has closed; "That form can't be sent like that. Check it and try again." with the refused fields' names in `error.fields`; "You've sent this a few times already. Please try again later." with `error.retryAfter`.
+- An id that isn't one of the bot's offers sends nothing, with one console warning: "That action isn't one of the bot's forms, so nothing was sent."
+
+**Quick replies.** When the bot asks something with set answers ("Yes, send it", "No, cancel"), `onAnswer`'s `choices` holds them: show them as buttons, and send the one pressed as a message, `sendMessage(choice)`. An app without `onAnswer` shows none, and its users type the reply.
+
 ### Errors
 
 Blue mode's errors carry words your app can show as they are, never the server's own: `error.errorDesc` (and `onError`'s `errorDesc`) holds them, `error.status` the HTTP status (none when Blue couldn't be reached or the call ran out of time), `error.retryAfter` a `429`'s wait in seconds, and `error.fields` the names of a form's refused fields. The message reads like the gateway's: `HTTP request failed: 404 Not Found: This conversation isn't available any more. Start a new one.` None of the words contains "410" or "gone".

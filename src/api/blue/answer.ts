@@ -4,10 +4,12 @@
 // message's own clientId. Stop, a 409's hold and resume() are here too. The Conversation hands
 // in its listeners (emit, has) and keeps its own methods' names and shapes.
 import { draftText, withFooter } from './citations';
+import { BlueUser } from './identity';
 import { BlueOffer, BlueSource, BlueStreamEvent } from './ndjson';
+import { BluePressAnswer, OFFER_ID, pressText, pressValues } from './offers';
 import { BlueReadWay, BlueStream, Clock, RUNTIME_CLOCK, StreamEnd, openStream, pickWay } from './stream';
 import { BlueError, BlueTransport, DISPOSED, blueError } from './transport';
-import { WORDS } from './words';
+import { CONSOLE_WORDS, SETUP_WORDS, WORDS } from './words';
 
 /** The Conversation's listener lists Blue mode emits to: core's event names where core has the listener. */
 export const BLUE_EVENTS = {
@@ -38,8 +40,8 @@ export interface BlueAnswer {
   stopped?: boolean;
   /** Quick replies: an app answers one by sending its text. */
   choices?: string[];
-  /** The form the bot offered under the answer. */
-  offer?: BlueOffer;
+  /** The form the bot offered under the answer; for a press (sendAction), the press's own answer. */
+  offer?: BlueOffer | BluePressAnswer;
 }
 
 /** onConversationUpdate's, made by the library. */
@@ -67,6 +69,8 @@ export interface BlueConversationHost {
   emit: (name: BlueEventName, ...args: unknown[]) => void;
   /** Whether a list has a listener now. */
   has: (name: BlueEventName) => boolean;
+  /** Who the customer is and the details the bot reads, as they stand at each send and press (§2.7). */
+  customer: () => { user: BlueUser; details?: Record<string, string> };
   /** The runtime's timers by default; a hand-driven clock in tests. */
   clock?: Clock;
 }
@@ -137,6 +141,8 @@ export class BlueAnswers {
   private readonly pending = new Set<Send>();
   /** The last send's close: each send goes once the one before has closed its request (own choice 71). */
   private lastClosed: Promise<void> = Promise.resolve();
+  /** The offers seen in this conversation, by id: a press reads its kind and its first field's label. */
+  private readonly offers = new Map<string, BlueOffer>();
 
   constructor(host: BlueConversationHost) {
     this.host = host;
@@ -264,7 +270,7 @@ export class BlueAnswers {
     try {
       stream = openStream(this.transport, {
         path: '/v1/chat',
-        body: { conversationId: this.host.conversationId, message: send.text, clientId: send.clientId },
+        body: this.sendBody(send),
         secret: this.host.secret,
         way,
         clock: this.clock,
@@ -280,6 +286,71 @@ export class BlueAnswers {
     const end = await stream.finished;
     send.stream = null;
     await this.ended(send, end, holdStarted);
+  }
+
+  /**
+   * A send's body: the customer and the details as they stand now (§2.7), and `accepts` only while
+   * an onActionReceived listener is registered, since only an app that draws forms gets them (§2.8).
+   */
+  private sendBody(send: Send): Record<string, unknown> {
+    const { user, details } = this.host.customer();
+    return {
+      conversationId: this.host.conversationId,
+      message: send.text,
+      clientId: send.clientId,
+      user,
+      ...(details ? { details } : {}),
+      ...(this.host.has(BLUE_EVENTS.action) ? { accepts: ['offers'] } : {}),
+    };
+  }
+
+  /** Keeps an offer seen in a stream or a read-back, for a press on it. */
+  remember(offer: unknown): void {
+    if (offer && typeof offer === 'object' && typeof (offer as BlueOffer).id === 'string') {
+      this.offers.set((offer as BlueOffer).id, offer as BlueOffer);
+    }
+  }
+
+  /**
+   * Presses one of the bot's offers (§2.8): `of-…` ids alone (any other warns once and sends
+   * nothing), a link's send refused before sending (gaps G5). The answer's text and a look-up's
+   * rows go to onMessage as one message, and to onAnswer with the press's answer as `offer`. A
+   * refusal goes to onError and rejects, in §1.2's words by its code.
+   */
+  async press(actionId: string, data: unknown): Promise<void> {
+    if (this.transport.isDisposed) throw new Error(DISPOSED);
+    if (typeof actionId !== 'string' || !OFFER_ID.test(actionId)) {
+      this.transport.warnOnce('notAnOffer', CONSOLE_WORDS.notAnOffer);
+      return;
+    }
+    const given = (data && typeof data === 'object' ? data : {}) as { choice?: unknown; values?: unknown };
+    const choice = given.choice ?? 'send';
+    const offer = this.offers.get(actionId);
+    if (offer?.kind === 'link' && choice === 'send') throw new Error(SETUP_WORDS.linkOffer);
+    const values = pressValues(given.values);
+    if (values instanceof Error) throw values;
+    const { user, details } = this.host.customer();
+    let answer: BluePressAnswer | undefined;
+    try {
+      answer = await this.transport.request<BluePressAnswer>('POST', `${this.path}/offers/${encodeURIComponent(actionId)}`, {
+        call: 'press',
+        secret: this.host.secret,
+        body: { choice, values, user, ...(details ? { details } : {}) },
+      });
+    } catch (error) {
+      const refusal = error as BlueError;
+      if (refusal.errorDesc && !this.transport.isDisposed) this.emit(BLUE_EVENTS.error, this.errorEvent(refusal.errorDesc, refusal));
+      throw error;
+    }
+    const pressed: BluePressAnswer = {
+      offer: answer?.offer ?? { id: actionId, status: 'sent' },
+      ...(answer?.lookup ? { lookup: answer.lookup } : {}),
+      messages: Array.isArray(answer?.messages) ? answer!.messages : [],
+    };
+    if (offer && typeof pressed.offer.status === 'string') this.offers.set(actionId, { ...offer, status: pressed.offer.status });
+    const text = pressText(pressed, offer);
+    if (text) this.emit(BLUE_EVENTS.message, [{ type: 'text', text }], 'ai_agent');
+    this.emit(BLUE_EVENTS.answer, { text, sources: [], offer: pressed } satisfies BlueAnswer);
   }
 
   private async ended(send: Send, end: StreamEnd, holdStarted: number | null): Promise<void> {
@@ -383,6 +454,7 @@ export class BlueAnswers {
   private giveOffer(send: Send): void {
     if (send.offerGiven || !send.offer) return;
     send.offerGiven = true;
+    this.remember(send.offer);
     this.emit(BLUE_EVENTS.action, [{ id: send.offer.id, data: send.offer }]);
   }
 
