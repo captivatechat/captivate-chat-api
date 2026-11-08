@@ -1,12 +1,20 @@
 import { CaptivateChatAPI, CaptivateChatAPIOptions } from './CaptivateChatAPI';
 import { Conversation } from './Conversation';
+import { isBlueKey } from './blue/keys';
+import { SETUP_WORDS } from './blue/words';
 
 type ApiKey = string;
+
+/** The manager merges several keys' lists on core's server, which knows no Blue key (first-channels-library-spec §2.2). */
+function refuseBlueKeys(apiKeys: ApiKey[]): void {
+  if (apiKeys.some((key) => isBlueKey(key))) throw new Error(SETUP_WORDS.managerBlueKey);
+}
 
 export class CaptivateChatManager {
   private apiInstances: { [apiKey: string]: CaptivateChatAPI } = {};
 
   constructor(apiKeys: ApiKey[], mode: 'prod' | 'dev' = 'prod', options: CaptivateChatAPIOptions = {}) {
+    refuseBlueKeys(apiKeys);
     // Deduplicate API keys to prevent duplicate instances
     const uniqueKeys = [...new Set(apiKeys)];
 
@@ -26,6 +34,7 @@ export class CaptivateChatManager {
     mode: 'prod' | 'dev' = 'prod',
     options: CaptivateChatAPIOptions = {}
   ): Promise<CaptivateChatManager> {
+    refuseBlueKeys(apiKeys);
     const uniqueKeys = [...new Set(apiKeys)];
 
     const manager = Object.create(CaptivateChatManager.prototype) as CaptivateChatManager;

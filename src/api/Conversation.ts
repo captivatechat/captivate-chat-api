@@ -1,6 +1,22 @@
 import { CaptivateChatFileManager, TtlDays } from './CaptivateChatFileManager';
 import { captivateLogger } from './CaptivateChatAPI';
-import { BLUE_EVENTS, BlueAnswer, BlueAnswers, BlueConversationHost } from './blue/answer';
+import { BLUE_EVENTS, BlueAnswer, BlueAnswers } from './blue/answer';
+import {
+  BlueCopy,
+  BlueGreeting,
+  ReadBack,
+  channelMetadataOf,
+  copyOfReadBack,
+  isRecord,
+  keptPart,
+  merged,
+  metadataWrapper,
+  tooBig,
+  transcriptOf,
+} from './blue/shapes';
+import { Clock, RUNTIME_CLOCK } from './blue/stream';
+import { BlueTransport } from './blue/transport';
+import { CONSOLE_WORDS, METADATA_TOO_BIG, NOT_HERE, SETUP_WORDS } from './blue/words';
 
 const ALLOWED_TTL_DAYS: TtlDays[] = [1, 7, 30, 90];
 
@@ -11,6 +27,62 @@ let stopWarned = false;
 interface Action {
   id: string;
   data: any;
+}
+
+/** What a Blue conversation's handle is made with (first-channels-library-spec §2.2). */
+export interface BlueHandle {
+  transport: BlueTransport;
+  /** The user's secret, as X-Blue-Conversation; without it, found by findSecret at the handle's first call. */
+  secret?: string;
+  /** The user's ID, when the call that made the handle named one. */
+  userId?: string | null;
+  /** For a handle from getConversation(id): the secret of the conversation's user, or null when nothing here knows it. */
+  findSecret?: () => Promise<{ secret: string; userId: string | null } | null>;
+  /** The runtime's timers by default; a hand-driven clock in tests. */
+  clock?: Clock;
+  /** What the call that made the handle knew of the conversation (the start, the list). */
+  copy?: BlueCopy;
+  /** The bot-first greeting, given to onMessage on the next tick. */
+  greeting?: BlueGreeting | null;
+  /** The app's metadata as given, in memory. */
+  given?: Record<string, unknown>;
+  /** The names of the details the bot's look-ups read (the start's or a read-back's). */
+  details?: string[] | null;
+}
+
+/** A Blue conversation's own state, beside core's fields. */
+export interface BlueState {
+  userId: string | null;
+  secret: string | null;
+  copy: BlueCopy | null;
+  greeting: BlueGreeting | null;
+  /**
+   * The app's metadata as given (createConversation's, then each setMetadata's), in memory only:
+   * user_id, user_token and the details' values are read from it (§2.7).
+   */
+  given: Record<string, unknown>;
+  details: string[] | null;
+}
+
+/** A Blue handle's state, read past withSocketGuard (which passes fields through as they are); null for core's. */
+export function blueStateOf(conversation: Conversation): BlueState | null {
+  return (conversation as any).blueState ?? null;
+}
+
+/** Gives a handle what a list or a read-back says of its conversation, its runtime `metadata` too. */
+export function takeBlueCopy(conversation: Conversation, copy: BlueCopy): void {
+  const state = blueStateOf(conversation);
+  if (!state) return;
+  state.copy = copy;
+  (conversation as any).metadata = { channelMetadata: channelMetadataOf(copy) };
+}
+
+/** What Blue mode doesn't do, as an Error with status 501 and its words. */
+function notHere(words: string): Error {
+  const error = new Error(words) as Error & { status: number; errorDesc: string };
+  error.status = 501;
+  error.errorDesc = words;
+  return error;
 }
 
 /**
@@ -70,6 +142,9 @@ export class Conversation {
    * §2.2): its methods then take their Blue branch, and no socket is listened to.
    */
   private blue: BlueAnswers | null = null;
+  private blueState: BlueState | null = null;
+  private blueTransport: BlueTransport | null = null;
+  private findBlueSecret: BlueHandle['findSecret'];
 
   /**
    * Initializes a new Conversation instance.
@@ -91,7 +166,7 @@ export class Conversation {
     mode?: 'prod' | 'dev',
     socketId?: string | null,
     provider?: ConversationSocketProvider,
-    blue?: Omit<BlueConversationHost, 'conversationId' | 'emit' | 'has'>
+    blue?: BlueHandle
   ) {
     this.apiKey = apiKey || '';
     this.conversationId = conversation_id;
@@ -104,12 +179,32 @@ export class Conversation {
     this.defaultTtlDays = undefined;
     this.boundHandleMessage = this.handleMessage.bind(this);
     if (blue) {
+      const state: BlueState = {
+        userId: blue.userId ?? null,
+        secret: blue.secret ?? null,
+        copy: null,
+        greeting: blue.greeting ?? null,
+        given: { ...(blue.given ?? {}) },
+        details: blue.details ?? null,
+      };
+      this.blueState = state;
+      this.blueTransport = blue.transport;
+      this.findBlueSecret = blue.findSecret;
+      if (blue.copy) takeBlueCopy(this, blue.copy);
       this.blue = new BlueAnswers({
-        ...blue,
+        transport: blue.transport,
+        clock: blue.clock,
         conversationId: conversation_id,
+        // Read at each call: a handle from getConversation(id) finds its user's secret at its first.
+        get secret() {
+          return state.secret ?? '';
+        },
         emit: (name, ...args) => this.emitBlue(name, args),
         has: (name) => (this.listeners.get(name)?.length ?? 0) > 0,
       });
+      // On the next tick, so an app that registers onMessage once createConversation resolves gets it (§2.2).
+      const greeting = state.greeting;
+      if (greeting) (blue.clock ?? RUNTIME_CLOCK).setTimeout(() => this.greet(greeting), 0);
     }
 
     // Attach via addEventListener, never `socket.onmessage = ...`.
@@ -211,6 +306,11 @@ export class Conversation {
    * @param days - Must be 1, 7, 30, or 90. Other values are ignored.
    */
   public async setTimeToLive(days: number): Promise<void> {
+    // Blue keeps a conversation's files with it for 90 days (§2.2).
+    if (this.blue) {
+      if (days === 90) return;
+      throw notHere(days < 90 ? NOT_HERE.shorterTimeToLive : NOT_HERE.longerTimeToLive);
+    }
     const d = days as TtlDays;
     if (ALLOWED_TTL_DAYS.includes(d)) {
       this.defaultTtlDays = d;
@@ -431,7 +531,11 @@ export class Conversation {
    * @returns A promise that resolves when the message is sent.
    */
   public async sendMessage(content: object | string): Promise<void> {
-    if (this.blue) return this.blue.send(content);
+    if (this.blue) {
+      const blue = this.blue;
+      if (this.blueState?.secret) return blue.send(content);
+      return this.blueSecret().then(() => blue.send(content));
+    }
     // Check if content is a string and transform it into a default object
     if (typeof content === 'string') {
       content = { type: 'text', text: content };
@@ -450,7 +554,11 @@ export class Conversation {
    * answered, or the answer had just ended. A core key has nothing to stop.
    */
   public async stop(): Promise<{ stopped: boolean }> {
-    if (this.blue) return this.blue.stop();
+    if (this.blue) {
+      const blue = this.blue;
+      if (this.blueState?.secret) return blue.stop();
+      return this.blueSecret().then(() => blue.stop());
+    }
     if (!stopWarned) {
       stopWarned = true;
       captivateLogger.warn(STOP_IN_CORE);
@@ -475,6 +583,7 @@ export class Conversation {
     if (typeof metadata !== 'object' || metadata === null) {
       throw new Error('Metadata must be a non-null object.');
     }
+    if (this.blueState) return this.setBlueMetadata(metadata as Record<string, unknown>);
 
     const metadataRequest = {
       action: 'sendMessage',
@@ -504,6 +613,7 @@ export class Conversation {
     if (typeof privateMeta !== 'object' || privateMeta === null) {
       throw new Error('Private metadata must be a non-null object.');
     }
+    if (this.blueTransport) return this.blueTransport.warnOnce('privateMetadata', CONSOLE_WORDS.privateMetadata);
     // Reuse the setMetadata logic, but wrap in { private: ... }
     return this.setMetadata({ private: privateMeta });
   }
@@ -531,6 +641,11 @@ export class Conversation {
    * @returns A promise that resolves to the conversation transcript with refreshed file URLs.
    */
   public async getTranscript(): Promise<object[]> {
+    // Blue's read-back in core's shape; it never writes (core's refresh of file links is core's alone).
+    if (this.blueState) {
+      const back = await this.readBlue();
+      return transcriptOf(this.conversationId, back, this.blueState.greeting);
+    }
     if (!this.apiKey) {
       throw new Error('API key is required to fetch transcript via REST.');
     }
@@ -641,6 +756,10 @@ export class Conversation {
  * @returns A promise that resolves to the conversation metadata.
  */
   public async getMetadata(): Promise<object> {
+    if (this.blueState) {
+      if (!this.blueState.copy) await this.readBlue();
+      return metadataWrapper(this.conversationId, this.blueState.copy ?? { kept: {} });
+    }
     const metadataRequest = {
       action: 'sendMessage',
       event: {
@@ -667,6 +786,11 @@ export class Conversation {
    */
   public async delete(options: { softDelete?: boolean } = {}): Promise<void> {
     const { softDelete = true } = options;
+    // A delete is a delete in Blue (apps own choice 12).
+    if (this.blueTransport) {
+      await this.blueTransport.request('DELETE', this.bluePath, { call: 'conversation', secret: await this.blueSecret() });
+      return;
+    }
 
     const deleteRequest = {
       action: 'sendMessage',
@@ -693,6 +817,7 @@ export class Conversation {
    * @returns A promise that resolves when the edit is confirmed via HTTP response.
    */
   public async editMessage(messageId: string, content: object | string): Promise<void> {
+    if (this.blue) throw notHere(NOT_HERE.editing);
     // If content is a string, wrap it in a default object
     if (typeof content === 'string') {
       content = { type: 'text', text: content };
@@ -835,6 +960,59 @@ export class Conversation {
     return this.mode === 'prod'
       ? 'https://channel.prod.captivat.io'
       : 'https://channel.dev.captivat.io';
+  }
+
+  private get bluePath(): string {
+    return `/v1/chat/${encodeURIComponent(this.conversationId)}`;
+  }
+
+  /** The user's secret: the handle's, else found once (getConversation(id)); else each call refuses in §2.2's words. */
+  private async blueSecret(): Promise<string> {
+    const state = this.blueState!;
+    if (state.secret) return state.secret;
+    const found = await this.findBlueSecret?.();
+    if (!found) throw new Error(SETUP_WORDS.userUnknown);
+    state.secret = found.secret;
+    if (found.userId !== null) state.userId = found.userId;
+    return found.secret;
+  }
+
+  /** GET /v1/chat/:id: the handle's copy and the details' names come with it. */
+  private async readBlue(): Promise<ReadBack> {
+    const back =
+      (await this.blueTransport!.request<ReadBack>('GET', this.bluePath, { call: 'conversation', secret: await this.blueSecret() })) ?? {};
+    takeBlueCopy(this, copyOfReadBack(back));
+    if (Array.isArray(back.details)) this.blueState!.details = back.details.filter((d) => typeof d === 'string');
+    return back;
+  }
+
+  /**
+   * Blue's setMetadata (§2.2, §2.7; gaps G10): everything as given kept in memory; all but
+   * user_id and user_token merged into what Blue keeps, by PATCH. A call of only user_id,
+   * user_token and the details' names sends nothing; one that would keep over 4 KB is refused first.
+   */
+  private async setBlueMetadata(metadata: Record<string, unknown>): Promise<void> {
+    const state = this.blueState!;
+    state.given = { ...state.given, ...metadata };
+    const sent = keptPart(metadata);
+    const details = new Set(state.details ?? []);
+    if (Object.keys(sent).every((name) => details.has(name))) return;
+    if (tooBig(merged(state.copy?.kept ?? {}, sent))) throw new Error(METADATA_TOO_BIG);
+    const answer = await this.blueTransport!.request<{ metadata?: unknown }>('PATCH', `${this.bluePath}/metadata`, {
+      call: 'metadata',
+      secret: await this.blueSecret(),
+      body: { metadata: sent },
+    });
+    const kept = isRecord(answer?.metadata) ? answer!.metadata : merged(state.copy?.kept ?? {}, sent);
+    takeBlueCopy(this, { ...(state.copy ?? {}), kept });
+  }
+
+  /** The bot-first greeting, once: onMessage, then onAnswer with its starters as quick replies (gaps G1). */
+  private greet(greeting: BlueGreeting): void {
+    if (this.blueTransport?.isDisposed) return;
+    if (greeting.text) this.emitBlue(BLUE_EVENTS.message, [[{ type: 'text', text: greeting.text }], 'ai_agent']);
+    const answer: BlueAnswer = { text: greeting.text, sources: [], ...(greeting.starters.length ? { choices: greeting.starters } : {}) };
+    this.emitBlue(BLUE_EVENTS.answer, [answer]);
   }
 
   /**

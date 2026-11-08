@@ -53,6 +53,19 @@ export const SETUP_WORDS = {
     'Server keys work only on your own server, never in an app or a web page. Make a key for your app on the Channels page, and if this key was ever in an app or a page, get a new one there.',
   serverKeyNotWhole: "This server key isn't whole. Copy it again from the Channels page.",
   noRandomSource: 'Blue mode needs a secure random source here. Add one, or pass options.randomValues.',
+  userSecretForm: 'options.userSecret must give a secret of 43 to 128 letters, digits, - or _ (base64url).',
+  /** A handle from getConversation(id) whose user nothing on this device knows: each call refuses. */
+  userUnknown: "This conversation's user isn't known on this device. List the user's conversations first.",
+  /** CaptivateChatManager merges lists on core's server, which knows no Blue key. */
+  managerBlueKey: "Use one CaptivateChatAPI for each app key. CaptivateChatManager is for Captivate's own keys.",
+} as const;
+
+/** What Blue mode doesn't do: thrown as an Error with status 501. */
+export const NOT_HERE = {
+  shorterTimeToLive: "Files sent in a chat are kept with it for 90 days here. A shorter time isn't available.",
+  // first-channels-dotnet-spec §1.2's words, offered to this library too (dotnet own choice 85).
+  longerTimeToLive: "Files sent in a chat are kept with it for 90 days here. A longer time isn't available.",
+  editing: "Editing a message isn't available here.",
 } as const;
 
 /** Written to the console once, for the developer. */
@@ -61,6 +74,9 @@ export const CONSOLE_WORDS = {
     'The key was refused. Check it is a key for your app, turned on, and that this address is listed on it.',
   noWebAddress:
     "This app's pages aren't on a web address, so the key can't check where they are. Use the library from the app's main process, or register the app's own scheme and list its address on the key.",
+  // dotnet own choice 85's words, warned once.
+  listFilters: "Blue mode lists a user's conversations newest first, without filters or searches, so those were left out.",
+  privateMetadata: "Blue mode doesn't keep private metadata, so it wasn't sent.",
 } as const;
 
 /** What a call was, since the same status reads differently on a send, a press or an upload. */

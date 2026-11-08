@@ -212,7 +212,7 @@ Given when the instance is made, beside the tunables above, or later with `confi
 | `blueUrl` | Blue's address. `prod` uses `https://vienna-blue-backend.prod.captivat.io`, `dev` `https://vienna-blue-backend.dev.captivat.io` |
 | `fetch` | A fetch to use in place of the global one: `expo/fetch`, Electron's `net.fetch` or a polyfill |
 | `stream` | How answers are read: `"auto"` (the default), `"fetch"`, `"xhr"` or `"whole"` |
-| `storage` | Where each user's secret is kept: `{ get, set, remove }`, each may return a Promise (React Native's AsyncStorage fits). `localStorage`, else memory, without it |
+| `storage` | Where each user's secret is kept: `{ get, set, remove }`, or an object with `getItem`, `setItem` and `removeItem` (React Native's AsyncStorage, as it is); each may return a Promise. `localStorage`, else memory, without it. A store that fails is left for memory |
 | `randomValues` | `(bytes: Uint8Array) => Uint8Array`, a secure random source where `crypto.getRandomValues` is missing (React Native: `expo-crypto`). Without either, the instance isn't made: "Blue mode needs a secure random source here. Add one, or pass options.randomValues." |
 | `userSecret` | `(userId) => string \| Promise<string>`: the user's secret from your own server, so a user has one list on every device |
 
@@ -253,6 +253,31 @@ await conversation.sendMessage('Where is my order?');
 **Stop:** `await conversation.stop()` stops the answer being written and resolves `{ stopped }`; `onAnswer` then gets `{ text: 'Stopped.', sources: [], stopped: true }`. `stopped: false` means nothing was being answered, or the answer had just ended. A message still waiting is dropped and never sent. Closing the connection yourself doesn't stop an answer: Blue goes on writing it.
 
 **A dropped connection** never sends the message again. The answer goes on in Blue, and the library reads it back, matched by the message's own id: what the app already got isn't given twice. When the message never reached Blue, the app gets "Your message didn't go through. Send it again.", and the message can be sent again safely. Phones pause connections in the background, so call `conversation.resume()` when the app comes back to the foreground: an answer still pending is read back at once.
+
+### Conversations by user
+
+```typescript
+const conversation = await api.createConversation('user-1', {}, { conversation_title: 'Orders' }, 'bot-first');
+const { conversations, pagination } = await api.getUserConversations({ userId: 'user-1', pagination: { page: 1, limit: 20 } });
+api.forgetUser('user-1');                                            // at sign-out
+```
+
+**The user's secret.** Blue never ties a user's conversations to their ID (often an email address): each user gets a secret, which every call about their conversations carries. By default it is made on the user's first conversation and kept on the device, per key and user, in `options.storage`, else `localStorage`, else memory (Electron's main process and React Native without a store lose the list when they restart). Its name holds a hash of the user's ID, never the ID. So a user has one list on each device. For one list on every device, give `options.userSecret(userId)`, which asks your own server for the user's secret. A good secret is `base64url(HMAC-SHA256(key, "vba-user:" + userId))`, made with a key your server keeps for this alone, never the app key's signing key, so a new signing key leaves every list as it was. Two rules:
+
+- Your server gives a user's secret only to that user, signed in. An endpoint that answers for any ID is the same as trusting whatever ID an app sends.
+- A secret anyone can work out from the ID, such as a plain hash of it, is no secret.
+
+The library checks only its form: 43 to 128 letters, digits, `-` or `_`. Anything else is refused: "options.userSecret must give a secret of 43 to 128 letters, digits, - or _ (base64url)." Call `api.forgetUser(userId)` when the user signs out: the secret kept on the device and the user's handles go.
+
+**What each call does:**
+
+- `createConversation(userId, userBasicInfo, metadata, autoStart, privateMetadata, { timeoutMs })` starts the conversation at once, within `timeoutMs` (20 seconds by default). Blue keeps `metadata` with it as you send it, up to 4 KB, except its top-level `user_id` and `user_token`, which stay in memory and are never stored (so put a customer's token only in `user_token`, and leave out of the metadata what you wouldn't store). Past 4 KB it is refused before sending: "Blue keeps at most 4 KB of metadata with a conversation. Keep less in it." `userBasicInfo` and `privateMetadata` are never sent. With `'bot-first'`, the bot's greeting comes to `onMessage` on the next tick, and to `onAnswer` with its starter questions as `choices`; it is never stored, so `getTranscript()` gives it first until the conversation's first message.
+- `getConversation(id)` gives a handle whose user is the one kept with the conversation on this device, else the last user named on this instance. When neither is known, each of its calls refuses: "This conversation's user isn't known on this device. List the user's conversations first."
+- `getUserConversations(userId | { userId, pagination })` lists the user's conversations, most recently active first, up to 50 a page, with core's `pagination` (`page`, `pageSize`, `total`, `totalPages`, `hasNextPage`, `hasPrevPage`). Each conversation's `metadata.channelMetadata` holds `conversationCreatedAt`, `conversationUpdatedAt`, `lastChatMessage`, `preview` and `custom`, the metadata Blue keeps. Filters and searches aren't available: they are left out, with one console warning. A user with no secret on this device has none.
+- `deleteUserConversations(userId)` deletes all of the user's conversations, and resolves `{ deleted, busy }`: one still answering stays, counted in `busy`. `conversation.delete()` deletes one, refused with "This conversation is still answering. Try again in a moment." while it answers. A delete is a delete: `softDelete` is ignored.
+- `conversation.getMetadata()` gives core's shape, `channelMetadata` where apps on 7.0 read it (`event.event_payload.content.channelMetadata`, `metadata.event.event_payload.content.channelMetadata`, `metadata.channelMetadata` and `channelMetadata`), read from Blue only when the handle doesn't already know it. `conversation.setMetadata(metadata)` changes what Blue keeps a top-level key at a time (a `null` removes one), never sending `user_id` or `user_token`; a call of only those (a sign-in) sends nothing.
+- `conversation.getTranscript()` gives the conversation's messages as `{ message_id, sender, from, content, text, sources, timestamp, createdAt, files?, stopped? }`, `sender` and `from` `'user'` or `'bot'`.
+- Not in Blue mode: `setPrivateMetadata` sends nothing (one warning: "Blue mode doesn't keep private metadata, so it wasn't sent."); `setTimeToLive(90)` resolves, since files sent in a chat are kept with it for 90 days, and any other number is refused with status `501`; `editMessage` is refused with status `501`, "Editing a message isn't available here."; `CaptivateChatManager` refuses Blue's keys: "Use one CaptivateChatAPI for each app key. CaptivateChatManager is for Captivate's own keys."
 
 ### Errors
 

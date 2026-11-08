@@ -6,12 +6,21 @@ import { BlueCall, CONSOLE_WORDS, SETUP_WORDS, WORDS, refusalWords } from './wor
 /** How an answer is read: picked before the POST goes out, since a sent POST can't be read again (§2.3). */
 export type BlueStreamMode = 'auto' | 'fetch' | 'xhr' | 'whole';
 
-/** Where the user's secrets are kept: localStorage's shape, each call possibly a Promise (React Native's AsyncStorage fits). */
-export interface BlueStorage {
-  get(name: string): string | null | undefined | Promise<string | null | undefined>;
-  set(name: string, value: string): void | Promise<void>;
-  remove(name: string): void | Promise<void>;
-}
+/**
+ * Where the user's secrets are kept: `{ get, set, remove }`, or localStorage's and React Native's
+ * AsyncStorage's own `{ getItem, setItem, removeItem }`, each call possibly a Promise.
+ */
+export type BlueStorage =
+  | {
+      get(name: string): string | null | undefined | Promise<string | null | undefined>;
+      set(name: string, value: string): void | Promise<void>;
+      remove(name: string): void | Promise<void>;
+    }
+  | {
+      getItem(name: string): string | null | undefined | Promise<string | null | undefined>;
+      setItem(name: string, value: string): void | Promise<void>;
+      removeItem(name: string): void | Promise<void>;
+    };
 
 /** Blue mode's options (§1.1), all optional, beside core's tunables in CaptivateChatAPIOptions. */
 export interface BlueOptions {

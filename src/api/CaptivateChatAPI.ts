@@ -1,8 +1,11 @@
 // Import the Conversation class
-import { Conversation, ConversationSocketProvider } from './Conversation';
+import { BlueHandle, Conversation, ConversationSocketProvider, blueStateOf, takeBlueCopy } from './Conversation';
 import { blueKeyKind } from './blue/keys';
-import { BlueOptions, BlueTransport } from './blue/transport';
-import { SETUP_WORDS } from './blue/words';
+import { BlueUsers } from './blue/secrets';
+import { CorePagination, ListedConversation, copyOfListed, isRecord, keptPart, listQuery, paginationOf, tooBig } from './blue/shapes';
+import { Clock } from './blue/stream';
+import { BlueOptions, BlueTransport, blueError } from './blue/transport';
+import { CONSOLE_WORDS, METADATA_TOO_BIG, SETUP_WORDS, WORDS } from './blue/words';
 
 // Determine the WebSocket implementation based on the environment (browser, Node.js, or React Native)
 let WebSocketImpl: typeof WebSocket;
@@ -60,6 +63,8 @@ const UNGUARDED_METHODS = [
   'onStep',
   'resume',
   'forgetUser',
+  // Blue mode's handle maker, called from getConversation through the guarded instance
+  'blueConversation',
 ];
 
 // Proxy guard function for automatic WebSocket state checking and reconnection
@@ -170,6 +175,10 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
   private connectPromise: Promise<void> | null = null;
   /** Blue mode's transport, set when the key is one of Blue's: no socket is opened then. */
   private blue: BlueTransport | null = null;
+  /** Blue mode's users and their secrets (first-channels-library-spec §2.6). */
+  private blueUsers: BlueUsers | null = null;
+  /** The timers Blue's conversations use: the runtime's unless a test sets one. */
+  private blueClock: Clock | undefined = undefined;
 
   static setDebugMode(enabled: boolean): void {
     captivateDebugMode = enabled;
@@ -207,7 +216,10 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     if (blueKind === 'server-partial') throw new Error(SETUP_WORDS.serverKeyNotWhole);
     // Server mode (a whole vbk_ key on the app's own server) is step K4's: until then it is refused.
     if (blueKind === 'server') throw new Error('Server keys work only with a later version of this library.');
-    if (blueKind === 'app') this.blue = new BlueTransport(apiKey, mode, options, captivateLogger);
+    if (blueKind === 'app') {
+      this.blue = new BlueTransport(apiKey, mode, options, captivateLogger);
+      this.blueUsers = new BlueUsers(this.blue);
+    }
 
     this.url =
       this.mode === 'prod'
@@ -440,6 +452,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     privateMetadata: object = {},
     options: { timeoutMs?: number } = {}
   ): Promise<Conversation> {
+    if (this.blue) return this.createBlueConversation(userId, metadata, autoConversationStart, privateMetadata, options);
     if (!this.isSocketActive()) {
       await this.connect();
     }
@@ -540,6 +553,10 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
   public getConversation(conversationId: string): Conversation {
     let conversation = this.conversations.get(conversationId);
 
+    if (!conversation && this.blue) {
+      conversation = this.blueConversation(conversationId, { findSecret: () => this.secretOfConversation(conversationId) });
+      this.conversations.set(conversationId, conversation);
+    }
     if (!conversation) {
       conversation = withSocketGuard(
         new Conversation(conversationId, this.socket, {}, this.apiKey, this.mode, this.socketId, this)
@@ -586,6 +603,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     const options = typeof userIdOrOptions === 'string'
       ? { userId: userIdOrOptions }
       : userIdOrOptions;
+    if (this.blue) return this.blueUserConversations(options);
 
     const { userId, filter = {}, search = {}, pagination = {}, apiKeys } = options;
     const conversations: Conversation[] = [];
@@ -654,10 +672,14 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
   /**
    * Deletes all conversations for a specific user using HTTP request with direct response.
    */
-  public async deleteUserConversations(userId: string, options: { softDelete?: boolean } = {}): Promise<void> {
+  public async deleteUserConversations(
+    userId: string,
+    options: { softDelete?: boolean } = {}
+  ): Promise<void | { deleted: number; busy: number }> {
     if (!userId) {
       throw new Error('User ID must be provided.');
     }
+    if (this.blue) return this.deleteBlueUserConversations(userId);
 
     const { softDelete = true } = options;
 
@@ -675,6 +697,167 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     }
 
     captivateLogger.log(`User conversations ${softDelete ? 'soft' : 'hard'} delete confirmed via HTTP response:`, response);
+  }
+
+  /**
+   * Blue mode: forgets a user on this device, their stored secret and their conversations'
+   * handles. Call it when the user signs out. Nothing with a core key.
+   */
+  public forgetUser(userId: string): void {
+    const users = this.blueUsers;
+    if (!users) return;
+    const theirs = new Set(users.conversationsOf(userId));
+    // As releaseConversation does: called on a guarded instance, that would go through the guard.
+    for (const [id, conversation] of [...this.conversations]) {
+      if (!theirs.has(id) && blueStateOf(conversation)?.userId !== userId) continue;
+      conversation.detachListeners();
+      this.conversations.delete(id);
+    }
+    users.forget(userId).catch((error) => captivateLogger.warn('Blue mode: a user could not be forgotten on this device', error));
+  }
+
+  /** A Blue conversation's handle, guarded as core's are. */
+  private blueConversation(conversationId: string, handle: Omit<BlueHandle, 'transport' | 'clock'>): Conversation {
+    const conversation = new Conversation(conversationId, null, {}, this.apiKey, this.mode, null, this, {
+      transport: this.blue!,
+      clock: this.blueClock,
+      ...handle,
+    });
+    return withSocketGuard(conversation);
+  }
+
+  /** getConversation(id)'s user: the one kept with the conversation, else the last one named here (§2.2). */
+  private async secretOfConversation(conversationId: string): Promise<{ secret: string; userId: string | null } | null> {
+    const users = this.blueUsers!;
+    const own = users.userOf(conversationId);
+    if (own) return own;
+    const kept = await users.secretOfConversation(conversationId);
+    if (kept) return { secret: kept, userId: null };
+    const last = users.lastUser;
+    if (last === null) return null;
+    const secret = await users.secretFor(last, false);
+    return secret === null ? null : { secret, userId: last };
+  }
+
+  /**
+   * Blue's createConversation (§2.2): the user's secret, then POST /v1/chat/conversations with the
+   * metadata as given but its user_id and user_token, which stay in memory. userBasicInfo and
+   * private metadata are never sent. A bot-first greeting comes to onMessage on the next tick.
+   */
+  private async createBlueConversation(
+    userId: string,
+    metadata: Record<string, any>,
+    autoConversationStart: 'bot-first' | 'user-first',
+    privateMetadata: object,
+    options: { timeoutMs?: number }
+  ): Promise<Conversation> {
+    if (typeof userId !== 'string' || !userId) throw new Error('User ID must be provided.');
+    const transport = this.blue!;
+    const users = this.blueUsers!;
+    const given = isRecord(metadata) ? { ...metadata } : {};
+    const kept = keptPart(given);
+    if (tooBig(kept)) throw new Error(METADATA_TOO_BIG);
+    if (isRecord(privateMetadata) && Object.keys(privateMetadata).length > 0) {
+      transport.warnOnce('privateMetadata', CONSOLE_WORDS.privateMetadata);
+    }
+    const secret = (await users.secretFor(userId, true))!;
+    const answer = await transport.request<{
+      conversationId?: unknown;
+      greeting?: { text?: unknown; starters?: unknown } | null;
+      details?: unknown;
+    }>('POST', '/v1/chat/conversations', {
+      call: 'start',
+      secret,
+      body: { metadata: kept, greeting: autoConversationStart === 'bot-first' },
+      timeoutMs: options.timeoutMs ?? this.conversationStartTimeoutMs,
+    });
+    const conversationId = answer?.conversationId;
+    if (typeof conversationId !== 'string' || !conversationId) throw blueError(WORDS.couldntAnswer);
+    const opening = answer?.greeting;
+    const greeting =
+      autoConversationStart === 'bot-first' && opening && typeof opening.text === 'string'
+        ? {
+            text: opening.text,
+            starters: Array.isArray(opening.starters) ? opening.starters.filter((s): s is string => typeof s === 'string') : [],
+            at: new Date().toISOString(),
+          }
+        : null;
+    const details = Array.isArray(answer?.details) ? answer!.details.filter((d): d is string => typeof d === 'string') : [];
+    const conversation = this.blueConversation(conversationId, { secret, userId, copy: { kept }, greeting, given, details });
+    this.conversations.set(conversationId, conversation);
+    await users.bind([conversationId], userId);
+    return conversation;
+  }
+
+  /**
+   * Blue's getUserConversations (§2.2; gaps G13): none without the user's secret; else a page of
+   * GET /v1/chat/conversations, newest first, each a handle whose metadata.channelMetadata holds
+   * its dates, last message, preview and kept metadata (`custom`), with core's pagination.
+   */
+  private async blueUserConversations(options: {
+    userId: string;
+    filter?: object;
+    search?: object;
+    pagination?: { page?: string | number; limit?: string | number };
+    apiKeys?: string[];
+  }): Promise<{ conversations: Conversation[]; pagination: CorePagination }> {
+    const { userId, filter, search, apiKeys } = options;
+    if (typeof userId !== 'string' || !userId) throw new Error('User ID must be provided.');
+    const asked = (value: unknown) => isRecord(value) && Object.keys(value).length > 0;
+    if (asked(filter) || asked(search) || (Array.isArray(apiKeys) && apiKeys.length > 0)) {
+      this.blue!.warnOnce('listFilters', CONSOLE_WORDS.listFilters);
+    }
+    const query = listQuery(options.pagination);
+    const users = this.blueUsers!;
+    const secret = await users.secretFor(userId, false);
+    if (secret === null) return { conversations: [], pagination: paginationOf(0, query.page, query.limit) };
+    const answer = await this.blue!.request<{ total?: unknown; page?: unknown; pageSize?: unknown; items?: unknown }>(
+      'GET',
+      `/v1/chat/conversations?page=${query.page}&limit=${query.limit}`,
+      { call: 'conversation', secret }
+    );
+    const items = (Array.isArray(answer?.items) ? answer!.items : []).filter(
+      (item): item is ListedConversation => isRecord(item) && typeof item.conversationId === 'string' && item.conversationId !== ''
+    );
+    const conversations = items.map((item) => {
+      const copy = copyOfListed(item);
+      const existing = this.conversations.get(item.conversationId);
+      if (existing) {
+        const state = blueStateOf(existing);
+        if (state && !state.secret) {
+          state.secret = secret;
+          state.userId = userId;
+        }
+        takeBlueCopy(existing, copy);
+        return existing;
+      }
+      const conversation = this.blueConversation(item.conversationId, { secret, userId, copy });
+      this.conversations.set(item.conversationId, conversation);
+      return conversation;
+    });
+    await users.bind(items.map((item) => item.conversationId), userId);
+    const number = (value: unknown, fallback: number) => (typeof value === 'number' && Number.isFinite(value) ? value : fallback);
+    return {
+      conversations,
+      pagination: paginationOf(number(answer?.total, items.length), number(answer?.page, query.page), number(answer?.pageSize, query.limit)),
+    };
+  }
+
+  /** Blue's deleteUserConversations (§2.2; gaps G13): every one of the user's, those still answering left and counted in `busy`. */
+  private async deleteBlueUserConversations(userId: string): Promise<{ deleted: number; busy: number }> {
+    const users = this.blueUsers!;
+    const secret = await users.secretFor(userId, false);
+    if (secret === null) return { deleted: 0, busy: 0 };
+    const done = await this.blue!.request<{ deleted?: unknown; busy?: unknown }>('DELETE', '/v1/chat/conversations', {
+      call: 'conversation',
+      secret,
+    });
+    const theirs = new Set(users.conversationsOf(userId));
+    for (const [id, conversation] of [...this.conversations]) {
+      if (theirs.has(id) || blueStateOf(conversation)?.userId === userId) this.releaseConversation(id);
+    }
+    const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+    return { deleted: count(done?.deleted), busy: count(done?.busy) };
   }
 
   /**
