@@ -83,7 +83,7 @@ export interface Clock {
   now(): number;
 }
 
-const RUNTIME_CLOCK: Clock = {
+export const RUNTIME_CLOCK: Clock = {
   setTimeout: (run, ms) => setTimeout(run, ms),
   clearTimeout: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
   now: () => Date.now(),

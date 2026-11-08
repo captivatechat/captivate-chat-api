@@ -1,0 +1,35 @@
+{
+  "about": "What an app's listeners get for case-after-done.ndjson, all seven registered, read one line a network chunk. Reading whole gives the same without onDelta.",
+  "calls": [
+    {
+      "listener": "onDelta",
+      "args": [
+        "Hello.",
+        {
+          "reset": false
+        }
+      ]
+    },
+    {
+      "listener": "onMessage",
+      "args": [
+        [
+          {
+            "type": "text",
+            "text": "Hello."
+          }
+        ],
+        "ai_agent"
+      ]
+    },
+    {
+      "listener": "onAnswer",
+      "args": [
+        {
+          "text": "Hello.",
+          "sources": []
+        }
+      ]
+    }
+  ]
+}

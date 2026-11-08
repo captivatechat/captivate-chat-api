@@ -1,0 +1,26 @@
+{
+  "about": "What an app's listeners get for offline.ndjson, all seven registered, read one line a network chunk. Reading whole gives the same without onDelta.",
+  "calls": [
+    {
+      "listener": "onMessage",
+      "args": [
+        [
+          {
+            "type": "text",
+            "text": "This assistant isn't available right now."
+          }
+        ],
+        "ai_agent"
+      ]
+    },
+    {
+      "listener": "onAnswer",
+      "args": [
+        {
+          "text": "This assistant isn't available right now.",
+          "sources": []
+        }
+      ]
+    }
+  ]
+}

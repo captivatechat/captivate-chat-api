@@ -1,0 +1,24 @@
+{
+  "about": "What an app's listeners get for stopped.ndjson, all seven registered, read one line a network chunk. Reading whole gives the same without onDelta.",
+  "calls": [
+    {
+      "listener": "onConversationUpdate",
+      "args": [
+        {
+          "type": "stopped",
+          "conversationId": "000000000000000000000037"
+        }
+      ]
+    },
+    {
+      "listener": "onAnswer",
+      "args": [
+        {
+          "text": "Stopped.",
+          "sources": [],
+          "stopped": true
+        }
+      ]
+    }
+  ]
+}

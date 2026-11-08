@@ -1,0 +1,99 @@
+{
+  "about": "What an app's listeners get for lookup-offer.ndjson, all seven registered, read one line a network chunk. Reading whole gives the same without onDelta.",
+  "calls": [
+    {
+      "listener": "onStep",
+      "args": [
+        "Looking into it"
+      ]
+    },
+    {
+      "listener": "onDelta",
+      "args": [
+        "I can check that for you.",
+        {
+          "reset": false
+        }
+      ]
+    },
+    {
+      "listener": "onMessage",
+      "args": [
+        [
+          {
+            "type": "text",
+            "text": "I can check that for you."
+          }
+        ],
+        "ai_agent"
+      ]
+    },
+    {
+      "listener": "onActionReceived",
+      "args": [
+        [
+          {
+            "id": "of-000000000000000000000020",
+            "data": {
+              "id": "of-000000000000000000000020",
+              "actionId": "act_check_order",
+              "version": 1,
+              "kind": "form",
+              "title": "Check your order",
+              "fields": [
+                {
+                  "name": "number",
+                  "label": "Order number",
+                  "kind": "text",
+                  "required": true
+                }
+              ],
+              "consent": "We'll check this in Northwind's records for you. You'll see only what's yours.",
+              "sendLabel": "Check",
+              "cancelLabel": "Not now",
+              "status": "open",
+              "expiresAt": "2026-01-05T09:00:33.000Z",
+              "lookUp": true,
+              "verify": {
+                "state": "signed"
+              }
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "listener": "onAnswer",
+      "args": [
+        {
+          "text": "I can check that for you.",
+          "sources": [],
+          "offer": {
+            "id": "of-000000000000000000000020",
+            "actionId": "act_check_order",
+            "version": 1,
+            "kind": "form",
+            "title": "Check your order",
+            "fields": [
+              {
+                "name": "number",
+                "label": "Order number",
+                "kind": "text",
+                "required": true
+              }
+            ],
+            "consent": "We'll check this in Northwind's records for you. You'll see only what's yours.",
+            "sendLabel": "Check",
+            "cancelLabel": "Not now",
+            "status": "open",
+            "expiresAt": "2026-01-05T09:00:33.000Z",
+            "lookUp": true,
+            "verify": {
+              "state": "signed"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

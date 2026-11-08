@@ -1,0 +1,47 @@
+{
+  "about": "What an app's listeners get for answer-cited.ndjson, all seven registered, read one line a network chunk. Reading whole gives the same without onDelta.",
+  "calls": [
+    {
+      "listener": "onStep",
+      "args": [
+        "Looking into it"
+      ]
+    },
+    {
+      "listener": "onDelta",
+      "args": [
+        "Refunds are paid within 14 days of a request.",
+        {
+          "reset": false
+        }
+      ]
+    },
+    {
+      "listener": "onMessage",
+      "args": [
+        [
+          {
+            "type": "text",
+            "text": "Refunds are paid within 14 days of a request [1]."
+          }
+        ],
+        "ai_agent"
+      ]
+    },
+    {
+      "listener": "onAnswer",
+      "args": [
+        {
+          "text": "Refunds are paid within 14 days of a request [1].",
+          "sources": [
+            {
+              "number": 1,
+              "title": "Delivery notes",
+              "excerpt": "Parcels leave the warehouse every weekday at 4pm and arrive within two working days. Refunds for late parcels are paid on request."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

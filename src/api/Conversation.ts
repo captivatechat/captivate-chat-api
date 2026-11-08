@@ -1,7 +1,12 @@
 import { CaptivateChatFileManager, TtlDays } from './CaptivateChatFileManager';
 import { captivateLogger } from './CaptivateChatAPI';
+import { BLUE_EVENTS, BlueAnswer, BlueAnswers, BlueConversationHost } from './blue/answer';
 
 const ALLOWED_TTL_DAYS: TtlDays[] = [1, 7, 30, 90];
+
+/** stop() with a core key, warned once (first-channels-library-spec §2.2). */
+const STOP_IN_CORE = 'stop() works only with a key for your app from Blue, so nothing was stopped.';
+let stopWarned = false;
 
 interface Action {
   id: string;
@@ -60,6 +65,11 @@ export class Conversation {
    * Default TTL (days) for file uploads in this conversation. Set via setTimeToLive(); used when uploading files.
    */
   private defaultTtlDays: TtlDays | undefined;
+  /**
+   * Blue mode's answers, set when the conversation is one of Blue's (first-channels-library-spec
+   * §2.2): its methods then take their Blue branch, and no socket is listened to.
+   */
+  private blue: BlueAnswers | null = null;
 
   /**
    * Initializes a new Conversation instance.
@@ -71,6 +81,7 @@ export class Conversation {
    * @param socketId - Socket ID. Ignored when `provider` is supplied.
    * @param provider - Live view of the owning API's socket and socketId. Strongly preferred:
    *                   without it this instance goes stale as soon as the API reconnects.
+   * @param blue - Blue mode's transport and the user's secret, for a conversation of Blue's.
    */
   constructor(
     conversation_id: string,
@@ -79,7 +90,8 @@ export class Conversation {
     apiKey?: string,
     mode?: 'prod' | 'dev',
     socketId?: string | null,
-    provider?: ConversationSocketProvider
+    provider?: ConversationSocketProvider,
+    blue?: Omit<BlueConversationHost, 'conversationId' | 'emit' | 'has'>
   ) {
     this.apiKey = apiKey || '';
     this.conversationId = conversation_id;
@@ -91,6 +103,14 @@ export class Conversation {
     this.socketId = socketId || null;
     this.defaultTtlDays = undefined;
     this.boundHandleMessage = this.handleMessage.bind(this);
+    if (blue) {
+      this.blue = new BlueAnswers({
+        ...blue,
+        conversationId: conversation_id,
+        emit: (name, ...args) => this.emitBlue(name, args),
+        has: (name) => (this.listeners.get(name)?.length ?? 0) > 0,
+      });
+    }
 
     // Attach via addEventListener, never `socket.onmessage = ...`.
     // The old code assigned onmessage, which meant each new Conversation silently
@@ -283,6 +303,8 @@ export class Conversation {
    * @param callback - The function to handle incoming messages.
    */
   public onMessage(callback: (message: string, type: string) => void): void {
+    // Blue mode keeps the callback itself, so off('bot_message', callback) removes it.
+    if (this.blue) return this.addListener(BLUE_EVENTS.message, callback);
     this.addListener('bot_message', (payload: any) => callback(payload.content, 'ai_agent'));
     this.addListener('livechat_message', (payload: any) => callback(payload.content, 'human_agent'));
 
@@ -319,6 +341,7 @@ export class Conversation {
    * @param callback - The function to handle incoming action.
    */
   public onActionReceived(callback: (actions: [Action]) => void): void {
+    if (this.blue) return this.addListener(BLUE_EVENTS.action, callback);
     this.addListener('action', (payload: any) => callback(payload.actions));
   }
 
@@ -327,6 +350,7 @@ export class Conversation {
    * @param callback - The function to handle conversation updates.
    */
   public onConversationUpdate(callback: (update: any) => void): void {
+    if (this.blue) return this.addListener(BLUE_EVENTS.update, callback);
     this.addListener('conversation_update', (payload: any) => {
       callback({
         type: payload.type,
@@ -341,6 +365,7 @@ export class Conversation {
    * @param callback - The function to handle errors.
    */
   public onError(callback: (error: any) => void): void {
+    if (this.blue) return this.addListener(BLUE_EVENTS.error, callback);
     this.addListener('general_error', (payload: any) => {
       callback({
         conversationId: payload.conversation_id,
@@ -348,6 +373,38 @@ export class Conversation {
         errorDesc: payload.error_desc,
       });
     });
+  }
+
+  /**
+   * Blue mode: the answer so far while it is written, its [n] markers out, once per network
+   * chunk; `reset` when what was shown is dropped. Never called for a core key.
+   */
+  public onDelta(callback: (draft: string, info: { reset: boolean }) => void): void {
+    if (this.blue) this.addListener(BLUE_EVENTS.delta, callback);
+  }
+
+  /**
+   * Blue mode: the final answer once, with the sources its [n] point at and any quick replies.
+   * Never called for a core key.
+   */
+  public onAnswer(callback: (answer: BlueAnswer) => void): void {
+    if (this.blue) this.addListener(BLUE_EVENTS.answer, callback);
+  }
+
+  /** Blue mode: what the bot is doing, for a typing line ("Looking into it"). Never called for a core key. */
+  public onStep(callback: (label: string) => void): void {
+    if (this.blue) this.addListener(BLUE_EVENTS.step, callback);
+  }
+
+  /** Calls a Blue list's listeners in order; one that throws doesn't stop the others. */
+  private emitBlue(name: string, args: unknown[]): void {
+    for (const callback of [...(this.listeners.get(name) ?? [])]) {
+      try {
+        callback(...args);
+      } catch (err) {
+        captivateLogger.error(`Listener for "${name}" threw:`, err);
+      }
+    }
   }
 
   /**
@@ -374,6 +431,7 @@ export class Conversation {
    * @returns A promise that resolves when the message is sent.
    */
   public async sendMessage(content: object | string): Promise<void> {
+    if (this.blue) return this.blue.send(content);
     // Check if content is a string and transform it into a default object
     if (typeof content === 'string') {
       content = { type: 'text', text: content };
@@ -385,6 +443,27 @@ export class Conversation {
       conversation_id: this.conversationId,
       content,
     });
+  }
+
+  /**
+   * Blue mode: stops the answer being written. `stopped: false` means nothing was being
+   * answered, or the answer had just ended. A core key has nothing to stop.
+   */
+  public async stop(): Promise<{ stopped: boolean }> {
+    if (this.blue) return this.blue.stop();
+    if (!stopWarned) {
+      stopWarned = true;
+      captivateLogger.warn(STOP_IN_CORE);
+    }
+    return { stopped: false };
+  }
+
+  /**
+   * Blue mode: call when the app comes back to the foreground, so an answer still pending is
+   * read back. Nothing for a core key.
+   */
+  public resume(): void {
+    this.blue?.resume();
   }
 
   /**

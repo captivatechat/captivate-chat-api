@@ -1,0 +1,30 @@
+{
+  "about": "What an app's listeners get for interview-choices.ndjson, all seven registered, read one line a network chunk. Reading whole gives the same without onDelta.",
+  "calls": [
+    {
+      "listener": "onMessage",
+      "args": [
+        [
+          {
+            "type": "text",
+            "text": "I'll send this to Northwind: Name: `Sam Lee`, Email: `sam@example.com`. We'll send these details to Northwind so they can reply to you. Reply yes to send it, or no to cancel."
+          }
+        ],
+        "ai_agent"
+      ]
+    },
+    {
+      "listener": "onAnswer",
+      "args": [
+        {
+          "text": "I'll send this to Northwind: Name: `Sam Lee`, Email: `sam@example.com`. We'll send these details to Northwind so they can reply to you. Reply yes to send it, or no to cancel.",
+          "sources": [],
+          "choices": [
+            "Yes, send it",
+            "No, cancel"
+          ]
+        }
+      ]
+    }
+  ]
+}

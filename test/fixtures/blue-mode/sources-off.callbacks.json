@@ -1,0 +1,41 @@
+{
+  "about": "What an app's listeners get for sources-off.ndjson, all seven registered, read one line a network chunk. Reading whole gives the same without onDelta.",
+  "calls": [
+    {
+      "listener": "onStep",
+      "args": [
+        "Looking into it"
+      ]
+    },
+    {
+      "listener": "onDelta",
+      "args": [
+        "Refunds are paid within 14 days of a request.",
+        {
+          "reset": false
+        }
+      ]
+    },
+    {
+      "listener": "onMessage",
+      "args": [
+        [
+          {
+            "type": "text",
+            "text": "Refunds are paid within 14 days of a request."
+          }
+        ],
+        "ai_agent"
+      ]
+    },
+    {
+      "listener": "onAnswer",
+      "args": [
+        {
+          "text": "Refunds are paid within 14 days of a request.",
+          "sources": []
+        }
+      ]
+    }
+  ]
+}

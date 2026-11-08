@@ -230,6 +230,30 @@ An answer comes back while it is written, as one line of JSON an event. How the 
 
 The connection counts as cut when its headers don't come within 30 seconds, when nothing at all comes for 45 seconds while it is open (Blue sends a blank line every 15 seconds to keep it busy), when a body read whole hasn't ended 330 seconds after the message was sent, when it ends before the answer does, or when a line is over 1 MB (or, through `XMLHttpRequest`, the whole body over 2 MB). A cut message is never sent again: the answer goes on in Blue, and the library reads it back. There is no other time limit, since an answer may take up to 300 seconds.
 
+### Answers
+
+`sendMessage` works as it does with core's keys, and three listeners are new: `onDelta` for the answer while it's written, `onAnswer` for the final answer with its sources, and `onStep` for a typing line.
+
+```typescript
+conversation.onStep((label) => showTyping(label));                   // "Looking into it"
+conversation.onDelta((draft, { reset }) => showDraft(draft));        // the answer so far
+conversation.onMessage((content, type) => show(content, type));      // once per answer, as before
+conversation.onAnswer(({ text, sources, stopped, choices }) => showSources(sources));
+await conversation.sendMessage('Where is my order?');
+```
+
+- `onDelta(draft, { reset })` gets the whole answer so far, not the piece, once per piece the network brings. Its `[1]` markers are taken out, since a draft's numbers aren't the final answer's. `reset: true` comes with an empty draft when what was shown should be dropped. A runtime that reads the answer whole gives no drafts.
+- `onMessage(content, type)` gets each answer once, at its end, as `[{ type: 'text', text }]` with type `'ai_agent'`, never once per draft. Without `onAnswer`, the text ends with its sources, after a blank line ("Sources:", then a line a source; one whose title can't be shown reads "Internal document"). An answer with no words gives no `onMessage`, and neither does a stopped one. An answer that failed gives a string, `"[Error: …]"`, with type `'error'`, and goes to `onError` as well.
+- `onAnswer({ text, sources, stopped, choices, offer })` comes once an answer is done. `sources` are numbered as the `[n]` in `text`. `choices` are quick replies: show them as buttons and send the one pressed as a message, `sendMessage(choice)`. `offer` is a form the bot offered, which goes to `onActionReceived` too. `renumber(text, sources, keep)` (exported) renumbers the markers and the list together for an app that shows only some sources.
+- `onConversationUpdate` gets `{ type, conversationId }`: `'answering'` while a dropped answer is still being written, `'stopped'`, `'busy'` while your message waits for an answer this conversation is giving elsewhere, and `'unavailable'` when the assistant couldn't answer.
+- `onError` gets `{ conversationId, errorCode, errorDesc, retryAfter }`, `errorCode` the HTTP status when there was one. `off('bot_message', cb)`, `off('answer', cb)`, `off('delta', cb)` and `off('step', cb)` remove a listener.
+
+`sendMessage` resolves once the answer has started, and rejects when the message is refused (`error.errorDesc` holds the words). Messages go one at a time: a second one waits until the first answer's connection has closed. One sent while the conversation answers elsewhere (another tab or device) waits for that answer and then goes, for 10 minutes at most.
+
+**Stop:** `await conversation.stop()` stops the answer being written and resolves `{ stopped }`; `onAnswer` then gets `{ text: 'Stopped.', sources: [], stopped: true }`. `stopped: false` means nothing was being answered, or the answer had just ended. A message still waiting is dropped and never sent. Closing the connection yourself doesn't stop an answer: Blue goes on writing it.
+
+**A dropped connection** never sends the message again. The answer goes on in Blue, and the library reads it back, matched by the message's own id: what the app already got isn't given twice. When the message never reached Blue, the app gets "Your message didn't go through. Send it again.", and the message can be sent again safely. Phones pause connections in the background, so call `conversation.resume()` when the app comes back to the foreground: an answer still pending is read back at once.
+
 ### Errors
 
 Blue mode's errors carry words your app can show as they are, never the server's own: `error.errorDesc` (and `onError`'s `errorDesc`) holds them, `error.status` the HTTP status (none when Blue couldn't be reached or the call ran out of time), `error.retryAfter` a `429`'s wait in seconds, and `error.fields` the names of a form's refused fields. The message reads like the gateway's: `HTTP request failed: 404 Not Found: This conversation isn't available any more. Start a new one.` None of the words contains "410" or "gone".

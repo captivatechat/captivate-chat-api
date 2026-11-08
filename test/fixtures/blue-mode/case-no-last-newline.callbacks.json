@@ -1,0 +1,26 @@
+{
+  "about": "What an app's listeners get for case-no-last-newline.ndjson, all seven registered, read one line a network chunk. Reading whole gives the same without onDelta.",
+  "calls": [
+    {
+      "listener": "onMessage",
+      "args": [
+        [
+          {
+            "type": "text",
+            "text": "A last line without its newline."
+          }
+        ],
+        "ai_agent"
+      ]
+    },
+    {
+      "listener": "onAnswer",
+      "args": [
+        {
+          "text": "A last line without its newline.",
+          "sources": []
+        }
+      ]
+    }
+  ]
+}
