@@ -1,0 +1,7 @@
+{"type":"conversation","conversationId":"0000000000000000000000a3"}
+{"type":"delta","text":"Hello."}
+{"type":"text","text":"Hello."}
+{"type":"done"}
+{"type":"error","message":"Late words nobody should see."}
+{"type":"text","text":"A second answer nobody should see."}
+{"type":"done"}

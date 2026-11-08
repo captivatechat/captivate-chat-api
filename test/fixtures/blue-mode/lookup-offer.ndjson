@@ -1,0 +1,7 @@
+{"type":"conversation","conversationId":"000000000000000000000019"}
+{"type":"step","label":"Looking into it"}
+{"type":"delta","text":"I can check that for you."}
+{"type":"sources","sources":[]}
+{"type":"text","text":"I can check that for you."}
+{"type":"offer","offer":{"id":"of-000000000000000000000020","actionId":"act_check_order","version":1,"kind":"form","title":"Check your order","fields":[{"name":"number","label":"Order number","kind":"text","required":true}],"consent":"We'll check this in Northwind's records for you. You'll see only what's yours.","sendLabel":"Check","cancelLabel":"Not now","status":"open","expiresAt":"2026-01-05T09:00:33.000Z","lookUp":true,"verify":{"state":"signed"}}}
+{"type":"done"}

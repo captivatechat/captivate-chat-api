@@ -1,0 +1,33 @@
+{
+  "_id": "000000000000000000000037",
+  "createdAt": "2026-01-05T09:00:09.000Z",
+  "updatedAt": "2026-01-05T09:00:11.000Z",
+  "messages": [
+    {
+      "_id": "000000000000000000000038",
+      "seq": 1,
+      "role": "user",
+      "content": "zz-slow: what's new?",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:10.000Z",
+      "offline": false,
+      "stopped": false,
+      "clientId": "fixture-message-004"
+    },
+    {
+      "_id": "000000000000000000000039",
+      "seq": 2,
+      "role": "assistant",
+      "content": "Stopped.",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:11.000Z",
+      "offline": false,
+      "stopped": true
+    }
+  ],
+  "answering": false,
+  "metadata": {},
+  "details": []
+}

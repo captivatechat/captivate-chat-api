@@ -1,0 +1,14 @@
+
+
+{"type":"conversation","conversationId":"0000000000000000000000a1"}
+
+{"type":"step","label":"Looking into it"}
+
+
+{"type":"delta","text":"Parcels leave every weekday at 4pm."}
+
+{"type":"sources","sources":[]}
+{"type":"text","text":"Parcels leave every weekday at 4pm."}
+
+{"type":"done"}
+

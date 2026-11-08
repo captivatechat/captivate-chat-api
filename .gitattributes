@@ -1,0 +1,2 @@
+# The backend's recordings of what /v1/chat streams, and the hand-written cases beside them, read as sent.
+test/fixtures/blue-mode/** -text

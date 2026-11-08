@@ -216,6 +216,20 @@ Given when the instance is made, beside the tunables above, or later with `confi
 | `randomValues` | `(bytes: Uint8Array) => Uint8Array`, a secure random source where `crypto.getRandomValues` is missing (React Native: `expo-crypto`). Without either, the instance isn't made: "Blue mode needs a secure random source here. Add one, or pass options.randomValues." |
 | `userSecret` | `(userId) => string \| Promise<string>`: the user's secret from your own server, so a user has one list on every device |
 
+### How answers are read
+
+An answer comes back while it is written, as one line of JSON an event. How the library reads it is picked before the message goes out, since a request that was sent can't be read again:
+
+| Runtime | How it reads | The answer while it's written |
+|---|---|---|
+| Browsers, Electron (its windows and its main process, with Node's `fetch` or `options.fetch: net.fetch`), Node 20.15 and later, Deno, Bun; React Native with `expo/fetch` (Expo SDK 52 and later) passed as `options.fetch` | `fetch` and its response's body | Yes |
+| React Native's own `fetch`, Capacitor, older browsers | `XMLHttpRequest` | Yes |
+| Anything else | `fetch`, the response read whole | No: the same events, all at the end |
+
+`options.stream` (`"fetch"`, `"xhr"` or `"whole"`) overrides the pick. Where `TextDecoder` is missing (Hermes), the library decodes the bytes itself. The answer shows while it's written only when the bot's AI writes it that way too: an organization's own AI that doesn't stream gives the whole answer at the end, whichever way it is read.
+
+The connection counts as cut when its headers don't come within 30 seconds, when nothing at all comes for 45 seconds while it is open (Blue sends a blank line every 15 seconds to keep it busy), when a body read whole hasn't ended 330 seconds after the message was sent, when it ends before the answer does, or when a line is over 1 MB (or, through `XMLHttpRequest`, the whole body over 2 MB). A cut message is never sent again: the answer goes on in Blue, and the library reads it back. There is no other time limit, since an answer may take up to 300 seconds.
+
 ### Errors
 
 Blue mode's errors carry words your app can show as they are, never the server's own: `error.errorDesc` (and `onError`'s `errorDesc`) holds them, `error.status` the HTTP status (none when Blue couldn't be reached or the call ran out of time), `error.retryAfter` a `429`'s wait in seconds, and `error.fields` the names of a form's refused fields. The message reads like the gateway's: `HTTP request failed: 404 Not Found: This conversation isn't available any more. Start a new one.` None of the words contains "410" or "gone".

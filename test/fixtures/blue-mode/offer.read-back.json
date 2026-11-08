@@ -1,0 +1,100 @@
+{
+  "_id": "000000000000000000000024",
+  "createdAt": "2026-01-05T09:00:14.000Z",
+  "updatedAt": "2026-01-05T09:00:17.000Z",
+  "messages": [
+    {
+      "_id": "000000000000000000000029",
+      "seq": 1,
+      "role": "user",
+      "content": "Can I get a quote?",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:15.000Z",
+      "offline": false,
+      "stopped": false,
+      "clientId": "fixture-message-006"
+    },
+    {
+      "_id": "000000000000000000000030",
+      "seq": 2,
+      "role": "assistant",
+      "content": "Sure, the team can send you a quote.",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:16.000Z",
+      "offline": false,
+      "stopped": false,
+      "offer": {
+        "id": "of-000000000000000000000025",
+        "actionId": "act_request_a_quote",
+        "version": 1,
+        "kind": "form",
+        "title": "Request a quote",
+        "fields": [
+          {
+            "name": "name",
+            "label": "Name",
+            "kind": "text",
+            "required": true
+          },
+          {
+            "name": "email",
+            "label": "Email",
+            "kind": "email",
+            "required": true
+          }
+        ],
+        "consent": "We'll send these details to Northwind so they can reply to you.",
+        "sendLabel": "Send",
+        "cancelLabel": "Not now",
+        "status": "sent",
+        "expiresAt": "2026-01-05T09:00:32.000Z"
+      }
+    },
+    {
+      "_id": "000000000000000000000026",
+      "seq": 3,
+      "role": "user",
+      "content": "Sent: Request a quote",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:17.000Z",
+      "offline": false,
+      "stopped": false,
+      "submission": {
+        "submissionId": "000000000000000000000027",
+        "offerId": "of-000000000000000000000025",
+        "title": "Request a quote",
+        "values": [
+          {
+            "label": "Name",
+            "value": "Sam Lee"
+          },
+          {
+            "label": "Email",
+            "value": "sam@example.com"
+          }
+        ]
+      }
+    },
+    {
+      "_id": "000000000000000000000028",
+      "seq": 4,
+      "role": "assistant",
+      "content": "Thanks, Sam Lee! I've passed this on to the team.",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:17.000Z",
+      "offline": false,
+      "stopped": false,
+      "offerResult": {
+        "offerId": "of-000000000000000000000025",
+        "status": "sent"
+      }
+    }
+  ],
+  "answering": false,
+  "metadata": {},
+  "details": []
+}

@@ -1,0 +1,6 @@
+{"type":"conversation","conversationId":"000000000000000000000034"}
+{"type":"step","label":"Looking into it"}
+{"type":"delta","text":"Refunds are paid within 14 days of a request."}
+{"type":"sources","sources":[]}
+{"type":"text","text":"Refunds are paid within 14 days of a request."}
+{"type":"done"}

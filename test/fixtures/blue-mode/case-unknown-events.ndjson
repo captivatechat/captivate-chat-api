@@ -1,0 +1,6 @@
+{"type":"conversation","conversationId":"0000000000000000000000a5"}
+{"type":"verification","verification":{"supported":true}}
+{"type":"future","what":"an event a later backend adds"}
+{"type":"delta"}
+{"type":"text","text":"Still here."}
+{"type":"done"}

@@ -1,0 +1,75 @@
+{
+  "_id": "000000000000000000000019",
+  "createdAt": "2026-01-05T09:00:18.000Z",
+  "updatedAt": "2026-01-05T09:00:22.000Z",
+  "messages": [
+    {
+      "_id": "000000000000000000000022",
+      "seq": 1,
+      "role": "user",
+      "content": "Where's my order?",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:19.000Z",
+      "offline": false,
+      "stopped": false,
+      "clientId": "fixture-message-007"
+    },
+    {
+      "_id": "000000000000000000000023",
+      "seq": 2,
+      "role": "assistant",
+      "content": "I can check that for you.",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:20.000Z",
+      "offline": false,
+      "stopped": false,
+      "offer": {
+        "id": "of-000000000000000000000020",
+        "actionId": "act_check_order",
+        "version": 1,
+        "kind": "form",
+        "title": "Check your order",
+        "fields": [
+          {
+            "name": "number",
+            "label": "Order number",
+            "kind": "text",
+            "required": true
+          }
+        ],
+        "consent": "We'll check this in Northwind's records for you. You'll see only what's yours.",
+        "sendLabel": "Check",
+        "cancelLabel": "Not now",
+        "status": "sent",
+        "expiresAt": "2026-01-05T09:00:33.000Z",
+        "lookUp": true,
+        "verify": {
+          "state": "signed"
+        }
+      }
+    },
+    {
+      "_id": "000000000000000000000021",
+      "seq": 3,
+      "role": "assistant",
+      "content": "Here's what I found. Ask me if you have a question about it.",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:22.000Z",
+      "offline": false,
+      "stopped": false,
+      "offerResult": {
+        "offerId": "of-000000000000000000000020",
+        "status": "done",
+        "lookup": {
+          "at": "2026-01-05T09:00:21.000Z"
+        }
+      }
+    }
+  ],
+  "answering": false,
+  "metadata": {},
+  "details": []
+}

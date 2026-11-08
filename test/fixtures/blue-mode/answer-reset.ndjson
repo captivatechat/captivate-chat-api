@@ -1,0 +1,8 @@
+{"type":"conversation","conversationId":"000000000000000000000004"}
+{"type":"step","label":"Looking into it"}
+{"type":"delta","text":"Parcels usually leave the warehouse on the day the order is placed, and they tend to arrive a couple of days later. Most customers get theirs well inside a week, and the team keeps an eye on any that run late. Most customers get theirs well inside a week, and the team keeps an eye on any that run late."}
+{"type":"reset"}
+{"type":"delta","text":"Parcels leave every weekday at 4pm and arrive within two working days [1]."}
+{"type":"sources","sources":[{"number":1,"title":"Delivery notes","excerpt":"Parcels leave the warehouse every weekday at 4pm and arrive within two working days. Refunds for late parcels are paid on request."}]}
+{"type":"text","text":"Parcels leave every weekday at 4pm and arrive within two working days [1]."}
+{"type":"done"}

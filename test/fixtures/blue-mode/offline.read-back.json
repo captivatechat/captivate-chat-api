@@ -1,0 +1,33 @@
+{
+  "_id": "000000000000000000000031",
+  "createdAt": "2026-01-05T09:00:29.000Z",
+  "updatedAt": "2026-01-05T09:00:31.000Z",
+  "messages": [
+    {
+      "_id": "000000000000000000000032",
+      "seq": 1,
+      "role": "user",
+      "content": "Hello?",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:30.000Z",
+      "offline": false,
+      "stopped": false,
+      "clientId": "fixture-message-012"
+    },
+    {
+      "_id": "000000000000000000000033",
+      "seq": 2,
+      "role": "assistant",
+      "content": "This assistant isn't available right now.",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:31.000Z",
+      "offline": true,
+      "stopped": false
+    }
+  ],
+  "answering": false,
+  "metadata": {},
+  "details": []
+}

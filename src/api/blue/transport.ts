@@ -1,6 +1,6 @@
 // Blue mode's one way to the backend (first-channels-library-spec §2.1 to §2.3): no socket, one
 // HTTP call per method, made with the key's own headers and nothing else, its refusals turned
-// into §1.2's words. The streaming reads (the reader, ndjson.ts and stream.ts) build on it.
+// into §1.2's words. An answer's stream (stream.ts, with the line reader in ndjson.ts) builds on it.
 import { BlueCall, CONSOLE_WORDS, SETUP_WORDS, WORDS, refusalWords } from './words';
 
 /** How an answer is read: picked before the POST goes out, since a sent POST can't be read again (§2.3). */
@@ -91,7 +91,7 @@ function refusalOf(text: string): { code?: string; fields?: string[] } {
   }
 }
 
-const DISPOSED = 'This CaptivateChatAPI instance has been disposed. Create a new one.';
+export const DISPOSED = 'This CaptivateChatAPI instance has been disposed. Create a new one.';
 
 export interface BlueRequest {
   /** What the call is, for its refusal's words. */
@@ -106,7 +106,7 @@ export interface BlueRequest {
   withFiles?: boolean;
 }
 
-type Logger = { log: (...args: any[]) => void; warn: (...args: any[]) => void };
+export type Logger = { log: (...args: any[]) => void; warn: (...args: any[]) => void };
 
 export class BlueTransport {
   readonly apiKey: string;
@@ -115,7 +115,7 @@ export class BlueTransport {
   private disposed = false;
   private readonly inFlight = new Set<{ abort(): void }>();
   private readonly warned = new Set<string>();
-  private readonly logger: Logger;
+  readonly logger: Logger;
 
   constructor(apiKey: string, mode: 'prod' | 'dev', options: BlueOptions, logger: Logger) {
     this.apiKey = apiKey;
@@ -251,6 +251,14 @@ export class BlueTransport {
     if (this.warned.has(name)) return;
     this.warned.add(name);
     this.logger.warn(words);
+  }
+
+  /** Counts a call made outside request() (an answer's stream) among those dispose() ends; gives back its untrack. */
+  track(handle: { abort(): void }): () => void {
+    this.inFlight.add(handle);
+    return () => {
+      this.inFlight.delete(handle);
+    };
   }
 
   /** Aborts every call in flight; later calls refuse. */

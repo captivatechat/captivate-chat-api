@@ -1,0 +1,41 @@
+{
+  "offer": {
+    "id": "of-000000000000000000000025",
+    "status": "sent"
+  },
+  "messages": [
+    {
+      "_id": "000000000000000000000026",
+      "seq": 3,
+      "role": "user",
+      "at": "2026-01-05T09:00:17.000Z",
+      "content": "Sent: Request a quote",
+      "submission": {
+        "submissionId": "000000000000000000000027",
+        "offerId": "of-000000000000000000000025",
+        "title": "Request a quote",
+        "values": [
+          {
+            "label": "Name",
+            "value": "Sam Lee"
+          },
+          {
+            "label": "Email",
+            "value": "sam@example.com"
+          }
+        ]
+      }
+    },
+    {
+      "_id": "000000000000000000000028",
+      "seq": 4,
+      "role": "assistant",
+      "at": "2026-01-05T09:00:17.000Z",
+      "content": "Thanks, Sam Lee! I've passed this on to the team.",
+      "offerResult": {
+        "offerId": "of-000000000000000000000025",
+        "status": "sent"
+      }
+    }
+  ]
+}

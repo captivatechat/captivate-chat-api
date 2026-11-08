@@ -1,0 +1,7 @@
+{"type":"conversation","conversationId":"0000000000000000000000a4"}
+{"type":"step","label":"Looking into it"}
+{"type":"delta","text":"£12 a seat [1"}
+{"type":"delta","text":"£12 a seat [1, 2]. Ask about 漢字 or 🎉 groups [3]"}
+{"type":"sources","sources":[{"number":1,"title":"Prices","excerpt":"£12 a seat."},{"number":2,"title":null}]}
+{"type":"text","text":"£12 a seat [1, 2]. Ask about 漢字 or 🎉 groups [1]."}
+{"type":"done"}

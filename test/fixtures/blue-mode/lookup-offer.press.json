@@ -1,0 +1,37 @@
+{
+  "offer": {
+    "id": "of-000000000000000000000020",
+    "status": "sent"
+  },
+  "lookup": {
+    "state": "found",
+    "rows": [
+      [
+        {
+          "label": "Status",
+          "value": "Shipped"
+        },
+        {
+          "label": "Delivery date",
+          "value": "5 Nov"
+        }
+      ]
+    ]
+  },
+  "messages": [
+    {
+      "_id": "000000000000000000000021",
+      "seq": 3,
+      "role": "assistant",
+      "content": "Here's what I found. Ask me if you have a question about it.",
+      "at": "2026-01-05T09:00:22.000Z",
+      "offerResult": {
+        "offerId": "of-000000000000000000000020",
+        "status": "done",
+        "lookup": {
+          "at": "2026-01-05T09:00:21.000Z"
+        }
+      }
+    }
+  ]
+}
