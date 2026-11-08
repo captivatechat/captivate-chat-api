@@ -1,6 +1,7 @@
 import { CaptivateChatFileManager, TtlDays } from './CaptivateChatFileManager';
 import { captivateLogger } from './CaptivateChatAPI';
 import { BLUE_EVENTS, BlueAnswer, BlueAnswers } from './blue/answer';
+import { blueFileManager } from './blue/files';
 import { BlueUser, customerOf, detailsOf } from './blue/identity';
 import {
   BlueCopy,
@@ -225,6 +226,12 @@ export class Conversation {
 
     if (!this.apiKey) {
       console.warn('API key is required for HTTP communication. Some features may not work properly.');
+    }
+
+    // Blue mode: each file checked, given a place in Blue and PUT there by the app (§2.9).
+    if (this.blueTransport) {
+      this.fileManager = blueFileManager(this.blueTransport, conversation_id, () => this.blueSecret());
+      return;
     }
 
     // Instantiate fileManager bound to this conversation context (uses this.defaultTtlDays for uploads)

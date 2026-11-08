@@ -305,6 +305,19 @@ await conversation.setMetadata({ user_id: null });                        // at 
 
 **Quick replies.** When the bot asks something with set answers ("Yes, send it", "No, cancel"), `onAnswer`'s `choices` holds them: show them as buttons, and send the one pressed as a message, `sendMessage(choice)`. An app without `onAnswer` shows none, and its users type the reply.
 
+### Files
+
+```typescript
+const files = await conversation.fileManager.createMultiple({ files: [photo, invoice] });
+await conversation.sendMessage({ text: 'Here is the invoice', files });
+```
+
+A key for your app always takes files. `conversation.fileManager.create({ file, fileName, fileType })`, `createFile` and `createMultiple` work as they do with core's keys and return the same types, but the file goes to Blue, which reads it on its server for this conversation alone (never into the bot's knowledge) and keeps it with the conversation for 90 days. Each file asks Blue for a place and is then sent there by the app itself, one file at a time; each file object gets `upload: { uploadId, expiresAt }`, and its `textContent.text` is empty. Pass the result, its `files`, or an array of file objects as `sendMessage`'s `files`, with or without `text`.
+
+- **What it takes:** pictures (PNG, JPG or WebP), PDFs, Word, Excel and PowerPoint files, and text, Markdown and CSV files, by the file name's extension; 20 MB a file; 5 files with one message; 20 in a conversation. Each is checked before anything is sent, in words the user can see: "I can read pictures (PNG, JPG or WebP), PDFs, Word, Excel and PowerPoint files, and text, Markdown and CSV files.", "A file can be at most 20 MB." and "You can send up to 5 files with one message." A conversation with its 20 files gives "This conversation can't take more files. Start a new conversation to send more."
+- **What it doesn't:** `storage: false` (a file Blue would read from your own URL) is refused: "This app can't send files." A file object that didn't come from `conversation.fileManager` is refused when sent: "A file you attached couldn't be found. Attach it again and send your message." `CaptivateChatFileManager.create`, `createFile` and `createMultiple` called with a Blue key are refused: "Use conversation.fileManager with a key for your app."
+- **When it fails:** a file's place lasts 15 minutes, which is as long as sending it may take; one that couldn't be sent gives "The assistant couldn't answer just now. Please try again." Past the key's files for the day: "This chat can't take more files today. You can still type your question." A file too big for the bot's AI to look at, once sent: "That file is too big for the assistant to look at. Send a smaller picture or PDF, or paste the part that matters as text."
+
 ### Errors
 
 Blue mode's errors carry words your app can show as they are, never the server's own: `error.errorDesc` (and `onError`'s `errorDesc`) holds them, `error.status` the HTTP status (none when Blue couldn't be reached or the call ran out of time), `error.retryAfter` a `429`'s wait in seconds, and `error.fields` the names of a form's refused fields. The message reads like the gateway's: `HTTP request failed: 404 Not Found: This conversation isn't available any more. Start a new one.` None of the words contains "410" or "gone".

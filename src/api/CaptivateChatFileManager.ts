@@ -1,3 +1,6 @@
+import { isBlueKey } from './blue/keys';
+import { SETUP_WORDS } from './blue/words';
+
 /**
  * File manager for handling file uploads, storage, and presigned URL generation.
  * Supports direct file uploads with automatic text extraction and storage management.
@@ -24,6 +27,7 @@ export class CaptivateChatFileManager {
       fileSize: number;
       processingTime: number;
     }; // Storage information when storage is true
+    upload?: { uploadId: string; expiresAt: string }; // Blue mode: the file's place in Blue, which a message names
     textContent: {
       type: 'file_content';
       text: string;
@@ -82,6 +86,8 @@ export class CaptivateChatFileManager {
       ttlDays?: TtlDays;
     }
   ): Promise<CaptivateChatFileManager> {
+    // A Blue key's files go through conversation.fileManager, which knows the conversation and its user.
+    if (isBlueKey(options.apiKey)) throw new Error(SETUP_WORDS.fileManagerKey);
     // Direct file upload
     const file = options.file;
     const storage = options.storage !== undefined ? options.storage : true; // Default to true
@@ -296,6 +302,7 @@ export class CaptivateChatFileManager {
       ttlDays?: TtlDays;
     }
   ): Promise<CaptivateChatFileManager> {
+    if (isBlueKey(options.apiKey)) throw new Error(SETUP_WORDS.fileManagerKey);
     const storage = options.storage !== undefined ? options.storage : true; // Default to true
     
     // If storage is false, URLs are required for sendMessage compatibility

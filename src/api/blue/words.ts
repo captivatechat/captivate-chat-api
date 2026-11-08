@@ -24,6 +24,15 @@ export const WORDS = {
   /** 413 on a send with files. */
   fileTooBig:
     'That file is too big for the assistant to look at. Send a smaller picture or PDF, or paste the part that matters as text.',
+  /** A file whose type Blue can't read: the backend's `unsupported_type` sentence (gaps G14). */
+  fileType:
+    'I can read pictures (PNG, JPG or WebP), PDFs, Word, Excel and PowerPoint files, and text, Markdown and CSV files.',
+  /** A file over 20 MB: the backend's 413 sentence for an upload (gaps G14). */
+  fileOver20MB: 'A file can be at most 20 MB.',
+  /** More than 5 files with one message: Blue's window's words (gaps G14). */
+  filesPerMessage: 'You can send up to 5 files with one message.',
+  /** Core's `storage: false`, a file referenced by its URL (§2.9). */
+  cantSendFiles: "This app can't send files.",
   /** Any other 400, or 413, on a send. */
   shortenIt: "That message couldn't be sent as it is. Shorten it and send it again.",
   /** 429 on a send or a start past the key's day (decision 3 (d)). */
@@ -58,6 +67,8 @@ export const SETUP_WORDS = {
   userUnknown: "This conversation's user isn't known on this device. List the user's conversations first.",
   /** CaptivateChatManager merges lists on core's server, which knows no Blue key. */
   managerBlueKey: "Use one CaptivateChatAPI for each app key. CaptivateChatManager is for Captivate's own keys.",
+  /** CaptivateChatFileManager's static calls, given a Blue key (§2.2). */
+  fileManagerKey: 'Use conversation.fileManager with a key for your app.',
   /** sendAction's send on a link offer (gaps G5): a link opens in the browser. */
   linkOffer: "This offer is a link: open its link.url in the browser. There's nothing to send.",
 } as const;
@@ -127,6 +138,8 @@ export function refusalWords(refusal: {
   }
   if (status === 400 && code === 'too_many_files') return WORDS.tooManyFiles;
   if (status === 413 && call === 'metadata') return METADATA_TOO_BIG;
+  if (call === 'upload' && status === 400 && code === 'unsupported_type') return WORDS.fileType;
+  if (call === 'upload' && status === 413) return WORDS.fileOver20MB;
   if (call === 'press' && status === 400 && refusal.fields?.length) return WORDS.formRefused;
   if (call === 'send' && (status === 400 || status === 413)) {
     if (status === 400 && code === 'invalid_attachment') return WORDS.fileNotFound;

@@ -4,6 +4,7 @@
 // message's own clientId. Stop, a 409's hold and resume() are here too. The Conversation hands
 // in its listeners (emit, has) and keeps its own methods' names and shapes.
 import { draftText, withFooter } from './citations';
+import { attachmentsOf } from './files';
 import { BlueUser } from './identity';
 import { BlueOffer, BlueSource, BlueStreamEvent } from './ndjson';
 import { BluePressAnswer, OFFER_ID, pressText, pressValues } from './offers';
@@ -95,6 +96,8 @@ const busyError = () => blueError(WORDS.busy, { status: 409, statusText: 'Confli
 /** One sendMessage, from its queue to its answer. */
 interface Send {
   text: string;
+  /** The files' places, from conversation.fileManager (§2.9). */
+  attachments: { uploadId: string }[];
   clientId: string;
   /** onMessage has had the answer's text (or the answer had none): nothing but onAnswer comes after. */
   delivered: boolean;
@@ -181,11 +184,18 @@ export class BlueAnswers {
   send(content: unknown): Promise<void> {
     if (this.transport.isDisposed) return Promise.reject(new Error(DISPOSED));
     const text = typeof content === 'string' ? content : typeof (content as any)?.text === 'string' ? (content as any).text : '';
+    let attachments: { uploadId: string }[];
+    try {
+      attachments = typeof content === 'string' ? [] : attachmentsOf((content as any)?.files);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     let close!: () => void;
     const closed = new Promise<void>((r) => (close = r));
     const handed = new Promise<void>((resolve, reject) => {
       const send: Send = {
         text,
+        attachments,
         clientId: this.clientId(),
         delivered: false,
         finished: false,
@@ -273,6 +283,7 @@ export class BlueAnswers {
         body: this.sendBody(send),
         secret: this.host.secret,
         way,
+        withFiles: send.attachments.length > 0,
         clock: this.clock,
         onOpen: () => {
           if (way === 'whole') this.hand(send);
@@ -297,6 +308,7 @@ export class BlueAnswers {
     return {
       conversationId: this.host.conversationId,
       message: send.text,
+      ...(send.attachments.length ? { attachments: send.attachments } : {}),
       clientId: send.clientId,
       user,
       ...(details ? { details } : {}),
