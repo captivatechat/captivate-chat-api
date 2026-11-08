@@ -1,0 +1,10 @@
+{
+  "name": "captivate-chat-api-electron-harness",
+  "private": true,
+  "description": "Blue mode on the newest stable Electron and the oldest still supported: npm run test:electron from the library's folder.",
+  "main": "main.js",
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-oldest": "npm:electron@43.8.7"
+  }
+}

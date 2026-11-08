@@ -20,6 +20,10 @@ export declare class CaptivateChatFileManager {
             fileSize: number;
             processingTime: number;
         };
+        upload?: {
+            uploadId: string;
+            expiresAt: string;
+        };
         textContent: {
             type: 'file_content';
             text: string;
@@ -78,6 +82,10 @@ export declare class CaptivateChatFileManager {
             fileSize: number;
             processingTime: number;
         };
+        upload?: {
+            uploadId: string;
+            expiresAt: string;
+        };
         textContent: {
             type: "file_content";
             text: string;
@@ -120,6 +128,10 @@ export declare class CaptivateChatFileManager {
             fileSize: number;
             processingTime: number;
         };
+        upload?: {
+            uploadId: string;
+            expiresAt: string;
+        };
         textContent: {
             type: "file_content";
             text: string;
@@ -144,6 +156,10 @@ export declare class CaptivateChatFileManager {
             expiresIn: number;
             fileSize: number;
             processingTime: number;
+        };
+        upload?: {
+            uploadId: string;
+            expiresAt: string;
         };
         textContent: {
             type: "file_content";

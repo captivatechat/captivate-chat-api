@@ -9,3 +9,7 @@ test-e2e-chat.html
 problems.txt
 test-metadata-action.html
 /build-test/
+/test/electron/node_modules/
+/examples/react-native/node_modules/
+/examples/react-native/.expo/
+/captivate-chat-api-*.tgz

@@ -12,11 +12,13 @@ npm install captivate-chat-api
 
 ## What's New
 
-### Connection Reliability (v6.1.0)
+### Blue mode (v7.1.0)
 
-> Replace `6.1.0` with your actual release number.
+A key for your app from Vienna Blue's Channels page (`vba_…`) makes the same library talk to a Blue bot, with the answer shown while it's written in browsers, React Native and Electron, and a key for your own server (`vbk_…`) talks for each of your server's users. Every other key keeps Captivate's gateway, unchanged. See [Blue mode](#blue-mode).
 
-This release fixes a group of connection bugs that could cause dropped messages, `410 Gone` responses from the server, duplicate conversations, and spurious timeouts. **No code changes are required** — every fix is backward compatible except one narrowed return type (see [Migration](#migration-to-v610)).
+### Connection Reliability (v7.1.0)
+
+This release fixes a group of connection bugs that could cause dropped messages, `410 Gone` responses from the server, duplicate conversations, and spurious timeouts. **No code changes are required** — every fix is backward compatible except one narrowed return type (see [Migration](#migration-to-v710)).
 
 **Conversations now follow reconnects.** A `Conversation` used to capture the WebSocket and `socket_id` at construction. Both are replaced whenever the API reconnects, so any conversation created beforehand kept sending requests stamped with a closed connection id — the server then had nowhere to deliver the reply and returned `410 Gone`. Conversations now read the connection live from the owning `CaptivateChatAPI`.
 
@@ -74,7 +76,7 @@ Client sending operations have been refactored from WebSocket to HTTP REST for i
 **Methods still using WebSocket:**
 - All event listeners (`onMessage`, `onError`, `onConversationUpdate`, `onActionReceived`) - Continue to work via WebSocket for real-time updates
 
-Because sends go out over HTTP carrying the current `socket_id`, and the server pushes the reply back down the WebSocket, an outbound request is only deliverable while that socket is alive. This is why the connection fixes in v6.1.0 matter — see [Connection Lifecycle](#connection-lifecycle).
+Because sends go out over HTTP carrying the current `socket_id`, and the server pushes the reply back down the WebSocket, an outbound request is only deliverable while that socket is alive. This is why the connection fixes in v7.1.0 matter — see [Connection Lifecycle](#connection-lifecycle).
 
 ### Debug Mode (v5.0.0)
 
@@ -133,7 +135,7 @@ The `CaptivateChatFileManager` class has been significantly improved with:
 3. **Flexible Usage**: Choose between wrapper (`create()`) or direct (`createFile()`) approaches
 4. **Type Safety**: Full TypeScript support with proper type definitions
 
-## Migration to v6.1.0
+## Migration to v7.1.0
 
 One signature narrowed:
 
@@ -231,6 +233,34 @@ An answer comes back while it is written, as one line of JSON an event. How the 
 
 The connection counts as cut when its headers don't come within 30 seconds, when nothing at all comes for 45 seconds while it is open (Blue sends a blank line every 15 seconds to keep it busy), when a body read whole hasn't ended 330 seconds after the message was sent, when it ends before the answer does, or when a line is over 1 MB (or, through `XMLHttpRequest`, the whole body over 2 MB). A cut message is never sent again: the answer goes on in Blue, and the library reads it back. There is no other time limit, since an answer may take up to 300 seconds.
 
+### Runtimes
+
+- **A web app** lists its address on the key, as the browser sends it in `Origin`: scheme, host and port (`https://app.example.com`, `http://localhost:5173`).
+- **Electron.** A window on a dev server lists that address. A packaged app's pages need an address too: register the app's own scheme before the app is ready, and list `app://myapp` on the key, exactly as written:
+
+  ```javascript
+  protocol.registerSchemesAsPrivileged([
+    { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+  ]);
+  ```
+
+  A `file://` page, or a scheme registered without those privileges, sends an `Origin` of `null`, which no key can list. The library writes one console warning there ("This app's pages aren't on a web address, so the key can't check where they are. Use the library from the app's main process, or register the app's own scheme and list its address on the key."), and such an app uses the library from its main process. The main process sends no `Origin`, so the key needs no address for it; it reads answers with Node's `fetch`, or with Electron's own network (its proxy settings) given `fetch: net.fetch`. Its users' secrets are kept in memory unless `options.storage` keeps them (in a file, say). A server key is refused in Electron, its main process too.
+- **React Native** (Hermes or JSC) reads answers through `XMLHttpRequest`, so they show while they're written; on Expo SDK 52 and later `fetch` from `expo/fetch` may be passed as `options.fetch`. Pass a store and a random source, and read back an answer dropped in the background when the app comes back:
+
+  ```javascript
+  import AsyncStorage from '@react-native-async-storage/async-storage';
+  import * as Crypto from 'expo-crypto';
+
+  const api = await CaptivateChatAPI.create('vba_…', 'prod', {
+    storage: AsyncStorage,
+    randomValues: (bytes) => Crypto.getRandomValues(bytes),
+  });
+  AppState.addEventListener('change', (state) => { if (state === 'active') conversation.resume(); });
+  ```
+
+  Phones behind one carrier address share that address's limits (below). `examples/react-native` is a one-screen Expo app that does all of this.
+- **A server** sending for its users uses a server key: see [On your own server](#on-your-own-server). An app key there would count every user as one address.
+
 ### Answers
 
 `sendMessage` works as it does with core's keys, and three listeners are new: `onDelta` for the answer while it's written, `onAnswer` for the final answer with its sources, and `onStep` for a typing line.
@@ -318,6 +348,16 @@ A key for your app always takes files. `conversation.fileManager.create({ file, 
 - **What it takes:** pictures (PNG, JPG or WebP), PDFs, Word, Excel and PowerPoint files, and text, Markdown and CSV files, by the file name's extension; 20 MB a file; 5 files with one message; 20 in a conversation. Each is checked before anything is sent, in words the user can see: "I can read pictures (PNG, JPG or WebP), PDFs, Word, Excel and PowerPoint files, and text, Markdown and CSV files.", "A file can be at most 20 MB." and "You can send up to 5 files with one message." A conversation with its 20 files gives "This conversation can't take more files. Start a new conversation to send more."
 - **What it doesn't:** `storage: false` (a file Blue would read from your own URL) is refused: "This app can't send files." A file object that didn't come from `conversation.fileManager` is refused when sent: "A file you attached couldn't be found. Attach it again and send your message." `CaptivateChatFileManager.create`, `createFile` and `createMultiple` called with a Blue key are refused: "Use conversation.fileManager with a key for your app."
 - **When it fails:** a file's place lasts 15 minutes, which is as long as sending it may take; one that couldn't be sent gives "The assistant couldn't answer just now. Please try again." Past the key's files for the day: "This chat can't take more files today. You can still type your question." A file too big for the bot's AI to look at, once sent: "That file is too big for the assistant to look at. Send a smaller picture or PDF, or paste the part that matters as text."
+
+### Limits
+
+Blue counts a key for your app by the address each call comes from, so an office, or phones behind one carrier address, count as one:
+
+- An address: 10 messages a minute, and as many conversation starts, reads, Stops and form presses; 20 files a minute and 200 MB of files a day (UTC).
+- The key, across all its addresses: 600 messages a minute, and as many of each other call; 100 files a minute; and a day (UTC) of 5,000 answers, 1,000 new conversations and 2 GB of files.
+- A user: at most 20 conversations with no message yet. Past that, a new one is refused: "Too many new conversations at once. Send a message in one first." A conversation with no message goes after a day.
+
+Past a minute's limit a call is refused with "Too many messages just now. Try again in a minute." and `error.retryAfter`; past a day's, "This chat has answered all it can for today. Please try again tomorrow." (for files, "This chat can't take more files today. You can still type your question."); a form's press has its own words, above. Nothing is sent again by itself.
 
 ### Errors
 
@@ -526,7 +566,7 @@ Create a new conversation with the following options:
    - The `privateMetadata` parameter is optional and, if provided, will be sent under the `private` key in the metadata. This is intended for backend/internal use and will not be returned to the frontend when fetching metadata.
    - This change is **backwards compatible**: existing usages of `createConversation` do not need to change.
 
-4. **(v6.1.0)** Override the conversation-start timeout for a single call:
+4. **(v7.1.0)** Override the conversation-start timeout for a single call:
    ```typescript
    const conversation = await api.createConversation(
      'user123', {}, {}, 'bot-first', {},
@@ -980,7 +1020,7 @@ const { conversations, pagination } = await api.getUserConversations({
 });
 ```
 
-As of v6.1.0 this returns cached instances when the API already holds a handle for a conversation, so listeners you registered earlier are preserved instead of being silently dropped.
+As of v7.1.0 this returns cached instances when the API already holds a handle for a conversation, so listeners you registered earlier are preserved instead of being silently dropped.
 
 ### Multi-API-Key Support (CaptivateChatManager)
 
@@ -1139,8 +1179,11 @@ const api = new CaptivateChatAPI('YOUR_API_KEY', 'dev');
 
 The API supports the following environments:
 - **Browser**
-- **Node.js**
+- **Node.js** (20.15 and later)
 - **React Native**
+- **Electron** (its windows and its main process)
+
+Blue mode's runtimes, and what each needs, are under [Runtimes](#runtimes).
 
 ### File Processing
 
@@ -1162,7 +1205,7 @@ File-to-text conversion is handled by the external API endpoint:
   Creates and connects an instance, returning a guarded proxy that checks the socket and auto-reconnects before network calls. **Enforces singleton pattern.**
 
 - **`configure(options: CaptivateChatAPIOptions): void`**
-  **(v6.1.0)** Updates timeouts and reconnection tunables on a live instance.
+  **(v7.1.0)** Updates timeouts and reconnection tunables on a live instance.
 
 - **`static getInstance(apiKey: string, mode?: 'prod' | 'dev'): CaptivateChatAPI | undefined`**
   Gets an existing instance for the given API key and mode, if one exists.
@@ -1189,10 +1232,10 @@ File-to-text conversion is handled by the external API endpoint:
   Creates a new conversation. Connects first if the socket is not active.
 
 - **`getConversation(conversationId: string, userId?: string): Conversation`**
-  Retrieves a conversation by ID, creating a local handle if not cached. **(v6.1.0)** No longer returns `void`. With a server key, `userId` names the user on every call and the handle is a fresh one, never cached ([On your own server](#on-your-own-server)).
+  Retrieves a conversation by ID, creating a local handle if not cached. **(v7.1.0)** No longer returns `void`. With a server key, `userId` names the user on every call and the handle is a fresh one, never cached ([On your own server](#on-your-own-server)).
 
 - **`releaseConversation(conversationId: string): void`**
-  **(v6.1.0)** Drops a conversation from the local cache and detaches its socket listener. Does not delete it server-side.
+  **(v7.1.0)** Drops a conversation from the local cache and detaches its socket listener. Does not delete it server-side.
 
 - **`getUserConversations(userIdOrOptions: string | { userId: string; filter?: object; search?: object; pagination?: { page?: string | number; limit?: string | number }; apiKeys?: string[] }): Promise<{ conversations: Conversation[]; pagination?: PaginationInfo }>`**
   Fetches conversations for a user. Uses the v2 API when `filter`, `search`, `pagination`, or `apiKeys` is provided.
@@ -1246,13 +1289,13 @@ File-to-text conversion is handled by the external API endpoint:
   Returns the conversation ID.
 
 - **`restartListeners(): void`**
-  **(v6.1.0)** Re-binds this conversation to the current socket. Idempotent; called automatically after a reconnect.
+  **(v7.1.0)** Re-binds this conversation to the current socket. Idempotent; called automatically after a reconnect.
 
 - **`detachListeners(): void`**
-  **(v6.1.0)** Detaches the socket listener. Call when discarding an instance.
+  **(v7.1.0)** Detaches the socket listener. Call when discarding an instance.
 
 - **`off(eventType: string, callback: Function): void`** / **`removeAllListeners(): void`**
-  **(v6.1.0)** Removes registered event callbacks.
+  **(v7.1.0)** Removes registered event callbacks.
 
 #### Events
 
@@ -1393,13 +1436,13 @@ type TtlDays = 1 | 7 | 30 | 90;
 ## Troubleshooting
 
 **`410 Gone` from the server, or replies that never arrive.**
-Fixed in v6.1.0. Conversations now read `socket_id` live instead of capturing it, so a reconnect no longer strands them. If you are on an older version, recreate conversations after every reconnect.
+Fixed in v7.1.0. Conversations now read `socket_id` live instead of capturing it, so a reconnect no longer strands them. If you are on an older version, recreate conversations after every reconnect.
 
 **Only one conversation receives messages.**
-Fixed in v6.1.0. Listeners were assigned to `socket.onmessage`, so each new conversation overwrote the previous one's handler.
+Fixed in v7.1.0. Listeners were assigned to `socket.onmessage`, so each new conversation overwrote the previous one's handler.
 
 **`Timeout: No conversation_start_success received from WebSocket`, but the conversation exists.**
-Fixed in v6.1.0. The timer was never cleared and fired even after success. If you still see this on the current version, the backend genuinely exceeded the deadline — raise `conversationStartTimeoutMs`.
+Fixed in v7.1.0. The timer was never cleared and fired even after success. If you still see this on the current version, the backend genuinely exceeded the deadline — raise `conversationStartTimeoutMs`.
 
 **`Failed to fetch` with a CORS error in the console.**
 Often a rate-limited (`429`) response served without CORS headers. The status is visible in DevTools but not readable from JavaScript. Check your request volume before assuming a CORS misconfiguration.
@@ -1429,3 +1472,13 @@ npm run build       # webpack: dist/captivate-chat-api.js and its type files
 - `dispose()` on an instance from `CaptivateChatAPI.create` whose socket has already closed leaves a rejected promise nobody handles.
 
 Before a release, `test-e2e-chat.html` is also run by hand against the dev gateway, with a dev key.
+
+### Blue mode's runtimes
+
+```bash
+npm run test:electron   # npm run build, then server mode on plain Node and the Electron harness
+```
+
+`test/electron/` has its own `package.json`, pinning the newest stable Electron and the oldest still supported (`electron` and `electron-oldest`), installed there the first time. It starts a stand-in for Blue on `127.0.0.1` that replays `test/fixtures/blue-mode` a line at a time, and checks the built `dist` in each: the main process with Node's `fetch` and with `net.fetch` (drafts and the final answer, no `Origin`); a hidden window on `http://127.0.0.1` (drafts in the page, its address as `Origin`); a `file://` page (the warning once, no crash); a page on a registered `app://myapp` (its `Origin` through the preflight, drafts); and a server key in the main process (refused in its words). Before Electron, `node-server-mode.js` runs server mode on plain Node against the same stand-in: two users through one instance at once, each with its own drafts and answers. On Linux without a display it runs Electron under `xvfb-run`.
+
+`examples/react-native` is an Expo app (Expo 51, React Native 0.74) for the phones, run by hand from its README; `test-e2e-chat.blue.html` is a page for Blue mode by hand in a browser (drafts, Stop, a dropped connection read back), with a placeholder key to replace with an app key.
