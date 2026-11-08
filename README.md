@@ -1219,3 +1219,23 @@ The socket was closed by an idle timeout. Poll `isSocketActive()` and call `reco
 
 **Handlers firing twice.**
 `onMessage()` and friends append; calling them again adds another callback. Use `off()` or `removeAllListeners()`.
+
+## Development
+
+Node 20.15 or later.
+
+```bash
+npm install
+npm run typecheck   # src and test, with tsconfig.test.json
+npm test            # builds the tests into build-test/, then runs them with node --test
+npm run build       # webpack: dist/captivate-chat-api.js and its type files
+```
+
+`npm test -- connection` runs only the test files whose path holds `connection`. The tests never reach a server: `test/fakes/` holds a WebSocket, a fetch, an XMLHttpRequest and storage that the tests answer by hand, and a console that keeps what the library logs (`TEST_LOGS=1 npm test` prints it too).
+
+`test/core/` covers today's path through Captivate's gateway: the socket's address, connecting and the guard that reconnects, `dispose`, the HTTP envelope and its errors, the messages a conversation hears (with a reply too big for the socket, fetched from its link), creating a conversation and a user's list. They pass before and after every change. Two are marked todo: issues in that path found while writing them, left as they are for now:
+
+- a conversation handle from `getConversation` or the list keeps hearing the socket after `releaseConversation`, `deleteUserConversations` or `dispose`;
+- `dispose()` on an instance from `CaptivateChatAPI.create` whose socket has already closed leaves a rejected promise nobody handles.
+
+Before a release, `test-e2e-chat.html` is also run by hand against the dev gateway, with a dev key.
