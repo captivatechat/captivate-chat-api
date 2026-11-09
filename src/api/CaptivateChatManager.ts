@@ -1,4 +1,4 @@
-import { CaptivateChatAPI, CaptivateChatAPIOptions } from './CaptivateChatAPI';
+import { CaptivateChatAPI, CaptivateChatAPIOptions, keyLabel } from './CaptivateChatAPI';
 import { Conversation } from './Conversation';
 import { isBlueKey } from './blue/keys';
 import { SETUP_WORDS } from './blue/words';
@@ -77,7 +77,8 @@ export class CaptivateChatManager {
     const conversations = result.conversations.map((conv: Conversation) => {
       const ownerKey = conv.apiKey || apiKeys[0];
       const apiInstance = this.apiInstances[ownerKey];
-      if (!apiInstance) throw new Error(`No CaptivateChatAPI instance for apiKey: ${ownerKey}`);
+      // Named by keyLabel: an app's error report would otherwise carry the key itself.
+      if (!apiInstance) throw new Error(`No CaptivateChatAPI instance for apiKey: ${keyLabel(ownerKey)}`);
       return apiInstance.getConversation(conv.getConversationId());
     });
 

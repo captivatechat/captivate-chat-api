@@ -159,6 +159,16 @@ export interface CaptivateChatAPIOptions extends BlueOptions {
   reconnectDelay?: number;
 }
 
+/**
+ * A key as logs and errors may name it, never the key itself: a Blue key by its id, a core key by
+ * its last 4 characters, or by a short hash for a key under 16 characters, where 4 would give away
+ * too much of it. The package's index doesn't export it.
+ */
+export function keyLabel(apiKey: string): string {
+  if (isBlueKey(apiKey)) return keyIdOf(apiKey);
+  return apiKey.length >= 16 ? `…${apiKey.slice(-4)}` : `#${base64url(sha256(utf8Bytes(apiKey))).slice(0, 8)}`;
+}
+
 export class CaptivateChatAPI implements ConversationSocketProvider {
   /**
    * Static registry to track instances by API key and mode.
@@ -176,15 +186,9 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     return `${apiKey}-${mode}`;
   }
 
-  /**
-   * How the registry's log lines name an instance, never by the key itself: a Blue key by its id,
-   * a core key by its last 4 characters, or by a short hash for a key under 16 characters, where 4
-   * would give away too much of it.
-   */
+  /** How the registry's log lines name an instance, never by the key itself (keyLabel). */
   private static nameOf(apiKey: string, mode: 'prod' | 'dev'): string {
-    if (isBlueKey(apiKey)) return `${keyIdOf(apiKey)}-${mode}`;
-    const label = apiKey.length >= 16 ? `…${apiKey.slice(-4)}` : `#${base64url(sha256(utf8Bytes(apiKey))).slice(0, 8)}`;
-    return `${label}-${mode}`;
+    return `${keyLabel(apiKey)}-${mode}`;
   }
 
   private apiKey!: string;

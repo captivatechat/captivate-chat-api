@@ -6,6 +6,7 @@ import { FakeFetch, jsonResponse, textResponse } from '../fakes/fetch';
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { CaptivateChatAPI } from '../../src/api/CaptivateChatAPI';
+import { CaptivateChatManager } from '../../src/api/CaptivateChatManager';
 
 let fake: FakeFetch;
 
@@ -213,5 +214,21 @@ test('deleteUserConversations sends the user and drops every local handle', asyn
   await api.deleteUserConversations('user-1', { softDelete: false });
   assert.equal(fake.requests[1].json.event.event_payload.softdelete, false);
   await assert.rejects(api.deleteUserConversations(''), { message: 'User ID must be provided.' });
+  api.dispose();
+});
+
+test("the manager's error for a conversation of a key it doesn't hold names the key by its last 4 characters", async () => {
+  const held = 'manager-held-key-0001';
+  const other = 'manager-other-key-WXYZ';
+  const manager = new CaptivateChatManager([held]);
+  const api = manager.getApiInstance(held)!;
+  (api as any).getUserConversations = async () => ({
+    conversations: [{ apiKey: other, getConversationId: () => 'c1' }],
+  });
+  await assert.rejects(manager.getUserConversations({ userId: 'user-1' }), (error: Error) => {
+    assert.equal(error.message, 'No CaptivateChatAPI instance for apiKey: …WXYZ');
+    assert.ok(!error.message.includes(other));
+    return true;
+  });
   api.dispose();
 });

@@ -38,7 +38,7 @@ This release fixes a group of connection bugs that could cause dropped messages,
 
 **Every reconnect gets its own tries.** After one failed round of `maxReconnectAttempts` tries, every later `reconnect()`, including the guard's and the automatic one, used to fail at once with "Max reconnection attempts (N) reached", and the instance could only recover through `dispose()` and `create()`. Each `reconnect()` now starts a fresh round of up to `maxReconnectAttempts` tries; calls made while a round is running share it.
 
-**Debug logs never show a core key.** With `setDebugMode(true)`, an instance is named in the logs by the key's last 4 characters (or a short hash, for a key under 16 characters), never by the key.
+**Debug logs and errors never show a core key.** With `setDebugMode(true)`, an instance is named in the logs by the key's last 4 characters (or a short hash, for a key under 16 characters), never by the key. `CaptivateChatManager`'s error for a conversation whose key it doesn't hold names the key the same way.
 
 **Errors carry HTTP status.** Failed requests now throw an `Error` with `.status` and `.body`, so you can branch on `401` vs `429` vs `500` without matching strings.
 

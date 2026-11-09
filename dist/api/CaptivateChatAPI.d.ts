@@ -20,6 +20,12 @@ export interface CaptivateChatAPIOptions extends BlueOptions {
     /** Delay between reconnection attempts, in ms. Default 3000. */
     reconnectDelay?: number;
 }
+/**
+ * A key as logs and errors may name it, never the key itself: a Blue key by its id, a core key by
+ * its last 4 characters, or by a short hash for a key under 16 characters, where 4 would give away
+ * too much of it. The package's index doesn't export it.
+ */
+export declare function keyLabel(apiKey: string): string;
 export declare class CaptivateChatAPI implements ConversationSocketProvider {
     /**
      * Static registry to track instances by API key and mode.
@@ -32,11 +38,7 @@ export declare class CaptivateChatAPI implements ConversationSocketProvider {
      * core's keys keep today's, which Engage reads.
      */
     private static getInstanceKey;
-    /**
-     * How the registry's log lines name an instance, never by the key itself: a Blue key by its id,
-     * a core key by its last 4 characters, or by a short hash for a key under 16 characters, where 4
-     * would give away too much of it.
-     */
+    /** How the registry's log lines name an instance, never by the key itself (keyLabel). */
     private static nameOf;
     private apiKey;
     private mode;
