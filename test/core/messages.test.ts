@@ -6,6 +6,7 @@ import { FakeFetch, jsonResponse, textResponse } from '../fakes/fetch';
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Conversation } from '../../src/api/Conversation';
+import type { MessageContent, MessageSender } from '../../src';
 
 let fake: FakeFetch;
 
@@ -39,6 +40,28 @@ test("onMessage gives the bot's content as core sends it, and live chat's as a h
   const texts: string[] = [];
   for (const item of heard[0][0] as { text: string }[]) texts.push(item.text);
   assert.deepEqual(texts, ['Hello there']);
+  api.dispose();
+});
+
+// The live run (9 Nov) found the bot's content is a list of parts while the types said a string.
+// The content is unchanged; the types say what comes, and a callback written for the old type
+// still compiles. This file did not build on 7.1.0 before the types changed.
+test("onMessage's types say what comes: the bot's parts, or a string", async () => {
+  const api = await connectedApi();
+  const conversation = api.getConversation('conv-1');
+  const texts: string[] = [];
+  conversation.onMessage((message, type) => {
+    texts.push(typeof message === 'string' ? `${type}: ${message}` : message.map((part) => part.text ?? '').join(''));
+  });
+  const old: string[] = [];
+  conversation.onMessage((message: string, type: string) => old.push(type));
+  const typed = (message: MessageContent, type: MessageSender) => old.push(`${type} again`);
+  conversation.onMessage(typed);
+
+  FakeWebSocket.last!.receive(frame('bot_message', { content: [{ type: 'text', text: 'Hello' }, { type: 'text', text: ' there' }] }));
+  FakeWebSocket.last!.receive(frame('general_error', { error_code: 500, error_desc: 'Bot unavailable' }));
+  assert.deepEqual(texts, ['Hello there', 'error: [Error: Bot unavailable]']);
+  assert.deepEqual(old, ['ai_agent', 'ai_agent again', 'error', 'error again']);
   api.dispose();
 });
 

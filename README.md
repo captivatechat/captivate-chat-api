@@ -32,6 +32,14 @@ This release fixes a group of connection bugs that could cause dropped messages,
 
 **Automatic reconnection respects the attempt limit.** An unexpected close used to call `connect()` directly on a timer, bypassing `maxReconnectAttempts` entirely and looping indefinitely against a failing endpoint. It now routes through `reconnect()`, and stops after `dispose()`.
 
+**A connect that times out leaves nothing behind.** Core's gateway sometimes opens a socket and never sends `socket_connected`. The timed-out socket used to stay open as the instance's socket, still counted as active and still carrying the old connection's `socket_id`, so sends went through and their replies were lost without a word, and a second `create()` handed back that same dead instance. Now the socket is closed, its id cleared, and `isSocketActive()` is `false`, so the next `create()`, `reconnect()` or guarded call connects again.
+
+**A socket counts as active only once it has its id.** `isSocketActive()` is `true` when the socket is open *and* `socket_connected` has named its id, since replies can't reach a socket without one. A socket's id is cleared the moment the socket is replaced or given up.
+
+**Every reconnect gets its own tries.** After one failed round of `maxReconnectAttempts` tries, every later `reconnect()`, including the guard's and the automatic one, used to fail at once with "Max reconnection attempts (N) reached", and the instance could only recover through `dispose()` and `create()`. Each `reconnect()` now starts a fresh round of up to `maxReconnectAttempts` tries; calls made while a round is running share it.
+
+**Debug logs never show a core key.** With `setDebugMode(true)`, an instance is named in the logs by the key's last 4 characters (or a short hash, for a key under 16 characters), never by the key.
+
 **Errors carry HTTP status.** Failed requests now throw an `Error` with `.status` and `.body`, so you can branch on `401` vs `429` vs `500` without matching strings.
 
 ```typescript
@@ -46,7 +54,7 @@ try {
 
 > **Note on rate limits:** if the server returns `429` without CORS headers, the browser rejects the request with an opaque `TypeError: Failed to fetch` and no status is visible to JavaScript. You will see the real status in DevTools but cannot read it from code.
 
-**Correct proxy behaviour.** Instances returned by `create()` are wrapped in a guard that reconnects before network calls. `getSocketId()`, `getConversation()`, and `dispose()` were being wrapped by mistake — the first two returned Promises that contradicted their type declarations, and disposing a dead instance reconnected it first. All three are now excluded.
+**Correct proxy behaviour.** Instances returned by `create()` are wrapped in a guard that reconnects before network calls. `getSocketId()`, `getConversation()`, and `dispose()` were being wrapped by mistake — the first two returned Promises that contradicted their type declarations, and disposing a dead instance reconnected it first. All three are now excluded, and so are `configure()` and `releaseConversation()`: on an instance whose socket had closed, `configure()` reconnected with the settings it was about to change before changing them, and a failed reconnect left an error nobody could catch.
 
 **Configurable timeouts.** See [Configuration](#configuration).
 
@@ -153,6 +161,8 @@ Two behaviours changed in ways worth knowing about:
 
 - **Bot-first creation resolves earlier.** If you relied on `createConversation` resolving only after the opening message had been dispatched, that guarantee is gone. The bot's reply still arrives through `onMessage`; a failed opener is logged as an error.
 - **The default `conversation_start` timeout is 20s, up from 10s.** If you were catching that timeout and retrying, you can usually stop — the timeout no longer fires on success. Pass `{ timeoutMs }` to restore a shorter deadline.
+
+`onMessage`'s types now say what really arrives. The content was always passed on as the gateway sends it, a list of parts (`[{ type: 'text', text }]`) from the bot or a live agent and a string only for an error, but it was typed as `string`. Nothing changed at run time, and a callback typed `(message: string, type: string)` still compiles; see [Send and Receive Messages](#send-and-receive-messages).
 
 If you wrote a workaround for the timeout-on-success bug (watching the raw socket for `conversation_start_success` and adopting the conversation yourself), it is now dead code and can be removed.
 
@@ -418,7 +428,8 @@ Worth understanding if you are building anything long-lived:
 
 - **Sends are HTTP, replies are WebSocket.** Every outbound request carries the current `socket_id`; the server pushes the response back over that socket. A request is only deliverable while the socket is alive.
 - **The socket can die without your code noticing.** AWS API Gateway closes idle WebSocket connections after 10 minutes and caps any connection at 2 hours. Mobile browsers suspend backgrounded tabs, which closes sockets silently.
-- **Check before you send.** `isSocketActive()` is a cheap synchronous check. Instances from `create()` also auto-reconnect before any network call.
+- **Check before you send.** `isSocketActive()` is a cheap synchronous check: `true` only while the socket is open and has its id. Instances from `create()` also auto-reconnect before any network call.
+- **A failed connect can be tried again.** `create()` and `connect()` reject after `connectTimeoutMs` when the gateway never sends `socket_connected`. The instance is left with no socket, so calling `create()` again, or `reconnect()`, opens a new one. Each `reconnect()` makes up to `maxReconnectAttempts` tries.
 - **Reconnects are transparent to conversations.** `reconnect()` re-binds every cached conversation to the new socket, and sends pick up the new `socket_id` automatically.
 
 ```typescript
@@ -443,6 +454,13 @@ document.addEventListener('visibilitychange', async () => {
   }
 });
 ```
+
+## Known limits
+
+With a core key (Captivate's gateway, not Blue mode), two things the library can't fix on its own: both need a change in the gateway or in core, and are with that team.
+
+- **Every conversation on one connection hears every reply.** Conversations made by one instance share its socket, and the gateway's reply doesn't say which conversation it belongs to. So each conversation's `onMessage` is called for the replies to the others too. Until the gateway sends that, either keep one conversation per instance (one API key and mode each, since instances are shared per key and mode), or have your app tell its own replies apart, for example by sending one message at a time and matching the reply to the conversation that sent it.
+- **Deleting one conversation has no visible effect.** `conversation.delete()` (soft or hard) succeeds, but the conversation is still listed by `getUserConversations()` and its transcript can still be read. `deleteUserConversations(userId, { softDelete: false })` does remove a user's conversations.
 
 ## Usage
 
@@ -602,11 +620,14 @@ If the opener does arrive before your listener is attached, `getTranscript()` wi
 3. Listen for responses:
    ```typescript
    conversation.onMessage((message, type) => {
-     console.log(`${type}: ${message}`);
+     const text = typeof message === 'string' ? message : message.map((part) => part.text ?? '').join('');
+     console.log(`${type}: ${text}`);
    });
    ```
 
 `type` is `'ai_agent'` for bot messages, `'human_agent'` for live chat, and `'error'` when the message could not be retrieved.
+
+`message` is passed on as the sender sent it: from the bot or a live agent, a list of parts, `[{ type: 'text', text: 'Hello!' }]`; for an error, a string such as `"[Error: Bot unavailable]"`. Its type is `MessageContent` (`MessagePart[] | string`). Every conversation on one connection hears every reply: see [Known limits](#known-limits).
 
 ### File Handling with CaptivateChatFileManager
 
@@ -939,7 +960,9 @@ Use event listeners to handle various updates, errors, or custom actions:
 Listeners accumulate: calling `onMessage()` twice registers two callbacks and your handler runs twice per message. Remove individual callbacks with `off()`, or clear them all with `removeAllListeners()`.
 
 ```typescript
-const handler = (message: string, type: string) => console.log(message);
+import type { MessageContent, MessageSender } from 'captivate-chat-api';
+
+const handler = (message: MessageContent, type: MessageSender) => console.log(message);
 conversation.onMessage(handler);
 // ...later
 conversation.removeAllListeners();
@@ -1127,7 +1150,8 @@ import { CaptivateChatAPI } from 'captivate-chat-api';
 
     // Attach listeners immediately — the bot-first opener is already on its way
     conversation.onMessage((message, type) => {
-      console.log(`Received (${type}): ${message}`);
+      const text = typeof message === 'string' ? message : message.map((part) => part.text ?? '').join('');
+      console.log(`Received (${type}): ${text}`);
     });
 
     conversation.onConversationUpdate((update) => {
@@ -1300,8 +1324,8 @@ File-to-text conversion is handled by the external API endpoint:
 
 #### Events
 
-- **`onMessage(callback: (message: string, type: string) => void): void`**
-  Listens for new messages. `type` is `'ai_agent'`, `'human_agent'`, or `'error'`.
+- **`onMessage(callback: (message: MessageContent, type: MessageSender) => void): void`**
+  Listens for new messages. `message` is a list of parts (`[{ type: 'text', text }]`) from the bot or a live agent, and a string for an error. `type` is `'ai_agent'`, `'human_agent'`, or `'error'`. A callback typed `(message: string, type: string)`, as before 7.1.0, still compiles.
 
 - **`onError(callback: (error: any) => void): void`**
   Listens for errors.
@@ -1432,6 +1456,15 @@ interface PaginationInfo {
 }
 
 type TtlDays = 1 | 7 | 30 | 90;
+
+interface MessagePart {
+  type: string;          // 'text' for text
+  text?: string;
+  [key: string]: unknown;
+}
+
+type MessageContent = MessagePart[] | string;  // a string only for an error
+type MessageSender = 'ai_agent' | 'human_agent' | 'error';
 ```
 
 ## Troubleshooting
@@ -1441,6 +1474,18 @@ Fixed in v7.1.0. Conversations now read `socket_id` live instead of capturing it
 
 **Only one conversation receives messages.**
 Fixed in v7.1.0. Listeners were assigned to `socket.onmessage`, so each new conversation overwrote the previous one's handler.
+
+**Every conversation receives every reply.**
+A known limit of core's gateway: its replies don't say which conversation they belong to. See [Known limits](#known-limits).
+
+**`create()` rejects with `Connection timeout: socket_connected not received`.**
+The gateway opened the socket but never named it. Call `create()` again: since v7.1.0 the instance is left with no socket and connects afresh. Before v7.1.0 the second call returned an instance whose replies were lost.
+
+**`Max reconnection attempts (N) reached` on every reconnect.**
+Fixed in v7.1.0: each `reconnect()` gets its own `maxReconnectAttempts` tries.
+
+**`[object Object]` where the bot's words should be.**
+`onMessage`'s `message` is a list of parts, not a string: join their `text`. See [Send and Receive Messages](#send-and-receive-messages).
 
 **`Timeout: No conversation_start_success received from WebSocket`, but the conversation exists.**
 Fixed in v7.1.0. The timer was never cleared and fired even after success. If you still see this on the current version, the backend genuinely exceeded the deadline — raise `conversationStartTimeoutMs`.

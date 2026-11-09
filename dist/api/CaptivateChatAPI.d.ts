@@ -32,7 +32,11 @@ export declare class CaptivateChatAPI implements ConversationSocketProvider {
      * core's keys keep today's, which Engage reads.
      */
     private static getInstanceKey;
-    /** How the registry's log lines name an instance: a Blue key by its id alone, never its secret. */
+    /**
+     * How the registry's log lines name an instance, never by the key itself: a Blue key by its id,
+     * a core key by its last 4 characters, or by a short hash for a key under 16 characters, where 4
+     * would give away too much of it.
+     */
     private static nameOf;
     private apiKey;
     private mode;
@@ -54,6 +58,8 @@ export declare class CaptivateChatAPI implements ConversationSocketProvider {
     private isDisposed;
     /** In-flight connect, so concurrent callers share one handshake. */
     private connectPromise;
+    /** In-flight reconnect cycle, so concurrent callers share one. */
+    private reconnectPromise;
     /** Blue mode's transport, set when the key is one of Blue's: no socket is opened then. */
     private blue;
     /** Blue mode's users and their secrets (first-channels-library-spec §2.6). */
@@ -190,6 +196,9 @@ export declare class CaptivateChatAPI implements ConversationSocketProvider {
     /**
      * Attempts to reconnect to the WebSocket server, then re-binds every cached
      * conversation to the new socket.
+     *
+     * Each call starts a fresh cycle of at most maxReconnectAttempts tries; callers while one is
+     * running (the guard, the auto-reconnect, the app) share it.
      */
     reconnect(): Promise<void>;
     /**

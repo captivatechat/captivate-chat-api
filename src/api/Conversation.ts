@@ -104,6 +104,19 @@ export interface ConversationSocketProvider {
   getSocketId(): string | null;
 }
 
+/** One part of a message's content. Core's gateway and Blue both send `{ type: 'text', text }`. */
+export interface MessagePart {
+  type: string;
+  text?: string;
+  [key: string]: unknown;
+}
+
+/** What onMessage gives: the sender's parts, or a string for an error ("[Error: …]"). */
+export type MessageContent = MessagePart[] | string;
+
+/** Who a message is from, as onMessage's second argument says. */
+export type MessageSender = 'ai_agent' | 'human_agent' | 'error';
+
 /**
  * Represents a conversation session, handling HTTP communication for sending and WebSocket for receiving.
  * Client-side sending uses HTTP, while server-side real-time communication uses WebSocket listeners.
@@ -429,9 +442,16 @@ export class Conversation {
 
   /**
    * Registers a listener for messages from the bot or live chat.
+   *
+   * `message` is what the sender sent, passed on as it is: from the bot or a live agent, a list of
+   * parts (`[{ type: 'text', text }]`); for an error, a string (`"[Error: …]"`, type `'error'`).
+   * It was typed as a string before 7.1.0, which it never was for the bot; a callback written for
+   * that type still compiles (the second signature).
    * @param callback - The function to handle incoming messages.
    */
-  public onMessage(callback: (message: string, type: string) => void): void {
+  public onMessage(callback: (message: MessageContent, type: MessageSender) => void): void;
+  public onMessage(callback: (message: string, type: string) => void): void;
+  public onMessage(callback: (message: any, type: any) => void): void {
     // Blue mode keeps the callback itself, so off('bot_message', callback) removes it.
     if (this.blue) return this.addListener(BLUE_EVENTS.message, callback);
     this.addListener('bot_message', (payload: any) => callback(payload.content, 'ai_agent'));

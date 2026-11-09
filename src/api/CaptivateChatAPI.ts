@@ -52,6 +52,10 @@ const UNGUARDED_METHODS = [
   // dispose and connect call it through the instance they were called on: guarded, it
   // reconnected a disposed instance and rejected with nobody to hear it.
   'teardownSocket',
+  // Synchronous and local. Guarded, configure() on a dead instance reconnected with the settings it
+  // was about to change before changing them, and either rejected with nobody to hear it.
+  'configure',
+  'releaseConversation',
   // registry + local lookups
   'getConversation',
   'getConversationId',
@@ -172,9 +176,15 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     return `${apiKey}-${mode}`;
   }
 
-  /** How the registry's log lines name an instance: a Blue key by its id alone, never its secret. */
+  /**
+   * How the registry's log lines name an instance, never by the key itself: a Blue key by its id,
+   * a core key by its last 4 characters, or by a short hash for a key under 16 characters, where 4
+   * would give away too much of it.
+   */
   private static nameOf(apiKey: string, mode: 'prod' | 'dev'): string {
-    return isBlueKey(apiKey) ? `${keyIdOf(apiKey)}-${mode}` : CaptivateChatAPI.getInstanceKey(apiKey, mode);
+    if (isBlueKey(apiKey)) return `${keyIdOf(apiKey)}-${mode}`;
+    const label = apiKey.length >= 16 ? `…${apiKey.slice(-4)}` : `#${base64url(sha256(utf8Bytes(apiKey))).slice(0, 8)}`;
+    return `${label}-${mode}`;
   }
 
   private apiKey!: string;
@@ -197,6 +207,8 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
   private isDisposed: boolean = false;
   /** In-flight connect, so concurrent callers share one handshake. */
   private connectPromise: Promise<void> | null = null;
+  /** In-flight reconnect cycle, so concurrent callers share one. */
+  private reconnectPromise: Promise<void> | null = null;
   /** Blue mode's transport, set when the key is one of Blue's: no socket is opened then. */
   private blue: BlueTransport | null = null;
   /** Blue mode's users and their secrets (first-channels-library-spec §2.6). */
@@ -373,6 +385,9 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     // Null it first: the close handler checks identity against this.socket and bails
     // when it no longer matches, which is what suppresses the auto-reconnect.
     this.socket = null;
+    // The id goes with its socket. The close handler that used to clear it bails here, so a
+    // replaced or abandoned socket's id stayed and sends went out with a dead socket_id.
+    this.socketId = null;
     if (!socket) return;
     try {
       if (socket.readyState === WebSocketImpl.OPEN || socket.readyState === WebSocketImpl.CONNECTING) {
@@ -410,6 +425,10 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
       const timeoutId = setTimeout(() => {
         if (settled) return;
         settled = true;
+        // Give the socket up: open without socket_connected (core's gateway does this to about
+        // 1 socket in 4), it can't be sent replies, yet it kept isSocketActive() true, so neither
+        // create() nor the guard ever replaced it.
+        if (this.socket === socket) this.teardownSocket('Connection timeout');
         reject(new Error(`Connection timeout: socket_connected not received within ${this.connectTimeoutMs}ms`));
       }, this.connectTimeoutMs);
 
@@ -424,6 +443,9 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
           return;
         }
         if (message?.event?.event_type !== 'socket_connected') return;
+        // Only the instance's own socket names the id: a late frame on a socket replaced or
+        // given up would put back an id nothing can reach.
+        if (this.socket !== socket) return;
 
         this.socketId = message.event.event_payload?.socket_id || null;
         captivateLogger.log('Socket connected with ID:', this.socketId);
@@ -947,46 +969,66 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     // In Blue mode it stays true until dispose(), so the guard never reconnects and apps on
     // 7.0 that stop sending while it's false keep sending (§0, rule 4).
     if (this.blue) return !this.isDisposed;
-    return !!this.socket && this.socket.readyState === WebSocketImpl.OPEN;
+    // Open is not enough: until socket_connected names its id, a socket can't be sent replies, so
+    // create() and the guard treat it as not active and wait for (or start) a handshake.
+    return !!this.socket && this.socket.readyState === WebSocketImpl.OPEN && !!this.socketId;
   }
 
   /**
    * Attempts to reconnect to the WebSocket server, then re-binds every cached
    * conversation to the new socket.
+   *
+   * Each call starts a fresh cycle of at most maxReconnectAttempts tries; callers while one is
+   * running (the guard, the auto-reconnect, the app) share it.
    */
   public async reconnect(): Promise<void> {
     if (this.isDisposed) {
       throw new Error('This CaptivateChatAPI instance has been disposed. Create a new one.');
     }
     if (this.blue) return;
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+    if (this.reconnectPromise) return this.reconnectPromise;
+    if (this.maxReconnectAttempts < 1) {
       throw new Error(`Max reconnection attempts (${this.maxReconnectAttempts}) reached`);
     }
-    this.reconnectAttempts++;
 
-    try {
-      await this.connect();
-      this.reconnectAttempts = 0; // Reset on successful connection
-
-      // connect() creates a brand-new WebSocket, so every cached conversation is still
-      // listening on the old one. Move them across, otherwise inbound messages stop
-      // arriving even though the connection looks healthy.
-      for (const conversation of this.conversations.values()) {
+    // The counter used to reset only on success, so after one failed cycle every later reconnect,
+    // the guard's and the auto-reconnect's among them, threw at once and the instance never recovered.
+    this.reconnectAttempts = 0;
+    // A closure, not a private method: called through create()'s guarded instance, a method would
+    // be wrapped by the guard, which reconnects first.
+    const cycle = async (): Promise<void> => {
+      for (;;) {
+        this.reconnectAttempts++;
         try {
-          conversation.restartListeners();
-        } catch (err) {
-          captivateLogger.error('Failed to re-bind conversation after reconnect:', err);
+          await this.connect();
+          this.reconnectAttempts = 0;
+
+          // connect() creates a brand-new WebSocket, so every cached conversation is still
+          // listening on the old one. Move them across, otherwise inbound messages stop
+          // arriving even though the connection looks healthy.
+          for (const conversation of this.conversations.values()) {
+            try {
+              conversation.restartListeners();
+            } catch (err) {
+              captivateLogger.error('Failed to re-bind conversation after reconnect:', err);
+            }
+          }
+          captivateLogger.log('Reconnected; re-bound', this.conversations.size, 'conversation(s).');
+          return;
+        } catch (error) {
+          captivateLogger.error(`Reconnection attempt ${this.reconnectAttempts} failed:`, error);
+          if (this.reconnectAttempts >= this.maxReconnectAttempts || this.isDisposed) throw error;
+          await new Promise(resolve => setTimeout(resolve, this.reconnectDelay));
+          if (this.isDisposed) {
+            throw new Error('This CaptivateChatAPI instance has been disposed. Create a new one.');
+          }
         }
       }
-      captivateLogger.log('Reconnected; re-bound', this.conversations.size, 'conversation(s).');
-    } catch (error) {
-      captivateLogger.error(`Reconnection attempt ${this.reconnectAttempts} failed:`, error);
-      if (this.reconnectAttempts < this.maxReconnectAttempts && !this.isDisposed) {
-        await new Promise(resolve => setTimeout(resolve, this.reconnectDelay));
-        return this.reconnect();
-      }
-      throw error;
-    }
+    };
+    this.reconnectPromise = cycle().finally(() => {
+      this.reconnectPromise = null;
+    });
+    return this.reconnectPromise;
   }
 
   /**
