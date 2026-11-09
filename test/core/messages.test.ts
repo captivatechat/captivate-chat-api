@@ -138,11 +138,11 @@ test("detachListeners takes a conversation's handler off its socket", async () =
   api.dispose();
 });
 
-// Core's own bug, found by L0 and left as it is (core's path never changes): the guard wraps
-// every function property, so a guarded handle's detachListeners reads a wrapper in place of
-// its bound handler and removeEventListener misses. releaseConversation, deleteUserConversations
-// and dispose all detach that way, so a dropped handle keeps hearing the live socket.
-test('a guarded handle detaches from its socket when released', { todo: 'core bug: the guard wraps boundHandleMessage' }, async () => {
+// Core's own bug, found by L0 and fixed for 7.1.0: the guard wraps every function property, so
+// a guarded handle's detachListeners read a wrapper in place of its bound handler and
+// removeEventListener missed. releaseConversation, deleteUserConversations and dispose all
+// detach that way, so a dropped handle kept hearing the live socket.
+test('a guarded handle detaches from its socket when released', async () => {
   const api = await connectedApi();
   const socket = FakeWebSocket.last!;
   const before = socket.listenerCount('message');
@@ -151,12 +151,32 @@ test('a guarded handle detaches from its socket when released', { todo: 'core bu
   conversation.onMessage((content) => heard.push(content));
   api.releaseConversation('conv-1');
   socket.receive(frame('bot_message', { content: 'after release' }));
+  await new Promise((resolve) => setTimeout(resolve, 10));
   try {
     assert.equal(socket.listenerCount('message'), before);
     assert.deepEqual(heard, []);
   } finally {
     api.dispose();
   }
+});
+
+test('a guarded handle hears nothing after deleteUserConversations or dispose', async () => {
+  const api = await connectedApi();
+  const socket = FakeWebSocket.last!;
+  const before = socket.listenerCount('message');
+  const heard: unknown[] = [];
+  api.getConversation('conv-1').onMessage((content) => heard.push(content));
+  fake.reply(textResponse('OK'));
+  await api.deleteUserConversations('user-1');
+  socket.receive(frame('bot_message', { content: 'after delete' }));
+  assert.equal(socket.listenerCount('message'), before);
+
+  api.getConversation('conv-2').onMessage((content) => heard.push(content));
+  api.dispose();
+  socket.receive(frame('bot_message', { content: 'after dispose' }));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(socket.listenerCount('message'), before);
+  assert.deepEqual(heard, []);
 });
 
 test('a 413 general_error fetches the whole reply from its link and gives it as the bot', async () => {

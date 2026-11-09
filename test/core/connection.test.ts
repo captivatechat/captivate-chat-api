@@ -193,8 +193,7 @@ test('the guard says which call failed when it cannot reconnect', async () => {
     message: 'Socket reconnection failed. Cannot execute getUserConversations: no network',
   });
   assert.equal(fake.requests.length, 0);
-  // Disposed unguarded: see the todo at the end of this file.
-  CaptivateChatAPI.getInstance((api as any).apiKey)!.dispose();
+  api.dispose();
 });
 
 test('the guard leaves accessors and local calls synchronous', async () => {
@@ -240,7 +239,7 @@ test('dispose closes the socket, drops its conversations and frees the key', asy
 
   api.dispose();
 
-  // Detaching a guarded handle's listener is test/core/messages.test.ts' todo.
+  // test/core/messages.test.ts checks that a guarded handle's listener comes off too.
   assert.deepEqual(socket.closedWith, { code: 1000, reason: 'Instance disposed' });
   assert.equal((api as any).conversations.size, 0);
   assert.equal(api.isSocketActive(), false);
@@ -268,11 +267,11 @@ test('a guarded call on a disposed instance fails in the guard', async () => {
   assert.equal(fake.requests.length, 0);
 });
 
-// Core's own bug, found by L0 and left as it is (core's path never changes): dispose calls
-// this.teardownSocket, and on create()'s guarded instance that is a guarded call. With the
-// socket already closed, the guard tries to reconnect the instance dispose just marked
-// disposed, and its rejection is never handled (Node ends a process on one by default).
-test('dispose on a guarded instance whose socket closed rejects nothing', { todo: 'core bug: teardownSocket is guarded' }, async () => {
+// Core's own bug, found by L0 and fixed for 7.1.0: dispose calls this.teardownSocket, and on
+// create()'s guarded instance that was a guarded call. With the socket already closed, the
+// guard tried to reconnect the instance dispose just marked disposed, and its rejection was
+// never handled (Node ends a process on one by default).
+test('dispose on a guarded instance whose socket closed rejects nothing', async () => {
   const api = await createdApi();
   FakeWebSocket.last!.drop(1000);
   const unhandled: unknown[] = [];

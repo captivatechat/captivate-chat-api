@@ -49,6 +49,9 @@ const UNGUARDED_METHODS = [
   'getSocket',
   'getSocketId',
   'dispose',
+  // dispose and connect call it through the instance they were called on: guarded, it
+  // reconnected a disposed instance and rejected with nobody to hear it.
+  'teardownSocket',
   // registry + local lookups
   'getConversation',
   'getConversationId',
@@ -57,6 +60,9 @@ const UNGUARDED_METHODS = [
   'detachListeners',
   'removeAllListeners',
   'off',
+  // A field, not a method: detachListeners removes it by identity, and a wrapper never matched
+  // the handler attachSocketListener added, so a released handle kept hearing its socket.
+  'boundHandleMessage',
   // Blue mode's listeners and its local calls: synchronous, as their types say
   'onDelta',
   'onAnswer',
@@ -1029,8 +1035,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     this.conversations.clear();
 
     // Closes with code 1000, which the close handler treats as intentional. Blue mode has no
-    // socket, and on a guarded instance the call would go through the guard, which reconnects
-    // a disposed instance and rejects with nobody to hear it.
+    // socket. teardownSocket is in UNGUARDED_METHODS, so a guarded instance never reconnects here.
     if (!this.blue) this.teardownSocket('Instance disposed');
     this.socketId = null;
 
