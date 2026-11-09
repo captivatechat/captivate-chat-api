@@ -26,3 +26,9 @@ export declare const SERVER_USER_FORM: RegExp;
 export declare function serverModeRefused(scope?: any): boolean;
 /** What a log line may name of a Blue key: its kind and id (`vbk_` and 24 hex), never its secret. */
 export declare function keyIdOf(apiKey: string): string;
+/**
+ * Keeps a Blue key (or the address holding it) out of what JSON.stringify and console.log list of
+ * an object: a server that answers its own page with `res.json(handle)` must not send the key.
+ * Still readable by name inside the library.
+ */
+export declare function hideFromJson(target: object, ...names: string[]): void;

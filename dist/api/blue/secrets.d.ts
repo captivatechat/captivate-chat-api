@@ -35,6 +35,8 @@ export declare class BlueUsers {
     /** A device secret being made, so two calls at once make one. */
     private readonly making;
     private queue;
+    /** How many times each user hash was forgotten: a lookup begun before a forget doesn't bring the user back. */
+    private readonly forgotten;
     /** The last user a call named on this instance: a handle without a user of its own takes theirs. */
     lastUser: string | null;
     constructor(transport: BlueTransport);

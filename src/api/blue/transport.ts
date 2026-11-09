@@ -2,6 +2,7 @@
 // HTTP call per method, made with the key's own headers and nothing else, its refusals turned
 // into §1.2's words. An answer's stream (stream.ts, with the line reader in ndjson.ts) builds on it.
 import { BlueCall, CONSOLE_WORDS, SETUP_WORDS, WORDS, refusalWords } from './words';
+import { hideFromJson } from './keys';
 
 /** How an answer is read: picked before the POST goes out, since a sent POST can't be read again (§2.3). */
 export type BlueStreamMode = 'auto' | 'fetch' | 'xhr' | 'whole';
@@ -134,6 +135,7 @@ export class BlueTransport {
 
   constructor(apiKey: string, mode: 'prod' | 'dev', options: BlueOptions, logger: Logger, serverMode = false) {
     this.apiKey = apiKey;
+    hideFromJson(this, 'apiKey');
     this.mode = mode;
     this.serverMode = serverMode;
     this.logger = logger;

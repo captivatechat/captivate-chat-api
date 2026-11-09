@@ -1,6 +1,6 @@
 // Import the Conversation class
 import { BlueHandle, Conversation, ConversationSocketProvider, blueStateOf, takeBlueCopy } from './Conversation';
-import { SERVER_USER_FORM, blueKeyKind, isBlueKey, keyIdOf, serverModeRefused } from './blue/keys';
+import { SERVER_USER_FORM, blueKeyKind, hideFromJson, isBlueKey, keyIdOf, serverModeRefused } from './blue/keys';
 import { BlueUsers, base64url, sha256, utf8Bytes } from './blue/secrets';
 import { CorePagination, ListedConversation, copyOfListed, isRecord, keptPart, listQuery, paginationOf, tooBig } from './blue/shapes';
 import { Clock } from './blue/stream';
@@ -247,6 +247,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
       this.mode === 'prod'
         ? `wss://channel.wss.captivatechat.ai/dev?apiKey=${apiKey}`
         : `wss://channel-dev.wss.captivatechat.ai/dev?apiKey=${apiKey}`;
+    if (this.blue) hideFromJson(this, 'apiKey', 'url');
 
     this.socket = null;
     this.conversations = new Map();
@@ -256,7 +257,11 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     CaptivateChatAPI.instances.set(instanceKey, this);
 
     captivateLogger.log(`Created new CaptivateChatAPI instance for ${CaptivateChatAPI.nameOf(apiKey, mode)}`);
-    captivateLogger.log('CaptivateChatAPI: Using HTTP for sending messages and WebSocket for receiving real-time updates.');
+    captivateLogger.log(
+      this.blue
+        ? 'CaptivateChatAPI: Blue mode, every call one HTTPS request and no socket.'
+        : 'CaptivateChatAPI: Using HTTP for sending messages and WebSocket for receiving real-time updates.'
+    );
   }
 
   /** Updates tunables on a live instance. */
@@ -573,19 +578,26 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
    * caller into a null check that could never be satisfied on the success path.
    *
    * @param userId - Server mode: the user the call is for, on every call. A fresh handle each
-   *                 time, never kept, so one user's request never acts as another's. Unused with
-   *                 other keys.
+   *                 time, never kept, so one user's request never acts as another's. With an app
+   *                 key: the user whose secret a conversation this instance doesn't know is
+   *                 opened with. Unused with a core key.
+   * @param metadata - Server mode: this request's metadata, held in memory only (nothing is sent), so
+   *                   its user_id names the customer and its details go with each message. Unused otherwise.
    */
-  public getConversation(conversationId: string, userId?: string): Conversation {
+  public getConversation(conversationId: string, userId?: string, metadata?: Record<string, any>): Conversation {
     if (this.blue?.serverMode) {
       if (userId === undefined) throw new Error(SETUP_WORDS.nameTheUser);
       const user = serverUser(userId);
-      return this.blueConversation(conversationId, { secret: user, userId: user });
+      return this.blueConversation(conversationId, { secret: user, userId: user, given: isRecord(metadata) ? { ...metadata } : {} });
     }
     let conversation = this.conversations.get(conversationId);
 
     if (!conversation && this.blue) {
-      conversation = this.blueConversation(conversationId, { findSecret: () => this.secretOfConversation(conversationId) });
+      const named = typeof userId === 'string' && userId !== '' ? userId : null;
+      conversation = this.blueConversation(conversationId, {
+        findSecret: named ? () => this.secretOfUser(named) : () => this.secretOfConversation(conversationId),
+        ...(named ? { userId: named } : {}),
+      });
       this.conversations.set(conversationId, conversation);
     }
     if (!conversation) {
@@ -757,6 +769,12 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
       ...handle,
     });
     return withSocketGuard(conversation);
+  }
+
+  /** getConversation(id, userId)'s user, when this device knows their secret. */
+  private async secretOfUser(userId: string): Promise<{ secret: string; userId: string | null } | null> {
+    const secret = await this.blueUsers!.secretFor(userId, false);
+    return secret === null ? null : { secret, userId };
   }
 
   /** getConversation(id)'s user: the one kept with the conversation, else the last one named here (§2.2). */

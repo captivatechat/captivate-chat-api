@@ -2,6 +2,7 @@ import { CaptivateChatFileManager, TtlDays } from './CaptivateChatFileManager';
 import { captivateLogger } from './CaptivateChatAPI';
 import { BLUE_EVENTS, BlueAnswer, BlueAnswers } from './blue/answer';
 import { blueFileManager } from './blue/files';
+import { hideFromJson } from './blue/keys';
 import { BlueUser, customerOf, detailsOf } from './blue/identity';
 import {
   BlueCopy,
@@ -149,6 +150,10 @@ export class Conversation {
   private blueState: BlueState | null = null;
   private blueTransport: BlueTransport | null = null;
   private findBlueSecret: BlueHandle['findSecret'];
+  /** The bot-first greeting not yet given: it goes once, on the tick after the first message or answer listener. */
+  private greetingPending: BlueGreeting | null = null;
+  private greetingClock: Clock = RUNTIME_CLOCK;
+  private detailsLookup: Promise<void> | null = null;
 
   /**
    * Initializes a new Conversation instance.
@@ -183,6 +188,7 @@ export class Conversation {
     this.defaultTtlDays = undefined;
     this.boundHandleMessage = this.handleMessage.bind(this);
     if (blue) {
+      hideFromJson(this, 'apiKey');
       const state: BlueState = {
         userId: blue.userId ?? null,
         secret: blue.secret ?? null,
@@ -213,9 +219,10 @@ export class Conversation {
           return { user: state.user, ...(details ? { details } : {}) };
         },
       });
-      // On the next tick, so an app that registers onMessage once createConversation resolves gets it (§2.2).
-      const greeting = state.greeting;
-      if (greeting) (blue.clock ?? RUNTIME_CLOCK).setTimeout(() => this.greet(greeting), 0);
+      // Held until the first onMessage or onAnswer, then given on the next tick: a timer from here
+      // would fire before a slow store (AsyncStorage, a file) lets createConversation resolve (§2.2).
+      this.greetingClock = blue.clock ?? RUNTIME_CLOCK;
+      this.greetingPending = state.greeting;
     }
 
     // Attach via addEventListener, never `socket.onmessage = ...`.
@@ -413,6 +420,11 @@ export class Conversation {
       this.listeners.set(eventType, []);
     }
     this.listeners.get(eventType)?.push(callback);
+    if (this.greetingPending && (eventType === BLUE_EVENTS.message || eventType === BLUE_EVENTS.answer)) {
+      const greeting = this.greetingPending;
+      this.greetingPending = null;
+      this.greetingClock.setTimeout(() => this.greet(greeting), 0);
+    }
   }
 
   /**
@@ -550,8 +562,8 @@ export class Conversation {
   public async sendMessage(content: object | string): Promise<void> {
     if (this.blue) {
       const blue = this.blue;
-      if (this.blueState?.secret) return blue.send(content);
-      return this.blueSecret().then(() => blue.send(content));
+      if (this.blueState?.secret && this.blueState.details !== null) return blue.send(content);
+      return this.blueSecret().then(() => this.knowDetails()).then(() => blue.send(content));
     }
     // Check if content is a string and transform it into a default object
     if (typeof content === 'string') {
@@ -645,6 +657,7 @@ export class Conversation {
     // Blue mode: a press on one of the bot's offers, `{ choice, values }` (§2.8).
     if (this.blue) {
       await this.blueSecret();
+      await this.knowDetails();
       return this.blue.press(actionId, data);
     }
     const response = await this.sendPayload('action', {
@@ -999,6 +1012,22 @@ export class Conversation {
     return found.secret;
   }
 
+  /**
+   * A handle that never started or read its conversation (getConversation, in server mode every
+   * request's) doesn't know the names of the details the bot's look-ups read: reads them
+   * before its first send, press or setMetadata. A read that fails is left to the call itself, and tried again at the next.
+   */
+  private knowDetails(): Promise<void> {
+    if (this.blueState!.details !== null) return Promise.resolve();
+    this.detailsLookup ??= this.readBlue().then(
+      () => undefined,
+      () => undefined
+    ).finally(() => {
+      this.detailsLookup = null;
+    });
+    return this.detailsLookup;
+  }
+
   /** GET /v1/chat/:id: the handle's copy and the details' names come with it. */
   private async readBlue(): Promise<ReadBack> {
     const back =
@@ -1023,6 +1052,8 @@ export class Conversation {
     const user = customerOf(metadata, (name, words) => transport.warnOnce(name, words), transport.serverMode);
     if (user) state.user = user;
     const sent = keptPart(metadata);
+    // Only a name in the details' list stays out of what Blue keeps: learn the list first.
+    if (Object.keys(sent).length > 0) await this.knowDetails();
     const details = new Set(state.details ?? []);
     if (Object.keys(sent).every((name) => details.has(name))) return;
     if (tooBig(merged(state.copy?.kept ?? {}, sent))) throw new Error(METADATA_TOO_BIG);

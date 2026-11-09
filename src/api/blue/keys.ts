@@ -56,3 +56,15 @@ export function serverModeRefused(scope: any = globalThis): boolean {
 export function keyIdOf(apiKey: string): string {
   return /^vb[a-z]_[0-9a-f]{24}/.exec(apiKey)?.[0] ?? `${apiKey.slice(0, 4)}…`;
 }
+
+/**
+ * Keeps a Blue key (or the address holding it) out of what JSON.stringify and console.log list of
+ * an object: a server that answers its own page with `res.json(handle)` must not send the key.
+ * Still readable by name inside the library.
+ */
+export function hideFromJson(target: object, ...names: string[]): void {
+  for (const name of names) {
+    if (!Object.prototype.hasOwnProperty.call(target, name)) continue;
+    Object.defineProperty(target, name, { enumerable: false, writable: true, configurable: true, value: (target as any)[name] });
+  }
+}

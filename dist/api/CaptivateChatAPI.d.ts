@@ -106,10 +106,13 @@ export declare class CaptivateChatAPI implements ConversationSocketProvider {
      * caller into a null check that could never be satisfied on the success path.
      *
      * @param userId - Server mode: the user the call is for, on every call. A fresh handle each
-     *                 time, never kept, so one user's request never acts as another's. Unused with
-     *                 other keys.
+     *                 time, never kept, so one user's request never acts as another's. With an app
+     *                 key: the user whose secret a conversation this instance doesn't know is
+     *                 opened with. Unused with a core key.
+     * @param metadata - Server mode: this request's metadata, held in memory only (nothing is sent), so
+     *                   its user_id names the customer and its details go with each message. Unused otherwise.
      */
-    getConversation(conversationId: string, userId?: string): Conversation;
+    getConversation(conversationId: string, userId?: string, metadata?: Record<string, any>): Conversation;
     /**
      * Drops a conversation from the local cache and detaches its socket listener.
      * Does not delete it server-side — use conversation.delete() for that.
@@ -154,6 +157,8 @@ export declare class CaptivateChatAPI implements ConversationSocketProvider {
     forgetUser(userId: string): void;
     /** A Blue conversation's handle, guarded as core's are. */
     private blueConversation;
+    /** getConversation(id, userId)'s user, when this device knows their secret. */
+    private secretOfUser;
     /** getConversation(id)'s user: the one kept with the conversation, else the last one named here (§2.2). */
     private secretOfConversation;
     /**

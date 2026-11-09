@@ -167,6 +167,8 @@ export class BlueUsers {
   /** A device secret being made, so two calls at once make one. */
   private readonly making = new Map<string, Promise<string | null>>();
   private queue: Promise<unknown> = Promise.resolve();
+  /** How many times each user hash was forgotten: a lookup begun before a forget doesn't bring the user back. */
+  private readonly forgotten = new Map<string, number>();
   /** The last user a call named on this instance: a handle without a user of its own takes theirs. */
   lastUser: string | null = null;
 
@@ -228,6 +230,7 @@ export class BlueUsers {
     }
     const fromServer = this.transport.settings.userSecret;
     if (fromServer) return this.fromServer(userId, hash, fromServer);
+    const forgottenThen = this.forgotten.get(hash) ?? 0;
     const already = this.making.get(hash);
     if (already) return already.then((secret) => (secret ?? (make ? this.secretFor(userId, make) : null)));
     const found = this.inTurn(async () => {
@@ -241,7 +244,7 @@ export class BlueUsers {
     });
     const made = found.then((secret) => {
       this.making.delete(hash);
-      if (secret !== null) {
+      if (secret !== null && (this.forgotten.get(hash) ?? 0) === forgottenThen) {
         this.known.set(hash, { userId, secret });
         this.lastUser = userId;
       }
@@ -252,10 +255,13 @@ export class BlueUsers {
   }
 
   private async fromServer(userId: string, hash: string, get: (userId: string) => string | Promise<string>): Promise<string> {
+    const forgottenThen = this.forgotten.get(hash) ?? 0;
     const secret = await get(userId);
     if (typeof secret !== 'string' || !SECRET_FORM.test(secret)) throw new Error(SETUP_WORDS.userSecretForm);
-    this.known.set(hash, { userId, secret });
-    this.lastUser = userId;
+    if ((this.forgotten.get(hash) ?? 0) === forgottenThen) {
+      this.known.set(hash, { userId, secret });
+      this.lastUser = userId;
+    }
     return secret;
   }
 
@@ -313,6 +319,7 @@ export class BlueUsers {
   /** forgetUser: the user's secret and their conversations' users, in memory and on the device. */
   forget(userId: string): Promise<void> {
     const hash = userHash(userId);
+    this.forgotten.set(hash, (this.forgotten.get(hash) ?? 0) + 1);
     this.known.delete(hash);
     for (const [id, h] of [...this.owners]) if (h === hash) this.owners.delete(id);
     if (this.lastUser === userId) this.lastUser = null;

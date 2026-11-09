@@ -19,7 +19,7 @@ export type ListenerName = (typeof LISTENERS)[number];
 /** A Blue conversation handle, as L4's createConversation will make one. */
 export function blueConversation(api: CaptivateChatAPI, clock: FakeClock, id = '0000000000000000000000c1'): Conversation {
   const transport = (api as any).blue as BlueTransport;
-  return new Conversation(id, null, {}, transport.apiKey, 'prod', null, api, { transport, secret: SECRET, clock });
+  return new Conversation(id, null, {}, transport.apiKey, 'prod', null, api, { transport, secret: SECRET, clock, details: [] });
 }
 
 /** Registers the listeners named (all by default) and records each call, in order. */

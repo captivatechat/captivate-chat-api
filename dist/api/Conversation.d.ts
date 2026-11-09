@@ -108,6 +108,10 @@ export declare class Conversation {
     private blueState;
     private blueTransport;
     private findBlueSecret;
+    /** The bot-first greeting not yet given: it goes once, on the tick after the first message or answer listener. */
+    private greetingPending;
+    private greetingClock;
+    private detailsLookup;
     /**
      * Initializes a new Conversation instance.
      * @param conversation_id - The unique identifier of the conversation.
@@ -302,6 +306,12 @@ export declare class Conversation {
     private get bluePath();
     /** The user's secret: the handle's, else found once (getConversation(id)); else each call refuses in §2.2's words. */
     private blueSecret;
+    /**
+     * A handle that never started or read its conversation (getConversation, in server mode every
+     * request's) doesn't know the names of the details the bot's look-ups read: reads them
+     * before its first send, press or setMetadata. A read that fails is left to the call itself, and tried again at the next.
+     */
+    private knowDetails;
     /** GET /v1/chat/:id: the handle's copy and the details' names come with it. */
     private readBlue;
     /**

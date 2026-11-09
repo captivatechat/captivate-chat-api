@@ -251,7 +251,8 @@ test("two users through one instance: their lists apart, B can't reach A's conve
   const read = await refusal(() => b.getTranscript());
   assert.equal(read.status, 404);
   assert.equal(read.errorDesc, WORDS.conversationGone);
-  fake.reply(gone());
+  // A fresh handle first reads the conversation for its details' names: refused too, and the send itself goes on to be refused.
+  fake.reply(gone(), gone());
   const sent = await refusal(() => b.sendMessage('Show me my orders'));
   assert.equal(sent.errorDesc, WORDS.conversationGone);
   const fromB = sends()[sends().length - 1];
@@ -277,12 +278,61 @@ test("two users through one instance: their lists apart, B can't reach A's conve
   assert.equal(conversationsKept(api), 0);
 });
 
+test("a later request's handle knows the customer and the details from what that request gives, and setMetadata keeps no detail's name in Blue", async () => {
+  fake.reply(start(ID, { details: ['order_id'] }));
+  await api.createConversation(USER_A, {}, { user_id: 'C-1042', order_id: '77' }, 'user-first');
+  const before = fake.requests.length;
+  // The next request: a fresh handle, given the request's metadata; the names are read once, before the first send.
+  const next = api.getConversation(ID, USER_A, { user_id: 'C-1042', order_id: '77' });
+  fake.reply(readBack({ details: ['order_id'] }));
+  const sent = await send(next, answer(), 'Where is my order?');
+  assert.equal(fake.requests.length - before, 2);
+  assert.equal(fake.requests[before].method, 'GET');
+  assert.deepEqual(sent.json.user, { id: 'C-1042' });
+  assert.deepEqual(sent.json.details, { order_id: '77' });
+  // A second message on the same handle reads nothing again.
+  const again = await send(next, answer(), 'And the next one?');
+  assert.deepEqual(again.json.details, { order_id: '77' });
+  assert.equal(fake.requests.filter((r) => r.method === 'GET').length, 1);
+
+  // A handle that is only given setMetadata learns the names first: a detail is never PATCHed into what Blue keeps.
+  const third = api.getConversation(ID, USER_A);
+  fake.reply(readBack({ details: ['order_id'] }));
+  const patches = fake.requests.filter((r) => r.method === 'PATCH').length;
+  await third.setMetadata({ user_id: 'C-1042', order_id: '88' });
+  assert.equal(fake.requests.filter((r) => r.method === 'PATCH').length, patches);
+  const viaThird = await send(third, answer(), 'Hello');
+  assert.deepEqual(viaThird.json.user, { id: 'C-1042' });
+  assert.deepEqual(viaThird.json.details, { order_id: '88' });
+
+  // Without the request's metadata the message is anonymous, as before.
+  const bare = api.getConversation(ID, USER_A);
+  fake.reply(readBack());
+  assert.deepEqual((await send(bare)).json.user, { id: null });
+});
+
+test('JSON.stringify of a handle, of the instance and of a list of handles never holds the key', async () => {
+  const handle = api.getConversation(ID, USER_A);
+  fake.reply(listed([ID]));
+  const list = await api.getUserConversations(USER_A);
+  for (const value of [handle, api, list, list.conversations[0]]) {
+    const text = JSON.stringify(value);
+    assert.ok(!text.includes(secretPart), 'no key secret');
+    assert.ok(!text.includes(key.slice(0, 28) + '_'), 'nor the whole key');
+  }
+  // Still there for the library's own use.
+  assert.equal(transportOf(api).apiKey, key);
+  assert.equal((handle as any).apiKey, key);
+});
+
 test('two requests on one conversation: each handle gets its own answer and nothing of the other', async () => {
   const first = api.getConversation(ID, USER_A);
   const second = api.getConversation(ID, USER_A);
   const firstCalls = record(first, ['onMessage', 'onAnswer']);
   const secondCalls = record(second, ['onMessage', 'onAnswer']);
+  fake.reply(readBack());
   await send(first, answer('First answer.'));
+  fake.reply(readBack());
   await send(second, answer('Second answer.'));
   assert.deepEqual(
     firstCalls.map((c) => c.listener),
@@ -419,6 +469,7 @@ test("each fixture gives the same callbacks in server mode as app mode's, with t
     const id = JSON.parse(text.split('\n').find((l) => l.trim())!).conversationId;
     const conversation = api.getConversation(id, USER_A);
     const calls: Call[] = record(conversation);
+    fake.reply(readBack({ _id: id }));
     fake.reply(new FakeResponse({ headers: NDJSON, body: lineChunks(text) }));
     await conversation.sendMessage('Hello');
     await flush();

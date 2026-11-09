@@ -141,6 +141,44 @@ test('bot-first: the greeting comes to onMessage on the next tick, then onAnswer
   assert.deepEqual(transcript.map((m) => m.sender), ['user', 'bot']);
 });
 
+test('bot-first with a store that answers on a later turn still gives the greeting to listeners added after createConversation resolves', async () => {
+  const slow = new Map<string, string>();
+  const later = () => new Promise<void>((resolve) => setTimeout(resolve, 10));
+  const asyncStorage = {
+    async getItem(key: string) {
+      await later();
+      return slow.get(key) ?? null;
+    },
+    async setItem(key: string, value: string) {
+      await later();
+      slow.set(key, value);
+    },
+    async removeItem(key: string) {
+      await later();
+      slow.delete(key);
+    },
+  };
+  // The real clock: a timer set when the handle was built would fire while the store was still working.
+  const real = await CaptivateChatAPI.create(appKey(), 'prod', { storage: asyncStorage });
+  try {
+    fake.reply(start({ greeting: { text: 'Hi, I can help with orders.', starters: ['Opening hours'] } }));
+    const conversation = await real.createConversation('user-1', {}, {}, 'bot-first');
+    const messages: unknown[] = [];
+    const answers: unknown[] = [];
+    conversation.onMessage((content) => messages.push(content));
+    conversation.onAnswer((answer) => answers.push(answer));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.deepEqual(messages, [[{ type: 'text', text: 'Hi, I can help with orders.' }]]);
+    assert.deepEqual(answers, [{ text: 'Hi, I can help with orders.', sources: [], choices: ['Opening hours'] }]);
+    // Once only, however many listeners come after.
+    conversation.onAnswer(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(messages.length, 1);
+  } finally {
+    real.dispose();
+  }
+});
+
 test('user-first asks for no greeting and gives none', async () => {
   const conversation = await created();
   const messages: unknown[] = [];

@@ -9,7 +9,7 @@ import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { CaptivateChatAPI } from '../../src/api/CaptivateChatAPI';
-import { base64url, sha256, userHash, utf8Bytes } from '../../src/api/blue/secrets';
+import { BlueUsers, base64url, sha256, userHash, utf8Bytes } from '../../src/api/blue/secrets';
 import { SETUP_WORDS } from '../../src/api/blue/words';
 import { flush } from './answers';
 
@@ -205,4 +205,35 @@ test('forgetUser removes the stored secret and the user\'s handles, and the user
   assert.notEqual(api.getConversation(id), conversation);
   await api.createConversation('user-1', {}, {}, 'user-first');
   assert.notEqual(secretOf(fake.last), before);
+});
+
+test('a forgetUser during a lookup still in flight leaves the user neither known nor the last user', async () => {
+  const storage = new FakeAsyncStorage();
+  const api = await blueApi(appKey(), { storage });
+  const users = (api as any).blueUsers as BlueUsers;
+  const lookup = users.secretFor('user-1', true);
+  const forgetting = users.forget('user-1');
+  assert.match((await lookup)!, /^[A-Za-z0-9_-]{43}$/);
+  await forgetting;
+  assert.equal(users.lastUser, null);
+  // Not held in memory, and removed from the device: no secret until one is made again.
+  assert.equal(await users.secretFor('user-1', false), null);
+  assert.equal(users.lastUser, null);
+  assert.match((await users.secretFor('user-1', true))!, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(users.lastUser, 'user-1');
+});
+
+test("getConversation(id, userId) with an app key opens a conversation this instance does not know with that user's secret, not the last user's", async () => {
+  const storage = new FakeStorage();
+  const api = await blueApi(appKey(), { storage });
+  fake.reply(started201(), started201());
+  await api.createConversation('user-a', {}, {}, 'user-first');
+  const secretA = secretOf(fake.last);
+  await api.createConversation('user-b', {}, {}, 'user-first');
+  assert.notEqual(secretOf(fake.last), secretA);
+  // A conversation no handle and no kept binding knows: the last user named is B, so the id alone would use B's secret.
+  const other = 'f'.repeat(24);
+  fake.reply(jsonResponse({ _id: other, messages: [], answering: false, metadata: {}, details: [] }));
+  await api.getConversation(other, 'user-a').getTranscript();
+  assert.equal(secretOf(fake.last), secretA);
 });
