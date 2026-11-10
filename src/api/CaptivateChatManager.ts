@@ -1,6 +1,6 @@
 import { CaptivateChatAPI, CaptivateChatAPIOptions, keyLabel } from './CaptivateChatAPI';
 import { Conversation } from './Conversation';
-import { isBlueKey } from './blue/keys';
+import { hideFromJson, isBlueKey } from './blue/keys';
 import { SETUP_WORDS } from './blue/words';
 
 type ApiKey = string;
@@ -22,6 +22,8 @@ export class CaptivateChatManager {
       // Constructor now returns singleton automatically
       this.apiInstances[key] = new CaptivateChatAPI(key, mode, options);
     }
+    // The instances are filed under their core keys: an app that logs the manager must not print them.
+    hideFromJson(this, 'apiInstances');
   }
 
   /**
@@ -42,6 +44,7 @@ export class CaptivateChatManager {
     for (const key of uniqueKeys) {
       manager.apiInstances[key] = await CaptivateChatAPI.create(key, mode, options);
     }
+    hideFromJson(manager, 'apiInstances');
     return manager;
   }
 

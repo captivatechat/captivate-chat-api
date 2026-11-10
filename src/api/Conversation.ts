@@ -238,6 +238,8 @@ export class Conversation {
       // would fire before a slow store (AsyncStorage, a file) lets createConversation resolve (§2.2).
       this.greetingClock = blue.clock ?? RUNTIME_CLOCK;
       this.greetingPending = state.greeting;
+      // The state holds the user's secret, ID and token, and the transport the key: an app that logs or reports a handle must not send them.
+      hideFromJson(this, 'blue', 'blueState', 'blueTransport', 'findBlueSecret');
     }
 
     // Attach via addEventListener, never `socket.onmessage = ...`.

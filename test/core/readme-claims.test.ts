@@ -42,10 +42,6 @@ const converted = (name: string) =>
     processingTime: 15,
   });
 
-// A claim these tests found the library doesn't keep (10 Nov), left for its owner: the test runs
-// and reports, and npm test stays green until the library or the README changes.
-const FINDING = 'finding of 10 Nov: the README claims it, the library does not do it yet';
-
 const pdf = (name = 'document.pdf') => new File(['%PDF'], name, { type: 'application/pdf' });
 
 /** The form a file-to-text call sent, as name → value. */
@@ -229,7 +225,7 @@ test('README: getTranscript refreshes a file link within five minutes of expiry 
 
 // README "Message Payload Format": content.files is a list of file objects
 // ({ filename, type, textContent }), and "Direct Usage: Use fileInput directly as files: fileInput".
-test('README: sendMessage({ text, files: fileInput }) sends content.files as a list of file objects', { todo: FINDING }, async () => {
+test('README: sendMessage({ text, files: fileInput }) sends content.files as a list of file objects', async () => {
   const api = await connectedApi();
   const conversation = api.getConversation('conv-send');
   fake.reply(converted('document.pdf'));

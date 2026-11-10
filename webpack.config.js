@@ -42,8 +42,11 @@ module.exports = [
         output: {
             path: path.resolve(__dirname, 'dist'),
             filename: 'captivate-chat-api.node.js',
+            // `exports.X = …` lines Node's ESM loader can read, so `import { CaptivateChatAPI } from
+            // 'captivate-chat-api'` works in a .mjs file or a "type": "module" app; commonjs2's
+            // `module.exports = …` gives ESM a default export only.
             library: {
-                type: 'commonjs2'
+                type: 'commonjs-static'
             }
         }
     }

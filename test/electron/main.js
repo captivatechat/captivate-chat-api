@@ -100,8 +100,9 @@ ipcMain.on('harness:report', (event, report) => reports.get(event.sender.id)?.(r
 async function main() {
   console.log(`Electron ${process.versions.electron} (Chromium ${process.versions.chrome}, Node ${process.versions.node}): ${fixtures.length} fixtures`);
   const replay = await startReplay();
-  // The library as apps get it: dist, built by npm run test:electron first.
-  const { CaptivateChatAPI } = require(join(ROOT, 'dist', 'captivate-chat-api.js'));
+  // The library as a Node app gets it: the package root, whose "main" is the Node build (npm run
+  // test:electron builds it first). The served page below keeps the browser file.
+  const { CaptivateChatAPI } = require(ROOT);
 
   protocol.handle('app', (request) => {
     const url = new URL(request.url);

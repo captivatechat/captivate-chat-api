@@ -3,7 +3,6 @@
 // once, each with its own drafts and answers, every call naming its user and none carrying an
 // Origin or a secret, and no handle kept. Run by npm run test:electron before Electron; exits 0
 // only when every check passed.
-const { join } = require('node:path');
 const { startReplay, fixtureNames, expectedOf, differenceOf, draftsOf, ROOT } = require('./replay');
 const { runAll } = require('./page');
 
@@ -16,7 +15,7 @@ async function main() {
   const fixtures = fixtureNames().map((name) => ({ name, count: expectedOf(name).filter((c) => c.listener !== 'onDelta').length }));
   console.log(`Node ${process.versions.node}, server mode: ${fixtures.length} fixtures for each of two users at once`);
   const replay = await startReplay();
-  const { CaptivateChatAPI } = require(join(ROOT, 'dist', 'captivate-chat-api.js'));
+  const { CaptivateChatAPI } = require(ROOT);
   const key = `vbk_${'f1'.padStart(24, '0')}_${'cd'.repeat(32)}`;
   const outcomes = [];
   const check = (name, problems) => {

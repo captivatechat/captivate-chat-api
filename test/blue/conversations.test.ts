@@ -8,6 +8,7 @@ import { FakeStorage } from '../fakes/storage';
 import { FakeClock } from '../fakes/clock';
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { inspect } from 'node:util';
 import { CaptivateChatAPI } from '../../src/api/CaptivateChatAPI';
 import { CaptivateChatManager } from '../../src/api/CaptivateChatManager';
 import { Conversation, blueStateOf } from '../../src/api/Conversation';
@@ -75,6 +76,26 @@ test('createConversation sends the metadata as given but user_id and user_token,
   // The user's metadata isn't passed by reference: a later change in the app's object isn't Blue's.
   metadata.plan = 'changed';
   assert.equal(state.given.plan, 'gold');
+});
+
+test("JSON.stringify and console.log of a Blue handle hold no user secret, user token, user ID or key", async () => {
+  const conversation = await created({ user_id: 'C-1042', user_token: 'token-value' });
+  const state = blueStateOf(conversation)!;
+  const secret = state.secret!;
+  assert.match(secret, /^[A-Za-z0-9_-]{43}$/);
+  const key = (api as any).apiKey as string;
+  const other = api.getConversation('0000000000000000000000c2');
+  for (const value of [conversation, other, [conversation, other], { conversation }]) {
+    for (const text of [JSON.stringify(value), inspect(value, { depth: 8 })]) {
+      for (const word of [secret, 'token-value', 'C-1042', key]) assert.ok(!text.includes(word), `${word.slice(0, 6)}… in ${text.slice(0, 160)}`);
+    }
+  }
+  // Still there for the library's own use.
+  assert.equal(blueStateOf(conversation)!.secret, secret);
+  assert.equal(blueStateOf(conversation)!.given.user_token, 'token-value');
+  fake.reply(jsonResponse({ stopped: false }));
+  await conversation.stop();
+  assert.ok(secretOf(fake.last) === secret, 'a call still carries the secret');
 });
 
 test('metadata over 4 KB once user_id and user_token are out is refused before sending, counted in UTF-8 bytes', async () => {

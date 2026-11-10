@@ -5,6 +5,7 @@ import { clearLogs, linesAt } from '../fakes/console';
 import { FakeFetch, jsonResponse, textResponse } from '../fakes/fetch';
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { inspect } from 'node:util';
 import { CaptivateChatAPI } from '../../src/api/CaptivateChatAPI';
 import { CaptivateChatManager } from '../../src/api/CaptivateChatManager';
 
@@ -215,6 +216,26 @@ test('deleteUserConversations sends the user and drops every local handle', asyn
   assert.equal(fake.requests[1].json.event.event_payload.softdelete, false);
   await assert.rejects(api.deleteUserConversations(''), { message: 'User ID must be provided.' });
   api.dispose();
+});
+
+test("JSON.stringify and console.log of a manager, however made, never hold the core keys it files its instances under", async () => {
+  const keys = ['manager-json-key-0001-abcdef', 'manager-json-key-0002-abcdef'];
+  const built = new CaptivateChatManager(keys);
+  const connecting = CaptivateChatManager.create(keys, 'dev');
+  // create() connects one key after the other.
+  for (let i = 0; i < keys.length; i++) {
+    await until(() => FakeWebSocket.instances.length > i);
+    FakeWebSocket.instances[i].open(`socket-m${i}`);
+  }
+  const created = await connecting;
+  for (const manager of [built, created]) {
+    for (const text of [JSON.stringify(manager), JSON.stringify([manager]), inspect(manager, { depth: 6 })]) {
+      for (const key of keys) assert.ok(!text.includes(key), `a key in ${text.slice(0, 120)}`);
+    }
+    // Still there for the library's own use.
+    for (const key of keys) assert.ok(manager.getApiInstance(key));
+  }
+  for (const manager of [built, created]) for (const key of keys) manager.getApiInstance(key)!.dispose();
 });
 
 test("the manager's error for a conversation of a key it doesn't hold names the key by its last 4 characters", async () => {

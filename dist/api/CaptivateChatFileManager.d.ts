@@ -143,6 +143,36 @@ export declare class CaptivateChatFileManager {
         };
     }[];
     /**
+     * What JSON.stringify writes for it: the list itself, so `files: fileInput` sends a list of
+     * file objects, as the README shows, and not this wrapper.
+     */
+    toJSON(): {
+        filename: string;
+        type: string;
+        file?: File | Blob;
+        url?: string;
+        storage?: {
+            fileKey: string;
+            presignedUrl: string;
+            expiresIn: number;
+            fileSize: number;
+            processingTime: number;
+        };
+        upload?: {
+            uploadId: string;
+            expiresAt: string;
+        };
+        textContent: {
+            type: "file_content";
+            text: string;
+            metadata: {
+                source: "file_attachment";
+                originalFileName: string;
+                storageType?: "direct";
+            };
+        };
+    }[];
+    /**
      * Makes the class iterable so it can be used directly as an array.
      */
     [Symbol.iterator](): Generator<{
