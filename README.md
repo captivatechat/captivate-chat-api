@@ -40,9 +40,13 @@ This release fixes a group of connection bugs that could cause dropped messages,
 
 **Debug logs and errors never show a core key.** With `setDebugMode(true)`, an instance is named in the logs by the key's last 4 characters (or a short hash, for a key under 16 characters), never by the key. `CaptivateChatManager`'s error for a conversation whose key it doesn't hold names the key the same way. A Blue app key (`vba_…`), whose id is the whole key, is named `vba_…` and its last 4 characters too; a server key by its id alone.
 
-**A handle's JSON leaves the key out.** `JSON.stringify` of a conversation, of the instance or of a list of conversations used to hold a core key, twice: the key itself and the socket's address, which carries it as `?apiKey=`. An app that logged or reported a handle sent its key along. The key, the address and the sockets are now left out of what `JSON.stringify` and `console.log` list, as they already were for Blue's keys; the library still uses them.
+**A handle's JSON leaves the key out.** `JSON.stringify` of a conversation, of the instance or of a list of conversations used to hold a core key, twice: the key itself and the socket's address, which carries it as `?apiKey=`. An app that logged or reported a handle sent its key along. The key, the address and the sockets are now left out of what `JSON.stringify` and `console.log` list, as they already were for Blue's keys; the library still uses them. The same holds for a `CaptivateChatManager`, which files its instances under their core keys, and for a Blue conversation, which holds its user's secret, ID and token.
 
 **Core mode works on Node 20.** Node 20 has no WebSocket of its own, so the library uses the `ws` package there, but the one built file was made for browsers and held `ws`'s browser stand-in: `create()` failed at once with "ws does not work in the browser" (7.0.0 too). The package now has two built files: `dist/captivate-chat-api.node.js`, which Node loads (`main`) and which uses the installed `ws`, and `dist/captivate-chat-api.js`, which browsers, React Native and bundlers for them load (`browser`) and script tags use, as before. Node 22 and later use their own WebSocket either way. A build checks that the Node file connects without a global WebSocket.
+
+**`import { CaptivateChatAPI } from 'captivate-chat-api'` works in a Node ES module.** In a `.mjs` file or an app with `"type": "module"`, Node's build used to give a default export only, so a named import failed with "Named export 'CaptivateChatAPI' not found". The Node build now exports each name in a form Node reads, and `npm run build` imports the built file as a module to check it. `require()` and bundlers are as before.
+
+**`files: fileInput` sends a list.** The README has long shown `files: fileInput`, with the file manager used directly, but the message carried the file manager object, not its list of files. The agent then answered "Sorry, I am currently not able to answer your query." and the file was missing from the transcript. The file manager now writes its list of files wherever JSON is made, so `files: fileInput` and `files: fileInput.files` send the same thing. This is core's file manager; Blue's files were not affected.
 
 **`fileInput[0]` and spreading a file manager give its files.** Both gave `undefined`: an index reaches the file manager as a string (`'0'`), and the file manager only answered a number. `[...fileInput]` and `for (const file of fileInput)` now give the file objects.
 
@@ -171,6 +175,49 @@ Two behaviours changed in ways worth knowing about:
 `onMessage`'s types now say what really arrives. The content was always passed on as the gateway sends it, a list of parts (`[{ type: 'text', text }]`) from the bot or a live agent and a string only for an error, but it was typed as `string`. Nothing changed at run time, and a callback typed `(message: string, type: string)` still compiles; see [Send and Receive Messages](#send-and-receive-messages).
 
 If you wrote a workaround for the timeout-on-success bug (watching the raw socket for `conversation_start_success` and adopting the conversation yourself), it is now dead code and can be removed.
+
+### Upgrading from 6.x or 7.0.0 to 7.1.0
+
+Compared with 7.0.0's published type declarations, 7.1.0's public API only adds. **An app that compiled and ran on 7.0.0 needs no change to its code to move to 7.1.0.** What differs, so you can check your own app against it:
+
+| | 7.0.0 | 7.1.0 |
+| --- | --- | --- |
+| `getConversation(id)` | `Conversation \| void` | `Conversation` (null checks still compile) |
+| `deleteUserConversations(...)` | `Promise<void>` | `Promise<void \| { deleted: number; busy: number }>`; core keys still resolve with nothing. Only code that assigns the result to a `Promise<void>` variable needs a change |
+| `createConversation`, `getConversation`, the constructors and `create()` of `CaptivateChatAPI` and `CaptivateChatManager` | as before | extra optional arguments (`options`, `userId`, `metadata`) |
+| `new Conversation(...)` | `socket: WebSocket` | `socket: WebSocket \| null`, more optional arguments |
+| new | | `configure()`, `releaseConversation()`, `forgetUser()`, `stop()`, `resume()`, `onDelta()`, `onAnswer()`, `onStep()`, `detachListeners()`, `off()`, `removeAllListeners()`, `isBlueKey`, `renumber` and the Blue mode types |
+| `main` in package.json | the browser file | the Node build, for Node; browsers, React Native and bundlers for them keep the browser file through `browser` |
+| files in the package | the source, `index.html` and test pages as well | `dist`, this README and the licence only: import `captivate-chat-api`, not a path into its source |
+| dependencies | `ws` and `react-native-websocket` (which the library never used) | `ws` |
+| Node | no limit stated | 20.15 and later |
+
+From 6.x there are two more differences, both made in 7.0.0: the static `CaptivateChatFileManager.setTimeToLive(apiKey, conversationId, days)` is gone (call `conversation.setTimeToLive(days)`), and `Conversation.updateSocket(...)` is gone (the library re-binds conversations itself after a reconnect).
+
+What an upgrading app may notice at run time, none of it needing a change:
+
+- **The bot's greeting arrives.** In the default `'bot-first'` mode the greeting used to reach the socket before `createConversation` had resolved, so no listener could hear it, and it was lost. It now goes to `onMessage` on the next tick. An app that showed a greeting of its own, or worked around the loss ([below](#staying-on-6x-or-700-for-now)), may now show two: drop its own, or keep creating chats `'user-first'`.
+- **Listing, opening or starting other chats no longer silences the open one.** Each conversation has its own listener. A workaround that registers a listener again after those calls is harmless and can be removed.
+- **A chat keeps working after a reconnect and after the gateway's idle close.** On 7.0.0 it did not. See [Connection Lifecycle](#connection-lifecycle) for what the library does and does not reconnect by itself.
+- **Objects that are logged no longer carry keys, secrets or tokens.** If your app read one of them from a handle's JSON, it can't any more; take it from where your app got it.
+
+## Staying on 6.x or 7.0.0 for now
+
+Move to 7.1.0 when you can: every fix below is in it. Until then, on 6.0.1 and 7.0.0 with a core key, three bugs lose bot replies without an error, and a fourth, in 7.0.0 alone, does too.
+
+**The bot's greeting is lost** (6.x and 7.0.0, `'bot-first'`, the default). Create the conversation `'user-first'`, attach your listener, then send the first message yourself; the bot's reply to it arrives as usual.
+
+```typescript
+const conversation = await api.createConversation(userId, {}, {}, 'user-first');
+conversation.onMessage((message, type) => show(message, type));
+await conversation.sendMessage(''); // or the user's first words
+```
+
+**Listing or opening chats silences the open one** (6.x and 7.0.0). Replies still reach the browser, but go to a copy of the chat that nobody listens to. After any `getUserConversations()`, `getConversation()` or `createConversation()`, register a listener again on the chat being shown, for example `conversation.onError(() => {})`; any listener will do.
+
+**After a dropped connection, or the gateway's idle close, the chat is deaf** (7.0.0 only; 6.0.1 recovers). The gateway closes a connection left idle for about 10 minutes, and the library reconnects but the chat keeps sending with the old connection's id, so replies never arrive and nothing is reported. Reopen the chat after every drop: once `isSocketActive()` is `true` again, get a fresh handle for the conversation with `getUserConversations()` and attach your listeners to it. Or go back to 6.0.1 until you can move to 7.1.0.
+
+**Sending files** (every 6.x and 7.0.0 version). If `files: fileInput` gets "Sorry, I am currently not able to answer your query.", send `files: fileInput.files` instead.
 
 ## Configuration
 
@@ -436,6 +483,7 @@ Worth understanding if you are building anything long-lived:
 - **The socket can die without your code noticing.** AWS API Gateway closes idle WebSocket connections after 10 minutes and caps any connection at 2 hours. Mobile browsers suspend backgrounded tabs, which closes sockets silently.
 - **Check before you send.** `isSocketActive()` is a cheap synchronous check: `true` only while the socket is open and has its id. Instances from `create()` also auto-reconnect before any network call.
 - **A failed connect can be tried again.** `create()` and `connect()` reject after `connectTimeoutMs` when the gateway never sends `socket_connected`. The instance is left with no socket, so calling `create()` again, or `reconnect()`, opens a new one. Each `reconnect()` makes up to `maxReconnectAttempts` tries.
+- **One round of tries, then it's yours.** When the connection closes unexpectedly the library reconnects by itself, with one round of up to `maxReconnectAttempts` tries `reconnectDelay` apart (5 tries 3 seconds apart, by default). If every try fails it logs "Automatic reconnection failed" and stops; nothing keeps trying after that, though the gateway or the network may be back a minute later. Watch `isSocketActive()` (below) and call `reconnect()` yourself, which starts a new round. An instance from `create()` also reconnects, one round, before its next network call.
 - **Reconnects are transparent to conversations.** `reconnect()` re-binds every cached conversation to the new socket, and sends pick up the new `socket_id` automatically.
 
 ```typescript
@@ -1210,7 +1258,7 @@ const api = new CaptivateChatAPI('YOUR_API_KEY', 'dev');
 
 The API supports the following environments:
 - **Browser**
-- **Node.js** (20.15 and later). Node loads `dist/captivate-chat-api.node.js` (package.json's `main`), which opens core's socket with the `ws` package on Node 20 and with Node's own WebSocket on Node 22 and later. Browsers, React Native and bundlers for them load `dist/captivate-chat-api.js` (`browser`). Requiring `dist/captivate-chat-api.js` by its path on Node 20 gives the browser file, where core mode can't connect.
+- **Node.js** (20.15 and later). Node loads `dist/captivate-chat-api.node.js` (package.json's `main`), which opens core's socket with the `ws` package on Node 20 and with Node's own WebSocket on Node 22 and later. Browsers, React Native and bundlers for them load `dist/captivate-chat-api.js` (`browser`). Requiring `dist/captivate-chat-api.js` by its path on Node 20 gives the browser file, where core mode can't connect. `require('captivate-chat-api')` and `import { CaptivateChatAPI } from 'captivate-chat-api'` (a `.mjs` file or `"type": "module"`) both load the Node build.
 - **React Native**
 - **Electron** (its windows and its main process)
 
