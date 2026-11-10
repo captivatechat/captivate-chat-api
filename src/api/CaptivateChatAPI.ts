@@ -275,7 +275,9 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     this.socket = null;
     // Core's key too, and the socket, whose address carries it as ?apiKey= (ws's own, on Node 20):
     // a handle's provider is this instance, so JSON.stringify of a handle would list them.
-    hideFromJson(this, 'apiKey', 'url', 'socket');
+    // Blue's transport and users too: a user's secret and ID sit in the users' maps, which console.log
+    // and util.inspect of the instance would otherwise list at Node's default depth.
+    hideFromJson(this, 'apiKey', 'url', 'socket', 'blue', 'blueUsers');
     this.conversations = new Map();
     this.configure(options);
 

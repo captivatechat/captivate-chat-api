@@ -3,6 +3,7 @@
 // per key and user under a name holding the sha256 of the ID (often an email), never the ID; or
 // one from the app's own server through options.userSecret, kept in memory only. Each
 // conversation's user is kept with it, by that hash, so getConversation(id) finds it again.
+import { hideFromJson } from './keys';
 import { BlueTransport } from './transport';
 import { SETUP_WORDS } from './words';
 
@@ -174,6 +175,9 @@ export class BlueUsers {
 
   constructor(transport: BlueTransport) {
     this.transport = transport;
+    // The maps hold each user's secret and ID (and the transport its key): an instance that is
+    // logged or turned to JSON must not list them, whatever holds this object.
+    hideFromJson(this, 'transport', 'known', 'owners', 'memory', 'making', 'forgotten', 'lastUser');
   }
 
   private get prefix(): string {

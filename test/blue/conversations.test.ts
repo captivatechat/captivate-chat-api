@@ -98,6 +98,27 @@ test("JSON.stringify and console.log of a Blue handle hold no user secret, user 
   assert.ok(secretOf(fake.last) === secret, 'a call still carries the secret');
 });
 
+test("JSON.stringify and console.log of the instance hold no user secret, user ID or key, with storage and without", async () => {
+  for (const withStorage of [true, false]) {
+    const own = withStorage
+      ? api
+      : await CaptivateChatAPI.create(appKey(), 'prod', { storage: undefined });
+    (own as any).blueClock = clock;
+    fake.reply(start());
+    const conversation = await own.createConversation('C-1042', {}, {}, 'user-first');
+    const secret = blueStateOf(conversation)!.secret!;
+    assert.match(secret, /^[A-Za-z0-9_-]{43}$/);
+    const key = (own as any).apiKey as string;
+    // The store had no secret yet, so for the no-storage instance the secret sits in memory.
+    for (const text of [JSON.stringify(own), inspect(own, { depth: 8 }), inspect(own)]) {
+      for (const word of [secret, 'C-1042', key, key.slice(-24)]) assert.ok(!text.includes(word), `${withStorage}: ${word.slice(0, 6)}… in ${text.slice(0, 160)}`);
+    }
+    // Still there for the library's own use.
+    assert.equal(blueStateOf(conversation)!.secret, secret);
+    if (!withStorage) own.dispose();
+  }
+});
+
 test('metadata over 4 KB once user_id and user_token are out is refused before sending, counted in UTF-8 bytes', async () => {
   // {"a":"…"} is 8 bytes around its value.
   const token = 't'.repeat(5000);
