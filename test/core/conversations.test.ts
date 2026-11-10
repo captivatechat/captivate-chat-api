@@ -232,3 +232,29 @@ test("the manager's error for a conversation of a key it doesn't hold names the 
   });
   api.dispose();
 });
+
+test('JSON.stringify of a core handle, of the instance and of a created conversation never holds the key', async () => {
+  const key = 'core-json-secret-0123456789abcdef';
+  const api = new CaptivateChatAPI(key, 'dev');
+  const connecting = api.connect();
+  FakeWebSocket.last!.open('socket-1');
+  await connecting;
+  assert.ok(FakeWebSocket.last!.url.includes(key), 'the socket address carries the key, as core wants');
+
+  fake.reply(textResponse('OK'));
+  const creating = api.createConversation('user-1', {}, {}, 'user-first');
+  await until(() => fake.requests.length === 1);
+  FakeWebSocket.last!.receive(started('conv-json'));
+  const created = await creating;
+  const handle = api.getConversation('conv-other');
+
+  for (const value of [created, handle, api, [created, handle]]) {
+    const text = JSON.stringify(value);
+    assert.ok(!text.includes(key), `the key in ${text.split(key).join('<key>').slice(0, 120)}`);
+    assert.ok(!text.includes('apiKey='), 'nor the socket address that carries it');
+  }
+  // Still there for the library's own use.
+  assert.equal((created as any).apiKey, key);
+  assert.equal((api as any).apiKey, key);
+  api.dispose();
+});

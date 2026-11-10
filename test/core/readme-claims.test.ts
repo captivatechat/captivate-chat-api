@@ -88,14 +88,14 @@ test('README: the file manager convenience methods and properties read the first
 });
 
 // README "Array-like Behavior": `fileInput[0] // ✅ Array access`.
-test('README: fileInput[0] gives the first file object (array access)', { todo: FINDING }, async () => {
+test('README: fileInput[0] gives the first file object (array access)', async () => {
   fake.reply(converted('document.pdf'));
   const input = await CaptivateChatFileManager.create({ file: pdf() });
   assert.equal((input as any)[0], input.files[0]);
 });
 
 // README "File Manager Improvements": "Proxy-based implementation supports array access and iteration".
-test('README: iterating a file manager gives its file objects', { todo: FINDING }, async () => {
+test('README: iterating a file manager gives its file objects', async () => {
   fake.reply(converted('a.pdf'), converted('b.pdf'));
   const input = await CaptivateChatFileManager.createMultiple({ files: [pdf('a.pdf'), pdf('b.pdf')] });
   assert.equal(input.length, 2);

@@ -222,8 +222,9 @@ export class CaptivateChatFileManager {
   static createProxy(instance: CaptivateChatFileManager) {
     return new Proxy(instance, {
       get(target, prop) {
-        // If accessing the files array directly, return the files
-        if (prop === Symbol.iterator || prop === 'length' || typeof prop === 'number') {
+        // If accessing the files array directly, return the files. An index arrives as a string
+        // ('0'), never a number: fileInput[0] and spreading read it so.
+        if (prop === Symbol.iterator || prop === 'length' || (typeof prop === 'string' && /^(0|[1-9]\d*)$/.test(prop))) {
           return target.files[prop as any];
         }
         // Otherwise, return the property from the instance

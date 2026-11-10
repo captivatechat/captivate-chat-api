@@ -2,7 +2,8 @@
   "name": "captivate-chat-api",
   "version": "7.1.0",
   "description": "This is a wrapper for captivate chat api socket custom channel",
-  "main": "dist/captivate-chat-api.js",
+  "main": "dist/captivate-chat-api.node.js",
+  "browser": "dist/captivate-chat-api.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist",
@@ -10,7 +11,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "webpack --mode production",
+    "build": "webpack --mode production && node scripts/check-node-build.mjs",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "node scripts/run-tests.mjs",
     "test:electron": "npm run build && node test/electron/run.mjs",

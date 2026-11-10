@@ -160,11 +160,13 @@ export interface CaptivateChatAPIOptions extends BlueOptions {
 }
 
 /**
- * A key as logs and errors may name it, never the key itself: a Blue key by its id, a core key by
- * its last 4 characters, or by a short hash for a key under 16 characters, where 4 would give away
- * too much of it. The package's index doesn't export it.
+ * A key as logs and errors may name it, never the key itself: a server key by its id, an app key
+ * (whose id is the whole key) and a core key by their last 4 characters, or by a short hash for a
+ * key under 16 characters, where 4 would give away too much of it. The package's index doesn't
+ * export it.
  */
 export function keyLabel(apiKey: string): string {
+  if (blueKeyKind(apiKey) === 'app') return `vba_…${apiKey.slice(-4)}`;
   if (isBlueKey(apiKey)) return keyIdOf(apiKey);
   return apiKey.length >= 16 ? `…${apiKey.slice(-4)}` : `#${base64url(sha256(utf8Bytes(apiKey))).slice(0, 8)}`;
 }
@@ -269,9 +271,11 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
       this.mode === 'prod'
         ? `wss://channel.wss.captivatechat.ai/dev?apiKey=${apiKey}`
         : `wss://channel-dev.wss.captivatechat.ai/dev?apiKey=${apiKey}`;
-    if (this.blue) hideFromJson(this, 'apiKey', 'url');
 
     this.socket = null;
+    // Core's key too, and the socket, whose address carries it as ?apiKey= (ws's own, on Node 20):
+    // a handle's provider is this instance, so JSON.stringify of a handle would list them.
+    hideFromJson(this, 'apiKey', 'url', 'socket');
     this.conversations = new Map();
     this.configure(options);
 

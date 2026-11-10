@@ -200,8 +200,10 @@ export class Conversation {
     this.socketId = socketId || null;
     this.defaultTtlDays = undefined;
     this.boundHandleMessage = this.handleMessage.bind(this);
+    // A core key as well as a Blue one: an app that logs or reports a handle must not send it.
+    // The sockets hold the gateway's address with the key, and `provider` the instance.
+    hideFromJson(this, 'apiKey', 'socket', 'attachedSocket', 'provider');
     if (blue) {
-      hideFromJson(this, 'apiKey');
       const state: BlueState = {
         userId: blue.userId ?? null,
         secret: blue.secret ?? null,

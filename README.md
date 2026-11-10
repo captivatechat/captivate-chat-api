@@ -38,7 +38,13 @@ This release fixes a group of connection bugs that could cause dropped messages,
 
 **Every reconnect gets its own tries.** After one failed round of `maxReconnectAttempts` tries, every later `reconnect()`, including the guard's and the automatic one, used to fail at once with "Max reconnection attempts (N) reached", and the instance could only recover through `dispose()` and `create()`. Each `reconnect()` now starts a fresh round of up to `maxReconnectAttempts` tries; calls made while a round is running share it.
 
-**Debug logs and errors never show a core key.** With `setDebugMode(true)`, an instance is named in the logs by the key's last 4 characters (or a short hash, for a key under 16 characters), never by the key. `CaptivateChatManager`'s error for a conversation whose key it doesn't hold names the key the same way.
+**Debug logs and errors never show a core key.** With `setDebugMode(true)`, an instance is named in the logs by the key's last 4 characters (or a short hash, for a key under 16 characters), never by the key. `CaptivateChatManager`'s error for a conversation whose key it doesn't hold names the key the same way. A Blue app key (`vba_…`), whose id is the whole key, is named `vba_…` and its last 4 characters too; a server key by its id alone.
+
+**A handle's JSON leaves the key out.** `JSON.stringify` of a conversation, of the instance or of a list of conversations used to hold a core key, twice: the key itself and the socket's address, which carries it as `?apiKey=`. An app that logged or reported a handle sent its key along. The key, the address and the sockets are now left out of what `JSON.stringify` and `console.log` list, as they already were for Blue's keys; the library still uses them.
+
+**Core mode works on Node 20.** Node 20 has no WebSocket of its own, so the library uses the `ws` package there, but the one built file was made for browsers and held `ws`'s browser stand-in: `create()` failed at once with "ws does not work in the browser" (7.0.0 too). The package now has two built files: `dist/captivate-chat-api.node.js`, which Node loads (`main`) and which uses the installed `ws`, and `dist/captivate-chat-api.js`, which browsers, React Native and bundlers for them load (`browser`) and script tags use, as before. Node 22 and later use their own WebSocket either way. A build checks that the Node file connects without a global WebSocket.
+
+**`fileInput[0]` and spreading a file manager give its files.** Both gave `undefined`: an index reaches the file manager as a string (`'0'`), and the file manager only answered a number. `[...fileInput]` and `for (const file of fileInput)` now give the file objects.
 
 **Errors carry HTTP status.** Failed requests now throw an `Error` with `.status` and `.body`, so you can branch on `401` vs `429` vs `500` without matching strings.
 
@@ -845,7 +851,7 @@ const fileInputs = await Promise.all(
   files.map(file => conversation.fileManager.create({ file }))
 );
 
-const allFiles = fileInputs.flatMap(input => input);
+const allFiles = fileInputs.flatMap(input => [...input]);
 
 await conversation.sendMessage({
   text: "Multiple documents attached",
@@ -1204,7 +1210,7 @@ const api = new CaptivateChatAPI('YOUR_API_KEY', 'dev');
 
 The API supports the following environments:
 - **Browser**
-- **Node.js** (20.15 and later)
+- **Node.js** (20.15 and later). Node loads `dist/captivate-chat-api.node.js` (package.json's `main`), which opens core's socket with the `ws` package on Node 20 and with Node's own WebSocket on Node 22 and later. Browsers, React Native and bundlers for them load `dist/captivate-chat-api.js` (`browser`). Requiring `dist/captivate-chat-api.js` by its path on Node 20 gives the browser file, where core mode can't connect.
 - **React Native**
 - **Electron** (its windows and its main process)
 
@@ -1507,7 +1513,7 @@ Node 20.15 or later.
 npm install
 npm run typecheck   # src and test, with tsconfig.test.json
 npm test            # builds the tests into build-test/, then runs them with node --test
-npm run build       # webpack: dist/captivate-chat-api.js and its type files
+npm run build       # webpack: dist/captivate-chat-api.js (browsers), dist/captivate-chat-api.node.js (Node) and their type files, then scripts/check-node-build.mjs
 ```
 
 `npm test -- connection` runs only the test files whose path holds `connection`. The tests never reach a server: `test/fakes/` holds a WebSocket, a fetch, an XMLHttpRequest and storage that the tests answer by hand, and a console that keeps what the library logs (`TEST_LOGS=1 npm test` prints it too).

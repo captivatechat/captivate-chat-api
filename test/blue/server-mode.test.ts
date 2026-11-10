@@ -117,10 +117,14 @@ test('a whole vbk_ key on a server is server mode: no socket, no users kept, its
     assert.ok(linesAt('log').some((l) => l.includes(`${words} CaptivateChatAPI instance for ${id}-dev`)), words);
   }
   assert.ok(logged.every((l) => !l.text.includes(secret)));
-  // An app key is registered by its hash too, and named by itself, its whole id.
+  // An app key is registered by its hash too, and named by its last 4 characters: its id is the
+  // whole key, so naming it by its id would print the key.
   const app = appKey();
   new CaptivateChatAPI(app, 'prod').dispose();
-  assert.ok(linesAt('log').some((l) => l.includes(`Created new CaptivateChatAPI instance for ${app}-prod`)));
+  for (const words of ['Created new', 'Disposed']) {
+    assert.ok(linesAt('log').some((l) => l.includes(`${words} CaptivateChatAPI instance for vba_…${app.slice(-4)}-prod`)), words);
+  }
+  assert.ok(logged.every((l) => !l.text.includes(app)), 'no debug line holds the whole app key');
   // Core's keys keep today's registry entry, which Engage reads.
   const core = new CaptivateChatAPI('core-key-for-server-tests', 'prod');
   assert.ok(((CaptivateChatAPI as any).instances as Map<string, unknown>).has('core-key-for-server-tests-prod'));

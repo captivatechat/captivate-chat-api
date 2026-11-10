@@ -58,8 +58,8 @@ export function keyIdOf(apiKey: string): string {
 }
 
 /**
- * Keeps a Blue key (or the address holding it) out of what JSON.stringify and console.log list of
- * an object: a server that answers its own page with `res.json(handle)` must not send the key.
+ * Keeps a key, Blue's or core's (or the address or socket holding it), out of what JSON.stringify
+ * and console.log list of an object: a server that answers its own page with `res.json(handle)` must not send the key.
  * Still readable by name inside the library.
  */
 export function hideFromJson(target: object, ...names: string[]): void {
