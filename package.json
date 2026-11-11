@@ -1,20 +1,27 @@
 {
   "name": "captivate-chat-api",
-  "version": "6.0.0",
+  "version": "7.1.0",
   "description": "This is a wrapper for captivate chat api socket custom channel",
-  "main": "dist/captivate-chat-api.js",
+  "main": "dist/captivate-chat-api.node.js",
+  "browser": "dist/captivate-chat-api.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "webpack --mode production",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "webpack --mode production && node scripts/check-node-build.mjs",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "test": "node scripts/run-tests.mjs",
+    "test:electron": "npm run build && node test/electron/run.mjs",
     "dev": "nodemon",
     "start": "ts-node src/index.ts"
   },
   "author": "Lance Del Valle",
   "license": "MIT",
   "dependencies": {
-    "ws": "^8.18.0",
-    "react-native-websocket": "^1.0.0"
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.3",
@@ -23,7 +30,7 @@
     "ts-loader": "^9.5.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.2",
-    "webpack": "^5.97.1",
+    "webpack": "^5.112.2",
     "webpack-cli": "^6.0.1"
   },
   "repository": {

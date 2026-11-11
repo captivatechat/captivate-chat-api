@@ -1,0 +1,129 @@
+{
+  "_id": "000000000000000000000009",
+  "createdAt": "2026-01-05T09:00:23.000Z",
+  "updatedAt": "2026-01-05T09:00:28.000Z",
+  "messages": [
+    {
+      "_id": "000000000000000000000010",
+      "seq": 1,
+      "role": "user",
+      "content": "Can I get a quote?",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:24.000Z",
+      "offline": false,
+      "stopped": false,
+      "clientId": "fixture-message-008"
+    },
+    {
+      "_id": "000000000000000000000011",
+      "seq": 2,
+      "role": "assistant",
+      "content": "Sure, the team can send you a quote.\n\nWhat's your name?",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:25.000Z",
+      "offline": false,
+      "stopped": false,
+      "offer": {
+        "id": "of-000000000000000000000012",
+        "actionId": "act_request_a_quote",
+        "version": 1,
+        "kind": "form",
+        "title": "Request a quote",
+        "fields": [
+          {
+            "name": "name",
+            "label": "Name",
+            "kind": "text",
+            "required": true
+          },
+          {
+            "name": "email",
+            "label": "Email",
+            "kind": "email",
+            "required": true
+          }
+        ],
+        "consent": "We'll send these details to Northwind so they can reply to you.",
+        "sendLabel": "Send",
+        "cancelLabel": "Not now",
+        "status": "open",
+        "expiresAt": "2026-01-05T09:00:34.000Z",
+        "inChat": true
+      }
+    },
+    {
+      "_id": "000000000000000000000013",
+      "seq": 3,
+      "role": "user",
+      "content": "Sam Lee",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:26.000Z",
+      "offline": false,
+      "stopped": false,
+      "clientId": "fixture-message-009"
+    },
+    {
+      "_id": "000000000000000000000014",
+      "seq": 4,
+      "role": "assistant",
+      "content": "And your email?",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:26.000Z",
+      "offline": false,
+      "stopped": false
+    },
+    {
+      "_id": "000000000000000000000015",
+      "seq": 5,
+      "role": "user",
+      "content": "[hidden]",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:27.000Z",
+      "offline": false,
+      "stopped": false,
+      "clientId": "fixture-message-010"
+    },
+    {
+      "_id": "000000000000000000000016",
+      "seq": 6,
+      "role": "assistant",
+      "content": "Please don't send card numbers, passwords or codes here. What's your email?",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:27.000Z",
+      "offline": false,
+      "stopped": false
+    },
+    {
+      "_id": "000000000000000000000017",
+      "seq": 7,
+      "role": "user",
+      "content": "sam@example.com",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:28.000Z",
+      "offline": false,
+      "stopped": false,
+      "clientId": "fixture-message-011"
+    },
+    {
+      "_id": "000000000000000000000018",
+      "seq": 8,
+      "role": "assistant",
+      "content": "I'll send this to Northwind: Name: `Sam Lee`, Email: `sam@example.com`. We'll send these details to Northwind so they can reply to you. Reply yes to send it, or no to cancel.",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:28.000Z",
+      "offline": false,
+      "stopped": false
+    }
+  ],
+  "answering": false,
+  "metadata": {},
+  "details": []
+}

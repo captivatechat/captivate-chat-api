@@ -1,0 +1,54 @@
+{
+  "about": "What an app's listeners get for error.ndjson, all seven registered, read one line a network chunk. Reading whole gives the same without onDelta.",
+  "calls": [
+    {
+      "listener": "onStep",
+      "args": [
+        "Looking into it"
+      ]
+    },
+    {
+      "listener": "onDelta",
+      "args": [
+        "Parcels usually leave the warehouse on the day the order is placed, and they tend to arrive a couple of days later. Most customers get theirs well inside a week, and the team keeps an eye on any that run late. Most customers get theirs well inside a week, and the team keeps an eye on any that run late.",
+        {
+          "reset": false
+        }
+      ]
+    },
+    {
+      "listener": "onDelta",
+      "args": [
+        "",
+        {
+          "reset": true
+        }
+      ]
+    },
+    {
+      "listener": "onMessage",
+      "args": [
+        "[Error: The assistant couldn't answer just now. Please try again.]",
+        "error"
+      ]
+    },
+    {
+      "listener": "onError",
+      "args": [
+        {
+          "conversationId": "000000000000000000000007",
+          "errorDesc": "The assistant couldn't answer just now. Please try again."
+        }
+      ]
+    },
+    {
+      "listener": "onConversationUpdate",
+      "args": [
+        {
+          "type": "unavailable",
+          "conversationId": "000000000000000000000007"
+        }
+      ]
+    }
+  ]
+}

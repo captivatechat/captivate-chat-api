@@ -1,0 +1,18 @@
+{
+  // The tests' build: src and test together into build-test/, run by scripts/run-tests.mjs.
+  // The same options as tsconfig.json, which webpack builds src with, but no declarations.
+  "compilerOptions": {
+    "target": "ES6",
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "isolatedModules": true,
+    "rootDir": ".",
+    "outDir": "./build-test"
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "test/electron"]
+}

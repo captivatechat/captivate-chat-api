@@ -1,0 +1,5 @@
+{"type":"conversation","conversationId":"0000000000000000000000a2"}
+{"type":"step","label":"Looking into it"}
+{"type":"delta","text":"Refunds are paid within 14 days of a request [1]."}
+{"type":"sources","sources":[{"number":1,"title":"Delivery notes","excerpt":"Refunds for late parcels are paid on request."}]}
+{"type":"text","text":"Refunds are paid within 14 days of a request [1]."}

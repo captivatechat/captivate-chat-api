@@ -1,12 +1,19 @@
+import { isBlueKey } from './blue/keys';
+import { SETUP_WORDS } from './blue/words';
+
 /**
  * File manager for handling file uploads, storage, and presigned URL generation.
  * Supports direct file uploads with automatic text extraction and storage management.
  */
+/** Allowed TTL values for S3 object expiration (days). Only these values are applied; any other value is ignored. */
+export type TtlDays = 1 | 7 | 30 | 90;
+
+const ALLOWED_TTL_DAYS: TtlDays[] = [1, 7, 30, 90];
+
 export class CaptivateChatFileManager {
   private static readonly FILE_TO_TEXT_API_URL = 'https://file-to-text.prod.captivat.io/api/file-to-text';
   private static readonly PRESIGNED_URL_API_URL = 'https://file-to-text.prod.captivat.io/api/presigned-url';
-  private static readonly PATH_TTL_API_URL = 'https://file-to-text.prod.captivat.io/api/path-ttl';
-  
+
   public readonly type: 'files' = 'files';
   public readonly files: Array<{
     filename: string;
@@ -20,6 +27,7 @@ export class CaptivateChatFileManager {
       fileSize: number;
       processingTime: number;
     }; // Storage information when storage is true
+    upload?: { uploadId: string; expiresAt: string }; // Blue mode: the file's place in Blue, which a message names
     textContent: {
       type: 'file_content';
       text: string;
@@ -63,6 +71,7 @@ export class CaptivateChatFileManager {
    * @param options.url - URL to reference the file when storage is false (required when storage is false).
    * @param options.apiKey - Optional API key for constructing the path parameter.
    * @param options.conversationId - Optional conversation ID for constructing the path parameter.
+   * @param options.ttlDays - Optional TTL for the stored S3 object: 1, 7, 30, or 90 days. Omit for no expiration.
    * @returns A promise that resolves to a CaptivateChatFileManager instance with converted text.
    */
   static async create(
@@ -74,8 +83,11 @@ export class CaptivateChatFileManager {
       url?: string;
       apiKey?: string;
       conversationId?: string;
+      ttlDays?: TtlDays;
     }
   ): Promise<CaptivateChatFileManager> {
+    // A Blue key's files go through conversation.fileManager, which knows the conversation and its user.
+    if (isBlueKey(options.apiKey)) throw new Error(SETUP_WORDS.fileManagerKey);
     // Direct file upload
     const file = options.file;
     const storage = options.storage !== undefined ? options.storage : true; // Default to true
@@ -90,12 +102,13 @@ export class CaptivateChatFileManager {
 
     // Convert file to text
     const conversionResult = await CaptivateChatFileManager.convertFileToText(
-      file, 
-      finalFileName, 
+      file,
+      finalFileName,
       true, // Always include metadata
       storage,
       options.apiKey,
-      options.conversationId
+      options.conversationId,
+      options.ttlDays
     );
 
     // Create and return the instance with proxy for array-like behavior
@@ -164,6 +177,14 @@ export class CaptivateChatFileManager {
   }
 
   /**
+   * What JSON.stringify writes for it: the list itself, so `files: fileInput` sends a list of
+   * file objects, as the README shows, and not this wrapper.
+   */
+  toJSON() {
+    return this.files;
+  }
+
+  /**
    * Makes the class iterable so it can be used directly as an array.
    */
   *[Symbol.iterator]() {
@@ -209,8 +230,9 @@ export class CaptivateChatFileManager {
   static createProxy(instance: CaptivateChatFileManager) {
     return new Proxy(instance, {
       get(target, prop) {
-        // If accessing the files array directly, return the files
-        if (prop === Symbol.iterator || prop === 'length' || typeof prop === 'number') {
+        // If accessing the files array directly, return the files. An index arrives as a string
+        // ('0'), never a number: fileInput[0] and spreading read it so.
+        if (prop === Symbol.iterator || prop === 'length' || (typeof prop === 'string' && /^(0|[1-9]\d*)$/.test(prop))) {
           return target.files[prop as any];
         }
         // Otherwise, return the property from the instance
@@ -228,6 +250,7 @@ export class CaptivateChatFileManager {
    * @param options.fileType - Optional custom file type.
    * @param options.storage - Whether to store the file for future reference (default: true).
    * @param options.url - URL to reference the file when storage is false (required when storage is false).
+   * @param options.ttlDays - Optional TTL for the stored S3 object: 1, 7, 30, or 90 days. Omit for no expiration.
    * @returns A promise that resolves to a single file object.
    */
   static async createFile(
@@ -239,6 +262,7 @@ export class CaptivateChatFileManager {
       url?: string;
       apiKey?: string;
       conversationId?: string;
+      ttlDays?: TtlDays;
     }
   ): Promise<{
     filename: string;
@@ -261,7 +285,8 @@ export class CaptivateChatFileManager {
       storage: options.storage,
       url: options.url,
       apiKey: options.apiKey,
-      conversationId: options.conversationId
+      conversationId: options.conversationId,
+      ttlDays: options.ttlDays
     });
     return fileInput.getFirstFile()!;
   }
@@ -273,6 +298,7 @@ export class CaptivateChatFileManager {
    * @param options.files - Array of files to process.
    * @param options.storage - Whether to store the files for future reference (default: true).
    * @param options.urls - Array of URLs to reference files when storage is false (required when storage is false).
+   * @param options.ttlDays - Optional TTL for stored S3 objects: 1, 7, 30, or 90 days. Omit for no expiration.
    * @returns A promise that resolves to a CaptivateChatFileManager instance with all processed files.
    */
   static async createMultiple(
@@ -282,8 +308,10 @@ export class CaptivateChatFileManager {
       urls?: string[];
       apiKey?: string;
       conversationId?: string;
+      ttlDays?: TtlDays;
     }
   ): Promise<CaptivateChatFileManager> {
+    if (isBlueKey(options.apiKey)) throw new Error(SETUP_WORDS.fileManagerKey);
     const storage = options.storage !== undefined ? options.storage : true; // Default to true
     
     // If storage is false, URLs are required for sendMessage compatibility
@@ -299,7 +327,8 @@ export class CaptivateChatFileManager {
         storage: storage,
         url: storage === false ? options.urls![index] : undefined,
         apiKey: options.apiKey,
-        conversationId: options.conversationId
+        conversationId: options.conversationId,
+        ttlDays: options.ttlDays
       }))
     );
 
@@ -370,62 +399,6 @@ export class CaptivateChatFileManager {
   }
 
   /**
-   * Sets the time-to-live (TTL) for a conversation path.
-   * @param apiKey - The API key for authentication.
-   * @param conversationId - The conversation ID.
-   * @param days - The number of days for the time-to-live.
-   * @returns A promise that resolves when the TTL is set successfully.
-   */
-  static async setTimeToLive(apiKey: string, conversationId: string, days: number): Promise<void> {
-    if (!apiKey) {
-      throw new Error('API key is required');
-    }
-
-    if (!conversationId) {
-      throw new Error('Conversation ID is required');
-    }
-
-    if (typeof days !== 'number' || days <= 0 || !Number.isInteger(days)) {
-      throw new Error('Days must be a positive integer.');
-    }
-
-    const path = `${apiKey}/${conversationId}`;
-    const url = CaptivateChatFileManager.PATH_TTL_API_URL;
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          path: path,
-          days: days
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`TTL update failed: ${response.status} ${response.statusText}. ${errorData.error || ''}`);
-      }
-
-      const data = await response.json().catch(() => ({ status: 'success' }));
-
-      if (data.success === false) {
-        throw new Error(`TTL update failed: ${data.error || 'Unknown error'}`);
-      }
-
-    } catch (error: any) {
-      if (error.message.includes('TTL update failed')) {
-        throw error;
-      }
-      throw new Error(`Failed to set path time-to-live: ${error.message}`);
-    }
-  }
-
-  /**
    * Converts a file to text using the file-to-text API endpoint.
    * @param file - The file to convert (File or Blob).
    * @param fileName - The name of the file.
@@ -433,9 +406,10 @@ export class CaptivateChatFileManager {
    * @param storage - Whether to store the file for future reference.
    * @param apiKey - Optional API key for constructing the path parameter.
    * @param conversationId - Optional conversation ID for constructing the path parameter.
+   * @param ttlDays - Optional TTL for the stored S3 object: 1, 7, 30, or 90 days. Only these values are sent; any other is ignored.
    * @returns A promise that resolves to the extracted text.
    */
-  private static async convertFileToText(file: File | Blob, fileName: string, includeMetadata: boolean, storage: boolean, apiKey?: string, conversationId?: string): Promise<{text: string, storageInfo?: any}> {
+  private static async convertFileToText(file: File | Blob, fileName: string, includeMetadata: boolean, storage: boolean, apiKey?: string, conversationId?: string, ttlDays?: TtlDays): Promise<{text: string, storageInfo?: any}> {
     const url = CaptivateChatFileManager.FILE_TO_TEXT_API_URL;
 
     // Create FormData for multipart/form-data request
@@ -443,11 +417,16 @@ export class CaptivateChatFileManager {
     formData.append('file', file, fileName);
     formData.append('includeMetadata', includeMetadata.toString());
     formData.append('storage', storage.toString());
-    
+
     // Add path parameter if both apiKey and conversationId are provided
     if (apiKey && conversationId) {
       const path = `${apiKey}/${conversationId}`;
       formData.append('path', path);
+    }
+
+    // Add ttlDays only if it's one of the allowed values (1, 7, 30, 90)
+    if (ttlDays !== undefined && ALLOWED_TTL_DAYS.includes(ttlDays)) {
+      formData.append('ttlDays', String(ttlDays));
     }
 
     try {

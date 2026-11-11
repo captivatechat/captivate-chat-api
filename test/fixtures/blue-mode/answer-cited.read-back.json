@@ -1,0 +1,39 @@
+{
+  "_id": "000000000000000000000001",
+  "createdAt": "2026-01-05T09:00:00.000Z",
+  "updatedAt": "2026-01-05T09:00:02.000Z",
+  "messages": [
+    {
+      "_id": "000000000000000000000002",
+      "seq": 1,
+      "role": "user",
+      "content": "How long do refunds take?",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:01.000Z",
+      "offline": false,
+      "stopped": false,
+      "clientId": "fixture-message-001"
+    },
+    {
+      "_id": "000000000000000000000003",
+      "seq": 2,
+      "role": "assistant",
+      "content": "Refunds are paid within 14 days of a request [1].",
+      "sources": [
+        {
+          "number": 1,
+          "title": "Delivery notes",
+          "excerpt": "Parcels leave the warehouse every weekday at 4pm and arrive within two working days. Refunds for late parcels are paid on request."
+        }
+      ],
+      "attachments": [],
+      "at": "2026-01-05T09:00:02.000Z",
+      "offline": false,
+      "stopped": false
+    }
+  ],
+  "answering": false,
+  "metadata": {},
+  "details": []
+}

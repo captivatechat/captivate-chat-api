@@ -1,0 +1,6 @@
+{"type":"conversation","conversationId":"000000000000000000000001"}
+{"type":"step","label":"Looking into it"}
+{"type":"delta","text":"Refunds are paid within 14 days of a request [3]."}
+{"type":"sources","sources":[{"number":1,"title":"Delivery notes","excerpt":"Parcels leave the warehouse every weekday at 4pm and arrive within two working days. Refunds for late parcels are paid on request."}]}
+{"type":"text","text":"Refunds are paid within 14 days of a request [1]."}
+{"type":"done"}

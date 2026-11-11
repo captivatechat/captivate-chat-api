@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "Blue mode example",
+    "slug": "captivate-chat-api-blue-mode-example",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": { "bundleIdentifier": "ai.captivatechat.bluemodeexample" },
+    "android": { "package": "ai.captivatechat.bluemodeexample" }
+  }
+}

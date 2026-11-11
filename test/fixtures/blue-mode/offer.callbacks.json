@@ -1,0 +1,103 @@
+{
+  "about": "What an app's listeners get for offer.ndjson, all seven registered, read one line a network chunk. Reading whole gives the same without onDelta.",
+  "calls": [
+    {
+      "listener": "onStep",
+      "args": [
+        "Looking into it"
+      ]
+    },
+    {
+      "listener": "onDelta",
+      "args": [
+        "Sure, the team can send you a quote.",
+        {
+          "reset": false
+        }
+      ]
+    },
+    {
+      "listener": "onMessage",
+      "args": [
+        [
+          {
+            "type": "text",
+            "text": "Sure, the team can send you a quote."
+          }
+        ],
+        "ai_agent"
+      ]
+    },
+    {
+      "listener": "onActionReceived",
+      "args": [
+        [
+          {
+            "id": "of-000000000000000000000025",
+            "data": {
+              "id": "of-000000000000000000000025",
+              "actionId": "act_request_a_quote",
+              "version": 1,
+              "kind": "form",
+              "title": "Request a quote",
+              "fields": [
+                {
+                  "name": "name",
+                  "label": "Name",
+                  "kind": "text",
+                  "required": true
+                },
+                {
+                  "name": "email",
+                  "label": "Email",
+                  "kind": "email",
+                  "required": true
+                }
+              ],
+              "consent": "We'll send these details to Northwind so they can reply to you.",
+              "sendLabel": "Send",
+              "cancelLabel": "Not now",
+              "status": "open",
+              "expiresAt": "2026-01-05T09:00:32.000Z"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "listener": "onAnswer",
+      "args": [
+        {
+          "text": "Sure, the team can send you a quote.",
+          "sources": [],
+          "offer": {
+            "id": "of-000000000000000000000025",
+            "actionId": "act_request_a_quote",
+            "version": 1,
+            "kind": "form",
+            "title": "Request a quote",
+            "fields": [
+              {
+                "name": "name",
+                "label": "Name",
+                "kind": "text",
+                "required": true
+              },
+              {
+                "name": "email",
+                "label": "Email",
+                "kind": "email",
+                "required": true
+              }
+            ],
+            "consent": "We'll send these details to Northwind so they can reply to you.",
+            "sendLabel": "Send",
+            "cancelLabel": "Not now",
+            "status": "open",
+            "expiresAt": "2026-01-05T09:00:32.000Z"
+          }
+        }
+      ]
+    }
+  ]
+}

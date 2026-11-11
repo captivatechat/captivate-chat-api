@@ -1,0 +1,4 @@
+{"type":"conversation","conversationId":"000000000000000000000009"}
+{"type":"text","text":"I'll send this to Northwind: Name: `Sam Lee`, Email: `sam@example.com`. We'll send these details to Northwind so they can reply to you. Reply yes to send it, or no to cancel."}
+{"type":"choices","choices":["Yes, send it","No, cancel"]}
+{"type":"done"}

@@ -1,0 +1,60 @@
+{
+  "about": "What an app's listeners get for case-draft-space.ndjson, all seven registered, read one line a network chunk. Reading whole gives the same without onDelta.",
+  "calls": [
+    {
+      "listener": "onStep",
+      "args": [
+        "Looking into it"
+      ]
+    },
+    {
+      "listener": "onDelta",
+      "args": [
+        "£12 a seat",
+        {
+          "reset": false
+        }
+      ]
+    },
+    {
+      "listener": "onDelta",
+      "args": [
+        "£12 a seat [1£12 a seat. Ask about 漢字 or 🎉 groups",
+        {
+          "reset": false
+        }
+      ]
+    },
+    {
+      "listener": "onMessage",
+      "args": [
+        [
+          {
+            "type": "text",
+            "text": "£12 a seat [1, 2]. Ask about 漢字 or 🎉 groups [1]."
+          }
+        ],
+        "ai_agent"
+      ]
+    },
+    {
+      "listener": "onAnswer",
+      "args": [
+        {
+          "text": "£12 a seat [1, 2]. Ask about 漢字 or 🎉 groups [1].",
+          "sources": [
+            {
+              "number": 1,
+              "title": "Prices",
+              "excerpt": "£12 a seat."
+            },
+            {
+              "number": 2,
+              "title": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

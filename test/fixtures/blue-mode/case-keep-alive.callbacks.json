@@ -1,0 +1,41 @@
+{
+  "about": "What an app's listeners get for case-keep-alive.ndjson, all seven registered, read one line a network chunk. Reading whole gives the same without onDelta.",
+  "calls": [
+    {
+      "listener": "onStep",
+      "args": [
+        "Looking into it"
+      ]
+    },
+    {
+      "listener": "onDelta",
+      "args": [
+        "Parcels leave every weekday at 4pm.",
+        {
+          "reset": false
+        }
+      ]
+    },
+    {
+      "listener": "onMessage",
+      "args": [
+        [
+          {
+            "type": "text",
+            "text": "Parcels leave every weekday at 4pm."
+          }
+        ],
+        "ai_agent"
+      ]
+    },
+    {
+      "listener": "onAnswer",
+      "args": [
+        {
+          "text": "Parcels leave every weekday at 4pm.",
+          "sources": []
+        }
+      ]
+    }
+  ]
+}

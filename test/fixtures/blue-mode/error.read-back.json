@@ -1,0 +1,22 @@
+{
+  "_id": "000000000000000000000007",
+  "createdAt": "2026-01-05T09:00:12.000Z",
+  "updatedAt": "2026-01-05T09:00:13.000Z",
+  "messages": [
+    {
+      "_id": "000000000000000000000008",
+      "seq": 1,
+      "role": "user",
+      "content": "zz-broken: when do they arrive?",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:13.000Z",
+      "offline": false,
+      "stopped": false,
+      "clientId": "fixture-message-005"
+    }
+  ],
+  "answering": false,
+  "metadata": {},
+  "details": []
+}

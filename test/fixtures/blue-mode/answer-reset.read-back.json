@@ -1,0 +1,39 @@
+{
+  "_id": "000000000000000000000004",
+  "createdAt": "2026-01-05T09:00:03.000Z",
+  "updatedAt": "2026-01-05T09:00:05.000Z",
+  "messages": [
+    {
+      "_id": "000000000000000000000005",
+      "seq": 1,
+      "role": "user",
+      "content": "When do parcels arrive?",
+      "sources": [],
+      "attachments": [],
+      "at": "2026-01-05T09:00:04.000Z",
+      "offline": false,
+      "stopped": false,
+      "clientId": "fixture-message-002"
+    },
+    {
+      "_id": "000000000000000000000006",
+      "seq": 2,
+      "role": "assistant",
+      "content": "Parcels leave every weekday at 4pm and arrive within two working days [1].",
+      "sources": [
+        {
+          "number": 1,
+          "title": "Delivery notes",
+          "excerpt": "Parcels leave the warehouse every weekday at 4pm and arrive within two working days. Refunds for late parcels are paid on request."
+        }
+      ],
+      "attachments": [],
+      "at": "2026-01-05T09:00:05.000Z",
+      "offline": false,
+      "stopped": false
+    }
+  ],
+  "answering": false,
+  "metadata": {},
+  "details": []
+}

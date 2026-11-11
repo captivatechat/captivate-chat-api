@@ -1,0 +1,7 @@
+{"type":"conversation","conversationId":"000000000000000000000024"}
+{"type":"step","label":"Looking into it"}
+{"type":"delta","text":"Sure, the team can send you a quote."}
+{"type":"sources","sources":[]}
+{"type":"text","text":"Sure, the team can send you a quote."}
+{"type":"offer","offer":{"id":"of-000000000000000000000025","actionId":"act_request_a_quote","version":1,"kind":"form","title":"Request a quote","fields":[{"name":"name","label":"Name","kind":"text","required":true},{"name":"email","label":"Email","kind":"email","required":true}],"consent":"We'll send these details to Northwind so they can reply to you.","sendLabel":"Send","cancelLabel":"Not now","status":"open","expiresAt":"2026-01-05T09:00:32.000Z"}}
+{"type":"done"}

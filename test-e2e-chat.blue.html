@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>captivate-chat-api: Blue mode by hand</title>
+    <!--
+      Blue mode's hand test in a browser (first-channels-library-spec §5, L7): drafts while an answer is
+      written, Stop, and a dropped connection read back. Serve the library's folder over http (for example
+      `npx http-server -p 8080`), open this page from that address, and list the address on the app key.
+      The key below is a placeholder: paste an app key from Blue's Channels page. Core's own pages
+      (test-e2e-chat.html and the others) are unchanged.
+    -->
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; background: #f6f6f6; color: #111; }
+        main { max-width: 760px; margin: 0 auto; display: grid; gap: 12px; }
+        fieldset { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; display: grid; gap: 8px; }
+        label { display: grid; gap: 4px; font-size: 14px; }
+        input, select, button { font: inherit; padding: 6px 8px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+        .row > label { flex: 1 1 160px; }
+        #messages { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; min-height: 200px; display: grid; gap: 8px; align-content: start; }
+        .bubble { padding: 8px 12px; border-radius: 10px; max-width: 85%; white-space: pre-wrap; }
+        .you { justify-self: end; background: #dbe8ff; }
+        .bot { justify-self: start; background: #eee; }
+        .draft { justify-self: start; background: #fff7d6; font-style: italic; }
+        .sources { font-size: 13px; color: #555; margin-top: 4px; }
+        .choices { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+        #log { background: #111; color: #cfc; font: 12px/1.4 ui-monospace, monospace; padding: 8px; border-radius: 8px; height: 220px; overflow: auto; white-space: pre-wrap; }
+        #status { font-size: 14px; color: #555; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Blue mode by hand</h1>
+
+    <fieldset>
+        <legend>Key</legend>
+        <div class="row">
+            <label>App key <input id="apiKey" value="vba_000000000000000000000000"></label>
+            <label>Backend
+                <select id="mode"><option value="dev">dev</option><option value="prod">prod</option></select>
+            </label>
+        </div>
+        <label>Another backend address (optional, for a local backend) <input id="blueUrl" placeholder="http://localhost:5000"></label>
+        <div class="row">
+            <label>User ID <input id="userId" value="hand-test-user"></label>
+            <label>Starts with
+                <select id="start"><option value="bot-first">the bot's greeting</option><option value="user-first">your message</option></select>
+            </label>
+            <button id="connectBtn">Start a conversation</button>
+        </div>
+        <div id="status">Not started.</div>
+    </fieldset>
+
+    <div id="messages"></div>
+
+    <fieldset>
+        <legend>Message</legend>
+        <div class="row">
+            <label>Words <input id="messageInput" disabled placeholder="Ask the bot something"></label>
+            <button id="sendBtn" disabled>Send</button>
+            <button id="stopBtn" disabled>Stop</button>
+            <button id="resumeBtn" disabled>Read back (resume)</button>
+        </div>
+        <div style="font-size: 13px; color: #555">To try a dropped connection: send, set DevTools' network to Offline while the answer is written, back to Online, then press "Read back". The answer should come once.</div>
+    </fieldset>
+
+    <div id="log"></div>
+</main>
+
+<script src="dist/captivate-chat-api.js"></script>
+<script>
+    const $ = (id) => document.getElementById(id);
+    let api = null;
+    let conversation = null;
+    let draftBubble = null;
+
+    function log(line) {
+        const at = new Date().toISOString().slice(11, 23);
+        $('log').textContent += `${at} ${line}\n`;
+        $('log').scrollTop = $('log').scrollHeight;
+    }
+
+    function bubble(kind, text) {
+        const div = document.createElement('div');
+        div.className = `bubble ${kind}`;
+        div.textContent = text;
+        $('messages').appendChild(div);
+        return div;
+    }
+
+    function showDraft(text) {
+        if (!draftBubble) draftBubble = bubble('draft', '');
+        draftBubble.textContent = text || '…';
+    }
+
+    function dropDraft() {
+        draftBubble?.remove();
+        draftBubble = null;
+    }
+
+    function setBusy(busy) {
+        $('stopBtn').disabled = !busy;
+    }
+
+    $('connectBtn').addEventListener('click', async () => {
+        try {
+            api?.dispose();
+            const blueUrl = $('blueUrl').value.trim();
+            api = await CaptivateChatAPI.create($('apiKey').value.trim(), $('mode').value, blueUrl ? { blueUrl } : {});
+            conversation = await api.createConversation($('userId').value.trim(), {}, {}, $('start').value);
+            const id = conversation.getConversationId();
+            $('status').textContent = `Conversation ${id}`;
+            log(`started ${id}`);
+
+            conversation.onStep((label) => {
+                log(`step: ${label}`);
+                showDraft(label);
+            });
+            conversation.onDelta((draft, { reset }) => {
+                log(`draft: ${draft.length} characters${reset ? ' (reset)' : ''}`);
+                showDraft(draft);
+            });
+            conversation.onMessage((content, type) => log(`onMessage once (${type}): ${Array.isArray(content) ? content.map((c) => c.text).join(' ') : content}`));
+            conversation.onAnswer(({ text, sources, stopped, choices }) => {
+                dropDraft();
+                setBusy(false);
+                const div = bubble('bot', text);
+                if (sources.length) {
+                    const list = document.createElement('div');
+                    list.className = 'sources';
+                    list.textContent = sources.map((s) => `[${s.number}] ${s.title || 'Internal document'}`).join('\n');
+                    div.appendChild(list);
+                }
+                if (choices?.length) {
+                    const row = document.createElement('div');
+                    row.className = 'choices';
+                    for (const choice of choices) {
+                        const button = document.createElement('button');
+                        button.textContent = choice;
+                        button.addEventListener('click', () => send(choice));
+                        row.appendChild(button);
+                    }
+                    div.appendChild(row);
+                }
+                log(`onAnswer${stopped ? ' (stopped)' : ''}: ${sources.length} sources`);
+            });
+            conversation.onActionReceived((actions) => log(`a form: ${actions.map((a) => a.data?.title).join(', ')}`));
+            conversation.onConversationUpdate((update) => log(`update: ${update.type}`));
+            conversation.onError(({ errorCode, errorDesc }) => {
+                dropDraft();
+                setBusy(false);
+                bubble('bot', errorDesc);
+                log(`onError ${errorCode ?? ''}: ${errorDesc}`);
+            });
+
+            for (const id of ['messageInput', 'sendBtn', 'resumeBtn']) $(id).disabled = false;
+        } catch (error) {
+            $('status').textContent = error.errorDesc || error.message;
+            log(`refused: ${error.message}`);
+        }
+    });
+
+    async function send(text) {
+        if (!conversation || !text) return;
+        bubble('you', text);
+        setBusy(true);
+        try {
+            await conversation.sendMessage(text);
+            log('sent: the answer has begun');
+        } catch (error) {
+            setBusy(false);
+            log(`refused: ${error.errorDesc || error.message}`);
+        }
+    }
+
+    $('sendBtn').addEventListener('click', () => {
+        const text = $('messageInput').value.trim();
+        $('messageInput').value = '';
+        send(text);
+    });
+    $('messageInput').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') $('sendBtn').click();
+    });
+    $('stopBtn').addEventListener('click', async () => {
+        const { stopped } = await conversation.stop();
+        log(`stop: ${stopped ? 'stopped' : 'nothing was being answered'}`);
+    });
+    $('resumeBtn').addEventListener('click', () => {
+        conversation.resume();
+        log('resume: an answer still pending is read back');
+    });
+</script>
+</body>
+</html>

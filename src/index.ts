@@ -1,6 +1,11 @@
 import { CaptivateChatAPI } from './api/CaptivateChatAPI';
 import { CaptivateChatManager } from './api/CaptivateChatManager';
-import { CaptivateChatFileManager } from './api/CaptivateChatFileManager';
+import { CaptivateChatFileManager, TtlDays } from './api/CaptivateChatFileManager';
+import { isBlueKey } from './api/blue/keys';
+import { renumber } from './api/blue/citations';
+import type { BlueAnswer } from './api/blue/answer';
+import type { BlueSource } from './api/blue/ndjson';
+import type { MessageContent, MessagePart, MessageSender } from './api/Conversation';
 
 
 
@@ -14,4 +19,5 @@ if (typeof window !== 'undefined') {
   window.CaptivateChatFileManager = CaptivateChatFileManager;
 }
 
-export { CaptivateChatAPI, CaptivateChatManager, CaptivateChatFileManager };
+export type { TtlDays, BlueAnswer, BlueSource, MessageContent, MessagePart, MessageSender };
+export { CaptivateChatAPI, CaptivateChatManager, CaptivateChatFileManager, isBlueKey, renumber };
