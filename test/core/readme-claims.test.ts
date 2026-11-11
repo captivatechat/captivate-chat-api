@@ -1,7 +1,7 @@
 // The README's claims about core's path that no other test held (10 Nov's claims map): the
 // file manager's array-like use, storage, time to live and secure links, the transcript's link
-// refresh, debug mode, the tunables and the known limit of every conversation hearing every
-// reply. A claim that fails here is a finding about the library or the README, not a test to
+// refresh, debug mode, the tunables and a conversation hearing the replies that name it.
+// A claim that fails here is a finding about the library or the README, not a test to
 // bend: each test says the README's words it checks.
 import { FakeWebSocket, connectedApi, freshKey, until } from './helpers';
 import { linesAt, clearLogs } from '../fakes/console';
@@ -314,14 +314,14 @@ test('README: listeners accumulate, so a handler registered twice runs twice', a
   api.dispose();
 });
 
-// README "Known limits": "each conversation's onMessage is called for the replies to the others too."
-// Kept as a test so a change to it is seen: the README and the release notes say it today.
-test('README known limit: every conversation on one instance hears a reply meant for another', async () => {
+// README (7.1.1): "each hears the replies that name it and those that name none." It was a known
+// limit until the gateway's source showed it puts conversation_id in every reply.
+test('README 7.1.1: a conversation on a shared instance hears the replies that name it, not another', async () => {
   const api = await connectedApi();
   const heard: string[] = [];
   api.getConversation('conv-a').onMessage(() => heard.push('a'));
   api.getConversation('conv-b').onMessage(() => heard.push('b'));
   FakeWebSocket.last!.receive(frame('bot_message', { content: [{ type: 'text', text: 'for a' }], conversation_id: 'conv-a' }));
-  assert.deepEqual(heard.sort(), ['a', 'b']);
+  assert.deepEqual(heard, ['a']);
   api.dispose();
 });

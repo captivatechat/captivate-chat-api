@@ -279,7 +279,7 @@ test("createConversation's failures", async () => {
 
   fake.reply(textResponse('busy', 503));
   await assert.rejects(api.createConversation('user-1'), {
-    message: 'HTTP request failed: 503 Service Unavailable: busy',
+    message: 'Failed to send message via HTTP: HTTP request failed: 503 Service Unavailable',
   });
 
   // A success that comes after the timeout makes no conversation.
@@ -300,7 +300,7 @@ test("a failed bot-first opener is logged, and the conversation still resolves",
   api.dispose();
 });
 
-test('deleteUserConversations sends the user and drops every local handle', async () => {
+test("deleteUserConversations sends the user and leaves every local handle as it was: another user's keeps hearing", async () => {
   const api = await connectedApi();
   const conversation = api.getConversation('c1');
 
@@ -311,7 +311,11 @@ test('deleteUserConversations sends the user and drops every local handle', asyn
     event_payload: { userId: 'user-1', softdelete: true },
     socket_id: 'socket-1',
   });
-  assert.notEqual(api.getConversation('c1'), conversation);
+  assert.equal(api.getConversation('c1'), conversation);
+  const heard: unknown[] = [];
+  conversation.onMessage((content) => heard.push(content));
+  FakeWebSocket.last!.receive({ event: { event_type: 'bot_message', event_payload: { content: 'still here', conversation_id: 'c1' } } });
+  assert.deepEqual(heard, ['still here']);
 
   await api.deleteUserConversations('user-1', { softDelete: false });
   assert.equal(fake.requests[1].json.event.event_payload.softdelete, false);
@@ -379,4 +383,51 @@ test('JSON.stringify of a core handle, of the instance and of a created conversa
   assert.equal((created as any).apiKey, key);
   assert.equal((api as any).apiKey, key);
   api.dispose();
+});
+
+// Found reviewing 7.1.1: the manager asked the owning instance for each listed conversation, and
+// for any key but the first that handle started at {} (or held what it last knew), so the
+// metadata the list brought was lost, as 7.1.0's single-key bug was; and the first instance kept
+// a stray handle, with its own socket listener, for each conversation of another key.
+test("the manager's list gives each conversation its key's handle with the server's metadata, and keeps no stray handle", async () => {
+  const keys = ['mgr-list-key-0001-abcdef', 'mgr-list-key-0002-abcdef'];
+  const creating = CaptivateChatManager.create(keys);
+  for (let i = 0; i < keys.length; i++) {
+    await until(() => FakeWebSocket.instances.length > i);
+    FakeWebSocket.instances[i].open(`socket-l${i}`);
+  }
+  const manager = await creating;
+  const [one, two] = keys.map((key) => manager.getApiInstance(key)!);
+  // The first instance's app already holds mc4, which key 2 owns: that handle is its own to keep.
+  const held = one.getConversation('mc4');
+
+  fake.reply(
+    listed(
+      { conversation_id: 'mc1', metadata: { t: 'one' }, apiKey: keys[0] },
+      { conversation_id: 'mc2', metadata: { t: 'two' }, apiKey: keys[1] },
+      { conversation_id: 'mc3' },
+      { conversation_id: 'mc4', metadata: { t: 'four' }, apiKey: keys[1] }
+    )
+  );
+  const { conversations } = await manager.getUserConversations({ userId: 'user-1' });
+  const byId = new Map(conversations.map((c) => [c.getConversationId(), c]));
+
+  assert.deepEqual((byId.get('mc1') as any).metadata, { t: 'one' });
+  assert.deepEqual((byId.get('mc2') as any).metadata, { t: 'two' });
+  assert.equal(byId.get('mc2')!.apiKey, keys[1]);
+  assert.deepEqual((byId.get('mc3') as any).metadata, {});
+  assert.equal(byId.get('mc3')!.apiKey, keys[0]);
+  assert.deepEqual((byId.get('mc4') as any).metadata, { t: 'four' });
+  // The handle the owner gives is the one it keeps.
+  assert.equal(byId.get('mc2'), two.getConversation('mc2'));
+  assert.equal(byId.get('mc4'), two.getConversation('mc4'));
+  assert.equal(byId.get('mc1'), one.getConversation('mc1'));
+
+  const firstHolds = (id: string) => (one as any).conversations.has(id);
+  assert.equal(firstHolds('mc1'), true);
+  // Never held by the first instance before the list: not left there by it.
+  assert.equal(firstHolds('mc2'), false);
+  assert.equal(firstHolds('mc4'), true);
+  assert.equal(one.getConversation('mc4'), held);
+  for (const api of [one, two]) api.dispose();
 });

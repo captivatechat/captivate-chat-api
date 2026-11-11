@@ -1,5 +1,5 @@
 import { CaptivateChatAPI, CaptivateChatAPIOptions, keyLabel } from './CaptivateChatAPI';
-import { Conversation } from './Conversation';
+import { Conversation, takeListedDetails } from './Conversation';
 import { hideFromJson, isBlueKey } from './blue/keys';
 import { SETUP_WORDS } from './blue/words';
 
@@ -68,6 +68,10 @@ export class CaptivateChatManager {
     const api = this.apiInstances[apiKeys[0]];
     if (!api) throw new Error('No CaptivateChatAPI instance available for the requested API keys');
 
+    // What the first instance held before the list: it caches a handle for each conversation it
+    // lists, those of other keys too, and only the strays are let go below.
+    const heldBefore = new Set<string>((api as any).conversations?.keys?.() ?? []);
+
     const { apiKeys: _apiKeys, ...rest } = options;
     const result = await api.getUserConversations({ ...rest, apiKeys });
 
@@ -82,7 +86,14 @@ export class CaptivateChatManager {
       const apiInstance = this.apiInstances[ownerKey];
       // Named by keyLabel: an app's error report would otherwise carry the key itself.
       if (!apiInstance) throw new Error(`No CaptivateChatAPI instance for apiKey: ${keyLabel(ownerKey)}`);
-      return apiInstance.getConversation(conv.getConversationId());
+      const id = conv.getConversationId();
+      const handle = apiInstance.getConversation(id);
+      // The owning instance's handle starts at {} or holds what it last knew: it takes the list's
+      // metadata and its key, as the handle the list built for the first instance did.
+      takeListedDetails(handle, (conv as any).metadata, ownerKey);
+      // The first instance listed this one only to ask for it: it doesn't keep a handle it never held.
+      if (apiInstance !== api && !heldBefore.has(id)) api.releaseConversation(id);
+      return handle;
     });
 
     return {

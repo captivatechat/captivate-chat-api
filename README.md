@@ -14,7 +14,14 @@ npm install captivate-chat-api
 
 ### Conversation details in the list (v7.1.1)
 
-7.1.1 keeps each conversation's details up to date in the list. Since 7.1.0, `getUserConversations()` gives back the conversation an app already holds, so its listeners stay attached. That conversation now also takes the list's metadata and key, as a fresh one did in 7.0.0, so a chat created or opened earlier shows its title and the details kept in its metadata (pinned messages, say) after the next list and after a reconnect. A conversation from `createConversation()` holds the metadata it was created with, without the private metadata, which the server doesn't give back. Nothing else changes, and no code change is needed.
+7.1.1 keeps each conversation's details up to date in the list. Since 7.1.0, `getUserConversations()` gives back the conversation an app already holds, so its listeners stay attached. That conversation now also takes the list's metadata and key, as a fresh one did in 7.0.0, so a chat created or opened earlier shows its title and the details kept in its metadata (pinned messages, say) after the next list and after a reconnect. `CaptivateChatManager.getUserConversations()` does the same for every key it lists. A conversation from `createConversation()` holds the metadata it was created with, without the private metadata, which the server doesn't give back.
+
+Four more things are put right, each one back as 7.0.0 had it or as this README says:
+
+- **`off()` works on a core key.** `off('bot_message', callback)` removes the callback you gave `onMessage()` (and with it the same call's live chat and error listeners); `off('action', …)`, `off('conversation_update', …)` and `off('general_error', …)` do the same for `onActionReceived()`, `onConversationUpdate()` and `onError()`. Before, it removed nothing.
+- **A conversation ignores a reply that names another conversation.** The gateway puts the conversation's ID in each reply, so with several conversations on one connection, each one's `onMessage` now hears its own replies only. A reply that names none is still heard by all.
+- **`deleteUserConversations(userId)` leaves your conversations as they are.** In 7.1.0 it also stopped every conversation of the instance hearing replies, other users' included.
+- **A failed request's message is 7.0.0's again**, for example "Failed to send message via HTTP: HTTP request failed: 500 Internal Server Error", without the server's own words, which an app might show to its users. They are on `error.body`, and the status on `error.status`.
 
 ### Blue mode (v7.1.0)
 
@@ -184,6 +191,8 @@ If you wrote a workaround for the timeout-on-success bug (watching the raw socke
 
 From 7.1.0, nothing to change: 7.1.1 keeps each conversation's details up to date in the list ([What's New](#conversation-details-in-the-list-v711)). From 6.x or 7.0.0, move straight to 7.1.1, as below.
 
+**One thing to check if your app registers listeners every time it opens a chat.** On 7.0.0, listing or opening a chat silenced the handle you had before, so an app could call `onMessage()` on each new handle and hear each reply once. Handles now keep their listeners, so a second `onMessage()` on the same conversation runs both callbacks. Register once for each conversation, or take the old one off first: `conversation.off('bot_message', callback)`, or `conversation.removeAllListeners()` when the screen closes.
+
 ### Upgrading from 6.x or 7.0.0 to 7.1.0
 
 Compared with 7.0.0's published type declarations, 7.1.0's public API only adds. **An app that compiled and ran on 7.0.0 needs no change to its code to move to 7.1.0.** What differs, so you can check your own app against it:
@@ -205,9 +214,10 @@ From 6.x there are two more differences, both made in 7.0.0: the static `Captiva
 What an upgrading app may notice at run time, none of it needing a change:
 
 - **The bot's greeting arrives.** In the default `'bot-first'` mode the greeting used to reach the socket before `createConversation` had resolved, so no listener could hear it, and it was lost. It now goes to `onMessage` on the next tick. An app that showed a greeting of its own, or worked around the loss ([below](#staying-on-6x-or-700-for-now)), may now show two: drop its own, or keep creating chats `'user-first'`.
-- **Listing, opening or starting other chats no longer silences the open one.** Each conversation has its own listener. A workaround that registers a listener again after those calls is harmless and can be removed.
+- **Listing, opening or starting other chats no longer silences the open one.** Each conversation has its own listener. A workaround that registers a listener again after those calls is no longer harmless: each call adds another callback to the same conversation, so remove the workaround, or `off()` the old callback first (see [Upgrading to 7.1.1](#upgrading-to-711)).
 - **A chat keeps working after a reconnect and after the gateway's idle close.** On 7.0.0 it did not. See [Connection Lifecycle](#connection-lifecycle) for what the library does and does not reconnect by itself.
 - **Objects that are logged no longer carry keys, secrets or tokens.** If your app read one of them from a handle's JSON, it can't any more; take it from where your app got it.
+- **After `dispose()`, an instance says so.** Its calls and `connect()` throw "This CaptivateChatAPI instance has been disposed. Create a new one.", as this README has always said to do: create a new instance.
 
 ## Staying on 6.x or 7.0.0 for now
 
@@ -519,9 +529,8 @@ document.addEventListener('visibilitychange', async () => {
 
 ## Known limits
 
-With a core key (Captivate's gateway, not Blue mode), two things the library can't fix on its own: both need a change in the gateway or in core, and are with that team.
+With a core key (Captivate's gateway, not Blue mode), one thing the library can't fix on its own: it needs a change in the gateway or in core, and is with that team.
 
-- **Every conversation on one connection hears every reply.** Conversations made by one instance share its socket, and the gateway's reply doesn't say which conversation it belongs to. So each conversation's `onMessage` is called for the replies to the others too. Until the gateway sends that, either keep one conversation per instance (one API key and mode each, since instances are shared per key and mode), or have your app tell its own replies apart, for example by sending one message at a time and matching the reply to the conversation that sent it.
 - **Deleting one conversation has no visible effect.** `conversation.delete()` (soft or hard) succeeds, but the conversation is still listed by `getUserConversations()` and its transcript can still be read. `deleteUserConversations(userId, { softDelete: false })` does remove a user's conversations.
 
 ## Usage
@@ -689,7 +698,7 @@ If the opener does arrive before your listener is attached, `getTranscript()` wi
 
 `type` is `'ai_agent'` for bot messages, `'human_agent'` for live chat, and `'error'` when the message could not be retrieved.
 
-`message` is passed on as the sender sent it: from the bot or a live agent, a list of parts, `[{ type: 'text', text: 'Hello!' }]`; for an error, a string such as `"[Error: Bot unavailable]"`. Its type is `MessageContent` (`MessagePart[] | string`). Every conversation on one connection hears every reply: see [Known limits](#known-limits).
+`message` is passed on as the sender sent it: from the bot or a live agent, a list of parts, `[{ type: 'text', text: 'Hello!' }]`; for an error, a string such as `"[Error: Bot unavailable]"`. Its type is `MessageContent` (`MessagePart[] | string`). On a connection shared by several conversations, each hears the replies that name it (7.1.1) and those that name none.
 
 ### File Handling with CaptivateChatFileManager
 
@@ -1382,7 +1391,7 @@ File-to-text conversion is handled by the external API endpoint:
   **(v7.1.0)** Detaches the socket listener. Call when discarding an instance.
 
 - **`off(eventType: string, callback: Function): void`** / **`removeAllListeners(): void`**
-  **(v7.1.0)** Removes registered event callbacks.
+  **(v7.1.0)** Removes registered event callbacks: `off` takes the callback you gave the `on...` method (for `onMessage()`, with `'bot_message'` or `'livechat_message'`), and `removeAllListeners()` every one of the conversation.
 
 #### Events
 
@@ -1538,7 +1547,7 @@ Fixed in v7.1.0. Conversations now read `socket_id` live instead of capturing it
 Fixed in v7.1.0. Listeners were assigned to `socket.onmessage`, so each new conversation overwrote the previous one's handler.
 
 **Every conversation receives every reply.**
-A known limit of core's gateway: its replies don't say which conversation they belong to. See [Known limits](#known-limits).
+Fixed in v7.1.1: a conversation ignores a reply that names another one. On 7.1.0 and before, keep one conversation per instance, or tell your own replies apart in your app.
 
 **`create()` rejects with `Connection timeout: socket_connected not received`.**
 The gateway opened the socket but never named it. Call `create()` again: since v7.1.0 the instance is left with no socket and connects afresh. Before v7.1.0 the second call returned an instance whose replies were lost.

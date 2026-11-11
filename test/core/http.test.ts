@@ -76,7 +76,8 @@ test('_send carries the status and the body on a refusal', async () => {
   const api = await connectedApi();
   fake.reply(textResponse('slow down', 429));
   await assert.rejects(send(api, { action: 'sendMessage', event: { event_type: 'ping' } }), (error: any) => {
-    assert.equal(error.message, 'HTTP request failed: 429 Too Many Requests: slow down');
+    // 7.0.0's words, never the server's body: apps show or match them.
+    assert.equal(error.message, 'Failed to send message via HTTP: HTTP request failed: 429 Too Many Requests');
     assert.equal(error.status, 429);
     assert.equal(error.body, 'slow down');
     return true;
@@ -85,14 +86,14 @@ test('_send carries the status and the body on a refusal', async () => {
   const long = 'x'.repeat(500);
   fake.reply(textResponse(long, 500));
   await assert.rejects(send(api, { action: 'sendMessage', event: { event_type: 'ping' } }), (error: any) => {
-    assert.equal(error.message, `HTTP request failed: 500 Internal Server Error: ${'x'.repeat(300)}`);
+    assert.equal(error.message, 'Failed to send message via HTTP: HTTP request failed: 500 Internal Server Error');
     assert.equal(error.body, long);
     return true;
   });
 
   fake.reply(textResponse('', 401));
   await assert.rejects(send(api, { action: 'sendMessage', event: { event_type: 'ping' } }), {
-    message: 'HTTP request failed: 401 Unauthorized',
+    message: 'Failed to send message via HTTP: HTTP request failed: 401 Unauthorized',
   });
   api.dispose();
 });
@@ -184,7 +185,7 @@ test("sendPayloadViaHttp's answers and errors", async () => {
 
   fake.reply(textResponse('nope', 500));
   await assert.rejects(sendRaw({ action: 'sendMessage', event: { event_type: 'x' } }), (error: any) => {
-    assert.equal(error.message, 'HTTP request failed: 500 Internal Server Error: nope');
+    assert.equal(error.message, 'Failed to send payload via HTTP: HTTP request failed: 500 Internal Server Error');
     assert.equal(error.status, 500);
     assert.equal(error.body, 'nope');
     return true;
@@ -285,7 +286,8 @@ test("getTranscript reads core's transcript route", async () => {
 
   fake.reply(textResponse('missing', 404));
   await assert.rejects(conversation.getTranscript(), (error: any) => {
-    assert.equal(error.message, 'Failed to fetch transcript: 404 Not Found: missing');
+    assert.equal(error.message, 'Failed to fetch transcript: 404 Not Found');
+    assert.equal(error.body, 'missing');
     assert.equal(error.status, 404);
     return true;
   });
