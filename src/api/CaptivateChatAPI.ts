@@ -1,5 +1,5 @@
 // Import the Conversation class
-import { BlueHandle, Conversation, ConversationSocketProvider, blueStateOf, takeBlueCopy } from './Conversation';
+import { BlueHandle, Conversation, ConversationSocketProvider, blueStateOf, takeBlueCopy, takeListedDetails } from './Conversation';
 import { SERVER_USER_FORM, blueKeyKind, hideFromJson, isBlueKey, keyIdOf, serverModeRefused } from './blue/keys';
 import { BlueUsers, base64url, sha256, utf8Bytes } from './blue/secrets';
 import { CorePagination, ListedConversation, copyOfListed, isRecord, keptPart, listQuery, paginationOf, tooBig } from './blue/shapes';
@@ -566,9 +566,10 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
         }
 
         // `this` is passed as the socket provider so the Conversation reads socket and
-        // socketId live instead of freezing whatever they happen to be right now.
+        // socketId live instead of freezing whatever they happen to be right now. It holds
+        // the metadata as given, without the private part, which the server never gives back.
         const conversation = withSocketGuard(
-          new Conversation(conversationId, this.socket, {}, this.apiKey, this.mode, this.socketId, this)
+          new Conversation(conversationId, this.socket, { ...metadata }, this.apiKey, this.mode, this.socketId, this)
         );
         this.conversations.set(conversationId, conversation);
 
@@ -728,9 +729,11 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
       if (!conversation_id) continue;
 
       // Reuse the cached instance when we already have one, so listeners registered by
-      // the caller are not silently dropped and duplicate handles are not created.
+      // the caller are not silently dropped and duplicate handles are not created. It takes
+      // the list's details, as a fresh handle would: one created or opened here held {}.
       const existing = this.conversations.get(conversation_id);
       if (existing) {
+        takeListedDetails(existing, metadata, apiKey || this.apiKey);
         existing.restartListeners();
         conversations.push(existing);
         continue;

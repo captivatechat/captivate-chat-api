@@ -82,6 +82,16 @@ export function takeBlueCopy(conversation: Conversation, copy: BlueCopy): void {
   (conversation as any).metadata = { channelMetadata: channelMetadataOf(copy) };
 }
 
+/**
+ * Gives a core handle the list already holds what the list says of its conversation, as 7.0.0's
+ * fresh handle had it: the server's metadata and the conversation's key, else the instance's. A
+ * list item without metadata leaves what the handle knows, never {} over it.
+ */
+export function takeListedDetails(conversation: Conversation, metadata: unknown, apiKey: string): void {
+  if (metadata && typeof metadata === 'object') (conversation as any).metadata = metadata;
+  conversation.apiKey = apiKey;
+}
+
 /** What Blue mode doesn't do, as an Error with status 501 and its words. */
 function notHere(words: string): Error {
   const error = new Error(words) as Error & { status: number; errorDesc: string };

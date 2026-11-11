@@ -12,6 +12,10 @@ npm install captivate-chat-api
 
 ## What's New
 
+### Conversation details in the list (v7.1.1)
+
+7.1.1 keeps each conversation's details up to date in the list. Since 7.1.0, `getUserConversations()` gives back the conversation an app already holds, so its listeners stay attached. That conversation now also takes the list's metadata and key, as a fresh one did in 7.0.0, so a chat created or opened earlier shows its title and the details kept in its metadata (pinned messages, say) after the next list and after a reconnect. A conversation from `createConversation()` holds the metadata it was created with, without the private metadata, which the server doesn't give back. Nothing else changes, and no code change is needed.
+
 ### Blue mode (v7.1.0)
 
 A key for your app from Vienna Blue's Channels page (`vba_…`) makes the same library talk to a Blue bot, with the answer shown while it's written in browsers, React Native and Electron, and a key for your own server (`vbk_…`) talks for each of your server's users. Every other key keeps Captivate's gateway, unchanged. See [Blue mode](#blue-mode).
@@ -175,6 +179,10 @@ Two behaviours changed in ways worth knowing about:
 `onMessage`'s types now say what really arrives. The content was always passed on as the gateway sends it, a list of parts (`[{ type: 'text', text }]`) from the bot or a live agent and a string only for an error, but it was typed as `string`. Nothing changed at run time, and a callback typed `(message: string, type: string)` still compiles; see [Send and Receive Messages](#send-and-receive-messages).
 
 If you wrote a workaround for the timeout-on-success bug (watching the raw socket for `conversation_start_success` and adopting the conversation yourself), it is now dead code and can be removed.
+
+### Upgrading to 7.1.1
+
+From 7.1.0, nothing to change: 7.1.1 keeps each conversation's details up to date in the list ([What's New](#conversation-details-in-the-list-v711)). From 6.x or 7.0.0, move straight to 7.1.1, as below.
 
 ### Upgrading from 6.x or 7.0.0 to 7.1.0
 
@@ -1098,7 +1106,7 @@ const { conversations, pagination } = await api.getUserConversations({
 });
 ```
 
-As of v7.1.0 this returns cached instances when the API already holds a handle for a conversation, so listeners you registered earlier are preserved instead of being silently dropped.
+As of v7.1.0 this returns cached instances when the API already holds a handle for a conversation, so listeners you registered earlier are preserved instead of being silently dropped. As of v7.1.1 each of those takes the list's metadata and key, as a fresh one does.
 
 ### Multi-API-Key Support (CaptivateChatManager)
 

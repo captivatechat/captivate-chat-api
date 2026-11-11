@@ -50,6 +50,12 @@ export declare function blueStateOf(conversation: Conversation): BlueState | nul
 /** Gives a handle what a list or a read-back says of its conversation, its runtime `metadata` too. */
 export declare function takeBlueCopy(conversation: Conversation, copy: BlueCopy): void;
 /**
+ * Gives a core handle the list already holds what the list says of its conversation, as 7.0.0's
+ * fresh handle had it: the server's metadata and the conversation's key, else the instance's. A
+ * list item without metadata leaves what the handle knows, never {} over it.
+ */
+export declare function takeListedDetails(conversation: Conversation, metadata: unknown, apiKey: string): void;
+/**
  * Live view of the owning API's connection.
  *
  * A Conversation used to capture `socket` and `socketId` at construction time. Both are

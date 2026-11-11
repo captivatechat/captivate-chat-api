@@ -118,6 +118,107 @@ test('getUserConversations keeps the handle an app already has, with its listene
   api.dispose();
 });
 
+// 7.1.0's bug, found reviewing the full app's upgrade: the list handed back a handle it
+// already held with that handle's own metadata, {} for one created or opened here, where
+// 7.0.0 gave a fresh handle with the server's. The app titles a chat and keeps its pinned
+// messages from that metadata, so a chat showed as "Untitled Conversation" after the next
+// list. Each of these failed on 7.1.0.
+const listed = (...conversations: object[]) => jsonResponse({ event: { event_payload: { conversations } } });
+
+test("a created conversation holds the metadata it was created with, and a list gives it the server's", async () => {
+  const api = await connectedApi();
+  fake.reply(textResponse('OK'), listed({ conversation_id: 'conv-9', metadata: { plan: 'pro', title: 'Billing' } }));
+  const creating = api.createConversation('user-1', {}, { plan: 'pro' }, 'user-first', { crm: 7 });
+  await until(() => fake.requests.length === 1);
+  FakeWebSocket.last!.receive(started('conv-9'));
+  const conversation = await creating;
+  // The private metadata is never given back to the app, so the handle doesn't hold it.
+  assert.deepEqual((conversation as any).metadata, { plan: 'pro' });
+
+  const { conversations } = await api.getUserConversations('user-1');
+  assert.equal(conversations[0], conversation);
+  assert.deepEqual((conversation as any).metadata, { plan: 'pro', title: 'Billing' });
+  api.dispose();
+});
+
+test("an opened conversation gets the server's metadata and key from a list, v1 and v2", async () => {
+  const api = await connectedApi();
+  const mine = api.getConversation('c1');
+  assert.deepEqual((mine as any).metadata, {});
+  const pagination = { hasNextPage: false, hasPrevPage: false, page: 1, pageSize: 10, total: 1, totalPages: 1 };
+  fake.reply(
+    listed({ conversation_id: 'c1', metadata: { title: 'Refund', pinned: ['m1'] }, apiKey: 'other-key' }),
+    jsonResponse({
+      event: { event_payload: { conversations: [{ conversation_id: 'c1', metadata: { title: 'Refund', pinned: ['m1', 'm2'] } }], pagination } },
+    }),
+    listed({ conversation_id: 'c1' })
+  );
+
+  const first = await api.getUserConversations('user-1');
+  assert.equal(first.conversations[0], mine);
+  assert.deepEqual((mine as any).metadata, { title: 'Refund', pinned: ['m1'] });
+  assert.equal(mine.apiKey, 'other-key');
+
+  const second = await api.getUserConversations({ userId: 'user-1', pagination: { page: 1, limit: 10 } });
+  assert.equal(fake.requests[1].json.event.event_type, 'get_user_conversations_v2');
+  assert.equal(second.conversations[0], mine);
+  assert.deepEqual((mine as any).metadata, { title: 'Refund', pinned: ['m1', 'm2'] });
+  // As 7.0.0's handle had it: a conversation listed without a key uses the instance's.
+  assert.equal(mine.apiKey, (api as any).apiKey);
+
+  // A list that says nothing of the metadata leaves what the handle knows.
+  await api.getUserConversations('user-1');
+  assert.deepEqual((mine as any).metadata, { title: 'Refund', pinned: ['m1', 'm2'] });
+  api.dispose();
+});
+
+test("after a reconnect a list gives the server's metadata, unchanged", async () => {
+  const api = await connectedApi({ reconnectDelay: 1 });
+  const mine = api.getConversation('c1');
+  const server = { title: 'Refund', pinned: ['m1'] };
+  fake.reply(listed({ conversation_id: 'c1', metadata: server }), listed({ conversation_id: 'c1', metadata: server }));
+
+  FakeWebSocket.last!.drop(1006);
+  FakeWebSocket.last!.open('socket-2');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(api.getSocketId(), 'socket-2');
+
+  const first = await api.getUserConversations('user-1');
+  assert.equal(first.conversations[0], mine);
+  assert.deepEqual((mine as any).metadata, server);
+
+  FakeWebSocket.last!.drop(1006);
+  FakeWebSocket.last!.open('socket-3');
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = await api.getUserConversations('user-1');
+  assert.equal(second.conversations[0], mine);
+  assert.deepEqual((mine as any).metadata, server);
+  assert.equal(fake.requests[1].json.event.socket_id, 'socket-3');
+  api.dispose();
+});
+
+test('a held handle a list brings up to date stays the same object, its listeners on the live socket', async () => {
+  const api = await connectedApi({ reconnectDelay: 1 });
+  const mine = api.getConversation('c1');
+  const heard: unknown[] = [];
+  mine.onMessage((content) => heard.push(content));
+  fake.reply(listed({ conversation_id: 'c1', metadata: { title: 'One' } }), listed({ conversation_id: 'c1', metadata: { title: 'Two' } }));
+
+  const first = await api.getUserConversations('user-1');
+  FakeWebSocket.last!.drop(1006);
+  FakeWebSocket.last!.open('socket-2');
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = await api.getUserConversations('user-1');
+
+  assert.equal(first.conversations[0], mine);
+  assert.equal(second.conversations[0], mine);
+  assert.equal(api.getConversation('c1'), mine);
+  assert.deepEqual((mine as any).metadata, { title: 'Two' });
+  FakeWebSocket.last!.receive({ event: { event_type: 'bot_message', event_payload: { content: 'hi' } } });
+  assert.deepEqual(heard, ['hi']);
+  api.dispose();
+});
+
 test('createConversation sends conversation_start and resolves on its success', async () => {
   const api = await connectedApi();
   fake.reply(textResponse('OK'), textResponse('OK'));
