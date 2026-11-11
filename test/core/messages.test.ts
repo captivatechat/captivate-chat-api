@@ -163,7 +163,7 @@ test("detachListeners takes a conversation's handler off its socket", async () =
 
 // Core's own bug, found by L0 and fixed for 7.1.0: the guard wraps every function property, so
 // a guarded handle's detachListeners read a wrapper in place of its bound handler and
-// removeEventListener missed. releaseConversation, deleteUserConversations and dispose all
+// removeEventListener missed. releaseConversation and dispose both
 // detach that way, so a dropped handle kept hearing the live socket.
 test('a guarded handle detaches from its socket when released', async () => {
   const api = await connectedApi();
@@ -183,7 +183,7 @@ test('a guarded handle detaches from its socket when released', async () => {
   }
 });
 
-test('a guarded handle hears nothing after deleteUserConversations or dispose', async () => {
+test('a guarded handle hears nothing after dispose, and still hears after deleteUserConversations', async () => {
   const api = await connectedApi();
   const socket = FakeWebSocket.last!;
   const before = socket.listenerCount('message');
@@ -191,15 +191,16 @@ test('a guarded handle hears nothing after deleteUserConversations or dispose', 
   api.getConversation('conv-1').onMessage((content) => heard.push(content));
   fake.reply(textResponse('OK'));
   await api.deleteUserConversations('user-1');
+  // A delete is for one user; this handle may be another's, as in 7.0.0.
   socket.receive(frame('bot_message', { content: 'after delete' }));
-  assert.equal(socket.listenerCount('message'), before);
+  assert.deepEqual([...heard], ['after delete']);
 
   api.getConversation('conv-2').onMessage((content) => heard.push(content));
   api.dispose();
   socket.receive(frame('bot_message', { content: 'after dispose' }));
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(socket.listenerCount('message'), before);
-  assert.deepEqual(heard, []);
+  assert.deepEqual(heard, ['after delete']);
 });
 
 test('a 413 general_error fetches the whole reply from its link and gives it as the bot', async () => {
@@ -262,5 +263,83 @@ test('other general errors reach onMessage as error text, beside onError', async
   ]);
   assert.equal(errors.length, 3);
   assert.equal(fake.requests.length, 0);
+  api.dispose();
+});
+
+// Found reviewing 7.1.1: off() compared the app's callback with the wrapper onMessage, onError,
+// onActionReceived and onConversationUpdate store, so on a core key it removed nothing. The
+// README tells core apps to use it. Each of these failed before.
+test("off removes a core listener by the callback the app gave, for every on... method", async () => {
+  const api = await connectedApi();
+  const conversation = api.getConversation('conv-1');
+  const heard: unknown[] = [];
+  const message = (content: MessageContent, type: MessageSender) => heard.push([content, type]);
+  conversation.onMessage(message);
+  conversation.off('bot_message', message);
+  // One onMessage call added three listeners; all three go.
+  const socket = FakeWebSocket.last!;
+  socket.receive(frame('bot_message', { content: 'a' }));
+  socket.receive(frame('livechat_message', { content: 'b' }));
+  socket.receive(frame('general_error', { error_code: 500, error_desc: 'Oops' }));
+  assert.deepEqual(heard, []);
+
+  const others: unknown[] = [];
+  const action = (a: unknown) => others.push(['action', a]);
+  const update = (u: unknown) => others.push(['update', u]);
+  const error = (e: unknown) => others.push(['error', e]);
+  conversation.onActionReceived(action);
+  conversation.onConversationUpdate(update);
+  conversation.onError(error);
+  conversation.off('action', action);
+  conversation.off('conversation_update', update);
+  conversation.off('general_error', error);
+  socket.receive(frame('action', { actions: [] }));
+  socket.receive(frame('conversation_update', { type: 'title' }));
+  socket.receive(frame('general_error', { error_code: 500 }));
+  assert.deepEqual(others, []);
+  api.dispose();
+});
+
+test("off takes away only the callback it names", async () => {
+  const api = await connectedApi();
+  const conversation = api.getConversation('conv-1');
+  const kept: unknown[] = [];
+  const gone: unknown[] = [];
+  const keep = (content: MessageContent) => kept.push(content);
+  const drop = (content: MessageContent) => gone.push(content);
+  conversation.onMessage(keep);
+  conversation.onMessage(drop);
+  conversation.off('bot_message', drop);
+  FakeWebSocket.last!.receive(frame('bot_message', { content: 'x' }));
+  FakeWebSocket.last!.receive(frame('livechat_message', { content: 'y' }));
+  assert.deepEqual(kept, ['x', 'y']);
+  assert.deepEqual(gone, []);
+  api.dispose();
+});
+
+// Every handle listed or opened here hears every frame on the connection. 7.0.0's handle from a
+// list silenced the old one, so an app that opens a chat and registers on it each time never
+// heard a frame twice by luck; since 7.1.0 a frame meant for B reached A's callback too.
+test("a handle ignores a frame that names another conversation, and hears one that names none", async () => {
+  const api = await connectedApi();
+  const heardA: unknown[] = [];
+  const heardB: unknown[] = [];
+  api.getConversation('A').onMessage((content) => heardA.push(content));
+  api.getConversation('B').onMessage((content) => heardB.push(content));
+  const socket = FakeWebSocket.last!;
+
+  socket.receive(frame('bot_message', { content: 'for B', conversation_id: 'B' }));
+  assert.deepEqual(heardA, []);
+  assert.deepEqual(heardB, ['for B']);
+
+  socket.receive(frame('bot_message', { content: 'for A', conversation_id: 'A' }));
+  assert.deepEqual(heardA, ['for A']);
+  assert.deepEqual(heardB, ['for B']);
+
+  // No conversation_id (or a null one): heard by every handle, as before.
+  socket.receive(frame('livechat_message', { content: 'nameless' }));
+  socket.receive(frame('bot_message', { content: 'null id', conversation_id: null }));
+  assert.deepEqual(heardA, ['for A', 'nameless', 'null id']);
+  assert.deepEqual(heardB, ['for B', 'nameless', 'null id']);
   api.dispose();
 });

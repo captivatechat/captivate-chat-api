@@ -1,5 +1,5 @@
 // Import the Conversation class
-import { BlueHandle, Conversation, ConversationSocketProvider, blueStateOf, takeBlueCopy } from './Conversation';
+import { BlueHandle, Conversation, ConversationSocketProvider, blueStateOf, takeBlueCopy, takeListedDetails } from './Conversation';
 import { SERVER_USER_FORM, blueKeyKind, hideFromJson, isBlueKey, keyIdOf, serverModeRefused } from './blue/keys';
 import { BlueUsers, base64url, sha256, utf8Bytes } from './blue/secrets';
 import { CorePagination, ListedConversation, copyOfListed, isRecord, keptPart, listQuery, paginationOf, tooBig } from './blue/shapes';
@@ -221,6 +221,13 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
   private blueUsers: BlueUsers | null = null;
   /** The timers Blue's conversations use: the runtime's unless a test sets one. */
   private blueClock: Clock | undefined = undefined;
+  /**
+   * The conversation a reply naming none goes to, since core's gateway names none in its replies
+   * yet: the last one here that sent a message or an action (Conversation.becomeActive) or was
+   * just created. Listing, opening, metadata and reconnects leave it; releasing it clears it.
+   * Null until then, and every handle hears such a reply, as before.
+   */
+  private activeConversationId: string | null = null;
 
   static setDebugMode(enabled: boolean): void {
     captivateDebugMode = enabled;
@@ -313,8 +320,8 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
    * never reaches this path — the browser rejects the fetch with an opaque TypeError.
    */
   private buildHttpError(prefix: string, response: Response, body: string): Error {
-    const detail = body ? `: ${body.slice(0, 300)}` : '';
-    const error = new Error(`${prefix}: ${response.status} ${response.statusText}${detail}`) as Error & {
+    // The message is 7.0.0's, since apps show or match it; the server's own words are on `.body`.
+    const error = new Error(`${prefix}: ${response.status} ${response.statusText}`) as Error & {
       status?: number;
       body?: string;
     };
@@ -361,7 +368,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
-      throw this.buildHttpError('HTTP request failed', response, body);
+      throw this.buildHttpError('Failed to send message via HTTP: HTTP request failed', response, body);
     }
 
     const contentType = response.headers.get('content-type');
@@ -566,11 +573,14 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
         }
 
         // `this` is passed as the socket provider so the Conversation reads socket and
-        // socketId live instead of freezing whatever they happen to be right now.
+        // socketId live instead of freezing whatever they happen to be right now. It holds
+        // the metadata as given, without the private part, which the server never gives back.
         const conversation = withSocketGuard(
-          new Conversation(conversationId, this.socket, {}, this.apiKey, this.mode, this.socketId, this)
+          new Conversation(conversationId, this.socket, { ...metadata }, this.apiKey, this.mode, this.socketId, this)
         );
         this.conversations.set(conversationId, conversation);
+        // The bot-first greeting names no conversation: it goes to this one.
+        this.activeConversationId = conversationId;
 
         // Resolve as soon as the conversation exists. The bot-first opener is dispatched
         // in the background: waiting for its HTTP round-trip delayed every caller for no
@@ -654,6 +664,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
    * Does not delete it server-side — use conversation.delete() for that.
    */
   public releaseConversation(conversationId: string): void {
+    if (this.activeConversationId === conversationId) this.activeConversationId = null;
     const conversation = this.conversations.get(conversationId);
     if (!conversation) return;
     try {
@@ -728,9 +739,11 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
       if (!conversation_id) continue;
 
       // Reuse the cached instance when we already have one, so listeners registered by
-      // the caller are not silently dropped and duplicate handles are not created.
+      // the caller are not silently dropped and duplicate handles are not created. It takes
+      // the list's details, as a fresh handle would: one created or opened here held {}.
       const existing = this.conversations.get(conversation_id);
       if (existing) {
+        takeListedDetails(existing, metadata, apiKey || this.apiKey);
         existing.restartListeners();
         conversations.push(existing);
         continue;
@@ -774,10 +787,8 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
       },
     });
 
-    // Local handles for those conversations are now dead — drop them.
-    for (const id of [...this.conversations.keys()]) {
-      this.releaseConversation(id);
-    }
+    // Local handles stay as 7.0.0 left them: this instance serves other users too, and a
+    // handle of theirs released here would go quiet with no error.
 
     captivateLogger.log(`User conversations ${softDelete ? 'soft' : 'hard'} delete confirmed via HTTP response:`, response);
   }
@@ -1085,6 +1096,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
       } catch (_) { /* ignore */ }
     }
     this.conversations.clear();
+    this.activeConversationId = null;
 
     // Closes with code 1000, which the close handler treats as intentional. Blue mode has no
     // socket. teardownSocket is in UNGUARDED_METHODS, so a guarded instance never reconnects here.

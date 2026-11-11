@@ -82,6 +82,36 @@ export function takeBlueCopy(conversation: Conversation, copy: BlueCopy): void {
   (conversation as any).metadata = { channelMetadata: channelMetadataOf(copy) };
 }
 
+/**
+ * Gives a core handle the list already holds what the list says of its conversation, as 7.0.0's
+ * fresh handle had it: the server's metadata and the conversation's key, else the instance's. A
+ * list item without metadata leaves what the handle knows, never {} over it.
+ */
+export function takeListedDetails(conversation: Conversation, metadata: unknown, apiKey: string): void {
+  if (metadata && typeof metadata === 'object') (conversation as any).metadata = metadata;
+  conversation.apiKey = apiKey;
+}
+
+/**
+ * A listener this conversation wraps for an onX call, marked with the app's own callback (and the
+ * call it came from), so off() finds it by that callback, not by a wrapper the app never saw.
+ */
+function wrapListener<F extends Function>(wrapper: F, original: Function, group: string): F {
+  (wrapper as any).original = original;
+  (wrapper as any).group = group;
+  return wrapper;
+}
+
+/**
+ * The conversation of a connection that a reply naming none goes to: the one that last sent a
+ * message or an action there, or was just started; null while none has (every handle hears it
+ * then). It lives on the owning CaptivateChatAPI, read past withSocketGuard as blueStateOf reads.
+ */
+function activeConversationOf(provider: ConversationSocketProvider | undefined): string | null {
+  const id = (provider as any)?.activeConversationId;
+  return typeof id === 'string' ? id : null;
+}
+
 /** What Blue mode doesn't do, as an Error with status 501 and its words. */
 function notHere(words: string): Error {
   const error = new Error(words) as Error & { status: number; errorDesc: string };
@@ -377,6 +407,17 @@ export class Conversation {
     if (!eventType || !this.listeners.has(eventType)) return;
 
     const payload = message.event.event_payload;
+    // Every handle listed or opened on this connection sees every frame. A frame that names a
+    // conversation is that conversation's. Core's gateway names none in its replies yet (a
+    // bot_message holds only type, bot and content), so one that names none goes to the
+    // conversation that last sent or was just started here, and to every handle while none has.
+    const forId = payload?.conversation_id;
+    if (typeof forId === 'string' && forId !== '') {
+      if (forId !== this.conversationId) return;
+    } else {
+      const active = activeConversationOf(this.provider);
+      if (active !== null && active !== this.conversationId) return;
+    }
     // Copy before iterating: a callback may register or remove listeners.
     const callbacks = [...(this.listeners.get(eventType) ?? [])];
     for (const callback of callbacks) {
@@ -458,11 +499,11 @@ export class Conversation {
   public onMessage(callback: (message: any, type: any) => void): void {
     // Blue mode keeps the callback itself, so off('bot_message', callback) removes it.
     if (this.blue) return this.addListener(BLUE_EVENTS.message, callback);
-    this.addListener('bot_message', (payload: any) => callback(payload.content, 'ai_agent'));
-    this.addListener('livechat_message', (payload: any) => callback(payload.content, 'human_agent'));
+    this.addListener('bot_message', wrapListener((payload: any) => callback(payload.content, 'ai_agent'), callback, 'message'));
+    this.addListener('livechat_message', wrapListener((payload: any) => callback(payload.content, 'human_agent'), callback, 'message'));
 
     // Handle large messages that are too big for WebSocket usually from AI Agents
-    this.addListener('general_error', async (payload: any) => {
+    this.addListener('general_error', wrapListener(async (payload: any) => {
 
       if (payload.error_code === 413 && payload.message_link) {
         try {
@@ -486,7 +527,7 @@ export class Conversation {
         // Handle other general errors
         callback(`[Error: ${payload.error_desc || 'Unknown error'}]`, 'error');
       }
-    });
+    }, callback, 'message'));
   }
 
   /**
@@ -495,7 +536,7 @@ export class Conversation {
    */
   public onActionReceived(callback: (actions: [Action]) => void): void {
     if (this.blue) return this.addListener(BLUE_EVENTS.action, callback);
-    this.addListener('action', (payload: any) => callback(payload.actions));
+    this.addListener('action', wrapListener((payload: any) => callback(payload.actions), callback, 'action'));
   }
 
   /**
@@ -504,13 +545,13 @@ export class Conversation {
    */
   public onConversationUpdate(callback: (update: any) => void): void {
     if (this.blue) return this.addListener(BLUE_EVENTS.update, callback);
-    this.addListener('conversation_update', (payload: any) => {
+    this.addListener('conversation_update', wrapListener((payload: any) => {
       callback({
         type: payload.type,
         conversationId: payload.conversation_id,
         data: payload.data,
       });
-    });
+    }, callback, 'update'));
   }
 
   /**
@@ -519,13 +560,13 @@ export class Conversation {
    */
   public onError(callback: (error: any) => void): void {
     if (this.blue) return this.addListener(BLUE_EVENTS.error, callback);
-    this.addListener('general_error', (payload: any) => {
+    this.addListener('general_error', wrapListener((payload: any) => {
       callback({
         conversationId: payload.conversation_id,
         errorCode: payload.error_code,
         errorDesc: payload.error_desc,
       });
-    });
+    }, callback, 'error'));
   }
 
   /**
@@ -566,9 +607,18 @@ export class Conversation {
    * @param callback - The callback function to remove.
    */
   public off(eventType: string, callback: Function): void {
+    // A core listener is a wrapper that holds the app's callback as `original`.
+    const is = (cb: any) => cb === callback || cb.original === callback;
     const callbacks = this.listeners.get(eventType);
     if (!callbacks) return;
-    this.listeners.set(eventType, callbacks.filter((cb) => cb !== callback));
+    this.listeners.set(eventType, callbacks.filter((cb) => !is(cb)));
+    // onMessage added one callback on three events: taking it off one takes it off all three.
+    if (eventType === 'bot_message' || eventType === 'livechat_message') {
+      for (const name of ['bot_message', 'livechat_message', 'general_error']) {
+        const list = this.listeners.get(name);
+        if (list) this.listeners.set(name, list.filter((cb: any) => !(cb.group === 'message' && is(cb))));
+      }
+    }
   }
 
   /**
@@ -594,6 +644,7 @@ export class Conversation {
       content = { type: 'text', text: content };
     }
 
+    this.becomeActive();
     return this.sendPayload('user_message', {
       type: 'message_create',
       client_msg_id: `unique-message-id-${Date.now()}`,
@@ -684,6 +735,8 @@ export class Conversation {
       await this.knowDetails();
       return this.blue.press(actionId, data);
     }
+    // A press is answered as a message is.
+    this.becomeActive();
     const response = await this.sendPayload('action', {
       type: 'normal',
       id: actionId,
@@ -904,6 +957,15 @@ export class Conversation {
   }
 
   /**
+   * Makes this the conversation that gets its connection's replies naming none (handleMessage),
+   * before the send, since the reply can reach the socket before the HTTP answer does.
+   */
+  private becomeActive(): void {
+    const provider = this.provider as any;
+    if (provider && 'activeConversationId' in provider) provider.activeConversationId = this.conversationId;
+  }
+
+  /**
    * Sends a payload via HTTP API (primary method).
    * @param eventType - The type of event being sent.
    * @param payload - The payload data to include with the event.
@@ -926,8 +988,8 @@ export class Conversation {
    * from 500 instead of string-matching a message.
    */
   private buildHttpError(prefix: string, response: Response, body: string): Error {
-    const detail = body ? `: ${body.slice(0, 300)}` : '';
-    const error = new Error(`${prefix}: ${response.status} ${response.statusText}${detail}`) as Error & {
+    // The message is 7.0.0's, since apps show or match it; the server's own words are on `.body`.
+    const error = new Error(`${prefix}: ${response.status} ${response.statusText}`) as Error & {
       status?: number;
       body?: string;
     };
@@ -987,7 +1049,7 @@ export class Conversation {
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
-      throw this.buildHttpError('HTTP request failed', response, body);
+      throw this.buildHttpError('Failed to send payload via HTTP: HTTP request failed', response, body);
     }
 
     // Check if response is JSON or plain text

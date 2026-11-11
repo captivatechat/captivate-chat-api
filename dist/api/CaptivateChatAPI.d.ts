@@ -69,6 +69,13 @@ export declare class CaptivateChatAPI implements ConversationSocketProvider {
     private blueUsers;
     /** The timers Blue's conversations use: the runtime's unless a test sets one. */
     private blueClock;
+    /**
+     * The conversation a reply naming none goes to, since core's gateway names none in its replies
+     * yet: the last one here that sent a message or an action (Conversation.becomeActive) or was
+     * just created. Listing, opening, metadata and reconnects leave it; releasing it clears it.
+     * Null until then, and every handle hears such a reply, as before.
+     */
+    private activeConversationId;
     static setDebugMode(enabled: boolean): void;
     static getDebugMode(): boolean;
     /**
