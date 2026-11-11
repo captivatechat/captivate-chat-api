@@ -303,6 +303,11 @@ export declare class Conversation {
      */
     editMessage(messageId: string, content: object | string): Promise<void>;
     /**
+     * Makes this the conversation that gets its connection's replies naming none (handleMessage),
+     * before the send, since the reply can reach the socket before the HTTP answer does.
+     */
+    private becomeActive;
+    /**
      * Sends a payload via HTTP API (primary method).
      * @param eventType - The type of event being sent.
      * @param payload - The payload data to include with the event.

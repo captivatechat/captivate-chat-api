@@ -314,8 +314,8 @@ test('README: listeners accumulate, so a handler registered twice runs twice', a
   api.dispose();
 });
 
-// README (7.1.1): "each hears the replies that name it and those that name none." It was a known
-// limit until the gateway's source showed it puts conversation_id in every reply.
+// README (7.1.1): "a reply that names its conversation goes to that one". Replies that name none
+// are test/core/unaddressed-replies.test.ts's.
 test('README 7.1.1: a conversation on a shared instance hears the replies that name it, not another', async () => {
   const api = await connectedApi();
   const heard: string[] = [];

@@ -221,6 +221,13 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
   private blueUsers: BlueUsers | null = null;
   /** The timers Blue's conversations use: the runtime's unless a test sets one. */
   private blueClock: Clock | undefined = undefined;
+  /**
+   * The conversation a reply naming none goes to, since core's gateway names none in its replies
+   * yet: the last one here that sent a message or an action (Conversation.becomeActive) or was
+   * just created. Listing, opening, metadata and reconnects leave it; releasing it clears it.
+   * Null until then, and every handle hears such a reply, as before.
+   */
+  private activeConversationId: string | null = null;
 
   static setDebugMode(enabled: boolean): void {
     captivateDebugMode = enabled;
@@ -572,6 +579,8 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
           new Conversation(conversationId, this.socket, { ...metadata }, this.apiKey, this.mode, this.socketId, this)
         );
         this.conversations.set(conversationId, conversation);
+        // The bot-first greeting names no conversation: it goes to this one.
+        this.activeConversationId = conversationId;
 
         // Resolve as soon as the conversation exists. The bot-first opener is dispatched
         // in the background: waiting for its HTTP round-trip delayed every caller for no
@@ -655,6 +664,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
    * Does not delete it server-side — use conversation.delete() for that.
    */
   public releaseConversation(conversationId: string): void {
+    if (this.activeConversationId === conversationId) this.activeConversationId = null;
     const conversation = this.conversations.get(conversationId);
     if (!conversation) return;
     try {
@@ -1086,6 +1096,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
       } catch (_) { /* ignore */ }
     }
     this.conversations.clear();
+    this.activeConversationId = null;
 
     // Closes with code 1000, which the close handler treats as intentional. Blue mode has no
     // socket. teardownSocket is in UNGUARDED_METHODS, so a guarded instance never reconnects here.

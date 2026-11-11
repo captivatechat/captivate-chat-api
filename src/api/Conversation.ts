@@ -102,6 +102,16 @@ function wrapListener<F extends Function>(wrapper: F, original: Function, group:
   return wrapper;
 }
 
+/**
+ * The conversation of a connection that a reply naming none goes to: the one that last sent a
+ * message or an action there, or was just started; null while none has (every handle hears it
+ * then). It lives on the owning CaptivateChatAPI, read past withSocketGuard as blueStateOf reads.
+ */
+function activeConversationOf(provider: ConversationSocketProvider | undefined): string | null {
+  const id = (provider as any)?.activeConversationId;
+  return typeof id === 'string' ? id : null;
+}
+
 /** What Blue mode doesn't do, as an Error with status 501 and its words. */
 function notHere(words: string): Error {
   const error = new Error(words) as Error & { status: number; errorDesc: string };
@@ -397,10 +407,17 @@ export class Conversation {
     if (!eventType || !this.listeners.has(eventType)) return;
 
     const payload = message.event.event_payload;
-    // Every handle listed or opened on this connection hears every frame. A frame that names
-    // another conversation is that conversation's; one that names none is heard, as before.
+    // Every handle listed or opened on this connection sees every frame. A frame that names a
+    // conversation is that conversation's. Core's gateway names none in its replies yet (a
+    // bot_message holds only type, bot and content), so one that names none goes to the
+    // conversation that last sent or was just started here, and to every handle while none has.
     const forId = payload?.conversation_id;
-    if (typeof forId === 'string' && forId !== '' && forId !== this.conversationId) return;
+    if (typeof forId === 'string' && forId !== '') {
+      if (forId !== this.conversationId) return;
+    } else {
+      const active = activeConversationOf(this.provider);
+      if (active !== null && active !== this.conversationId) return;
+    }
     // Copy before iterating: a callback may register or remove listeners.
     const callbacks = [...(this.listeners.get(eventType) ?? [])];
     for (const callback of callbacks) {
@@ -627,6 +644,7 @@ export class Conversation {
       content = { type: 'text', text: content };
     }
 
+    this.becomeActive();
     return this.sendPayload('user_message', {
       type: 'message_create',
       client_msg_id: `unique-message-id-${Date.now()}`,
@@ -717,6 +735,8 @@ export class Conversation {
       await this.knowDetails();
       return this.blue.press(actionId, data);
     }
+    // A press is answered as a message is.
+    this.becomeActive();
     const response = await this.sendPayload('action', {
       type: 'normal',
       id: actionId,
@@ -934,6 +954,15 @@ export class Conversation {
 
     // The HTTP response confirms the message was edited successfully
     captivateLogger.log('Message edit confirmed via HTTP response:', response);
+  }
+
+  /**
+   * Makes this the conversation that gets its connection's replies naming none (handleMessage),
+   * before the send, since the reply can reach the socket before the HTTP answer does.
+   */
+  private becomeActive(): void {
+    const provider = this.provider as any;
+    if (provider && 'activeConversationId' in provider) provider.activeConversationId = this.conversationId;
   }
 
   /**
