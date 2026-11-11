@@ -19,7 +19,7 @@ npm install captivate-chat-api
 Four more things are put right, each one back as 7.0.0 had it or as this README says:
 
 - **`off()` works on a core key.** `off('bot_message', callback)` removes the callback you gave `onMessage()` (and with it the same call's live chat and error listeners); `off('action', …)`, `off('conversation_update', …)` and `off('general_error', …)` do the same for `onActionReceived()`, `onConversationUpdate()` and `onError()`. Before, it removed nothing.
-- **A conversation ignores a reply that names another conversation.** The gateway puts the conversation's ID in each reply, so with several conversations on one connection, each one's `onMessage` now hears its own replies only. A reply that names none is still heard by all.
+- **A conversation ignores a reply that names another conversation.** When a reply carries its conversation's ID, only that conversation's `onMessage` hears it. Captivate's gateway doesn't put the ID in its replies yet, so with a core key every conversation on one connection still hears every reply (see Known limits); keep one open conversation per instance, or release the ones you leave with `releaseConversation(id)`.
 - **`deleteUserConversations(userId)` leaves your conversations as they are.** In 7.1.0 it also stopped every conversation of the instance hearing replies, other users' included.
 - **A failed request's message is 7.0.0's again**, for example "Failed to send message via HTTP: HTTP request failed: 500 Internal Server Error", without the server's own words, which an app might show to its users. They are on `error.body`, and the status on `error.status`.
 
@@ -1547,7 +1547,7 @@ Fixed in v7.1.0. Conversations now read `socket_id` live instead of capturing it
 Fixed in v7.1.0. Listeners were assigned to `socket.onmessage`, so each new conversation overwrote the previous one's handler.
 
 **Every conversation receives every reply.**
-Fixed in v7.1.1: a conversation ignores a reply that names another one. On 7.1.0 and before, keep one conversation per instance, or tell your own replies apart in your app.
+From v7.1.1 a conversation ignores a reply that names another one, but Captivate's gateway doesn't name the conversation in its replies yet, so with a core key keep one open conversation per instance, release the ones you leave with `releaseConversation(id)`, or tell your own replies apart in your app.
 
 **`create()` rejects with `Connection timeout: socket_connected not received`.**
 The gateway opened the socket but never named it. Call `create()` again: since v7.1.0 the instance is left with no socket and connects afresh. Before v7.1.0 the second call returned an instance whose replies were lost.
