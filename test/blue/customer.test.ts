@@ -93,6 +93,41 @@ test('user goes with every send and press: the ID and token from the metadata, a
   assert.ok(!JSON.stringify(body).includes('user-1'));
 });
 
+// Found by Sales Pilot's check (vienna-blue#93): its key starts a conversation only for a signed user and
+// reads the user from the start's body, and user_id and user_token never stay in the metadata.
+test('the start carries user as a send does: the ID and token from the metadata, never kept in the metadata', async () => {
+  fake.reply(start());
+  await api.createConversation('user-1', {}, { user_id: 'C-1042', user_token: 'token-value', plan: 'gold' }, 'user-first');
+  const body = fake.last!.json;
+  assert.deepEqual(body.user, { id: 'C-1042', token: 'token-value' });
+  assert.deepEqual(body.metadata, { plan: 'gold' });
+  assert.ok(!JSON.stringify(body.metadata).includes('C-1042') && !JSON.stringify(body.metadata).includes('token-value'));
+  // An ID alone goes alone.
+  fake.reply(start());
+  await api.createConversation('user-1', {}, { user_id: 'C-7' }, 'user-first');
+  assert.deepEqual(fake.last!.json.user, { id: 'C-7' });
+  // The token goes with the ID at the first send of the same conversation too.
+  assert.deepEqual((await send(await created({ user_id: 'C-1042', user_token: 'token-value' }))).json.user, { id: 'C-1042', token: 'token-value' });
+});
+
+test('the start names no user when the metadata names no user_id, and a bad one is no one, with its warning', async () => {
+  fake.reply(start());
+  await api.createConversation('user-1', {}, { plan: 'gold' }, 'user-first');
+  const body = fake.last!.json;
+  assert.ok(!('user' in body));
+  assert.ok(!JSON.stringify(body).includes('user-1'));
+  // user_id: null is a sign-out, sent as sends send it.
+  fake.reply(start());
+  await api.createConversation('user-1', {}, { user_id: null }, 'user-first');
+  assert.deepEqual(fake.last!.json.user, { id: null });
+  // An ID outside the backend's form is no one, once warned.
+  clearLogs();
+  fake.reply(start());
+  await api.createConversation('user-1', {}, { user_id: 'not an id!' }, 'user-first');
+  assert.deepEqual(fake.last!.json.user, { id: null });
+  assert.equal(warned(CONSOLE_WORDS.userId), 1);
+});
+
 test('setMetadata names the customer anew: user_id null is no one, a new ID drops the old token, other keys leave them', async () => {
   const conversation = await created({ user_id: 'C-1042', user_token: 'token-value' });
   await conversation.setMetadata({ user_id: null });
@@ -169,12 +204,14 @@ test('user_id and user_token never reach the start\'s metadata, a PATCH or the d
   const started = fake.requests.find((r) => r.url === `${BASE}/v1/chat/conversations`)!;
   const patch = fake.requests.find((r) => r.method === 'PATCH')!;
   assert.deepEqual(started.json.metadata, { plan: 'gold' });
+  // The start's own `user` (7.1.2) is the one place the first ID and token go besides sends.
+  assert.deepEqual(started.json.user, { id: 'C-1042', token: 'token-value' });
   assert.deepEqual(patch.json, { metadata: { plan: 'silver' } });
   await send(conversation);
   const stored = JSON.stringify([storage.entries(), storage.writes]);
   for (const word of ['C-1042', 'C-2048', 'token-value', 'second-token']) {
     assert.ok(!stored.includes(word), word);
-    assert.ok(!JSON.stringify(started.json).includes(word) && !JSON.stringify(patch.json).includes(word), word);
+    assert.ok(!JSON.stringify(started.json.metadata).includes(word) && !JSON.stringify(patch.json).includes(word), word);
   }
 });
 

@@ -12,6 +12,10 @@ npm install captivate-chat-api
 
 ## What's New
 
+### Who's signed in at the start (v7.1.2)
+
+`createConversation()` now names the signed-in customer when it starts the conversation, as every message and press already did: the `user_id` and `user_token` in its metadata go as `user: { id, token }` in the start's request. A Sales Pilot key starts a conversation only for a signed-in user and takes that user from the start, so before 7.1.2 its `createConversation()` was refused with a "not signed in" error. Other keys ignore the user at the start. Nothing else changes: `user_id` and `user_token` still stay in memory, are never kept in the conversation's metadata, and in server mode the token is still never sent.
+
 ### Conversation details in the list (v7.1.1)
 
 7.1.1 keeps each conversation's details up to date in the list. Since 7.1.0, `getUserConversations()` gives back the conversation an app already holds, so its listeners stay attached. That conversation now also takes the list's metadata and key, as a fresh one did in 7.0.0, so a chat created or opened earlier shows its title and the details kept in its metadata (pinned messages, say) after the next list and after a reconnect. `CaptivateChatManager.getUserConversations()` does the same for every key it lists. A conversation from `createConversation()` holds the metadata it was created with, without the private metadata, which the server doesn't give back.
@@ -186,6 +190,10 @@ Two behaviours changed in ways worth knowing about:
 `onMessage`'s types now say what really arrives. The content was always passed on as the gateway sends it, a list of parts (`[{ type: 'text', text }]`) from the bot or a live agent and a string only for an error, but it was typed as `string`. Nothing changed at run time, and a callback typed `(message: string, type: string)` still compiles; see [Send and Receive Messages](#send-and-receive-messages).
 
 If you wrote a workaround for the timeout-on-success bug (watching the raw socket for `conversation_start_success` and adopting the conversation yourself), it is now dead code and can be removed.
+
+### Upgrading to 7.1.2
+
+From 7.1.1, nothing to change ([What's New](#whos-signed-in-at-the-start-v712)). Earlier versions: follow the steps below to 7.1.1; 7.1.2 adds nothing else to them.
 
 ### Upgrading to 7.1.1
 
@@ -400,7 +408,7 @@ await conversation.sendAction(id, { choice: 'send', values: { email: 'sam@exampl
 await conversation.setMetadata({ user_id: null });                        // at sign-out
 ```
 
-**Who's signed in.** Name your signed-in customer in the metadata, as Blue's website chat does: `user_id`, their ID in your own system (letters, digits and `- _ . :`, at most 64; an email address isn't one), and `user_token`, a token your server signed for it. `createConversation`'s metadata names them first, then each `setMetadata` that has a `user_id` (one without a `user_token` names the ID alone); `user_id: null` says no one is signed in. They go with every message and every press as `user: { id, token }`, and are held in memory only: never stored on the device or with the conversation, and never logged. An ID outside that form, or a token that isn't text of at most 2,048 characters, counts as no one, with one console warning ("user_id must be letters, digits and - _ . : (at most 64), so the chat goes on without knowing who's signed in."). `createConversation`'s first argument names whose list the conversation is in, and is never sent as the customer's ID.
+**Who's signed in.** Name your signed-in customer in the metadata, as Blue's website chat does: `user_id`, their ID in your own system (letters, digits and `- _ . :`, at most 64; an email address isn't one), and `user_token`, a token your server signed for it. `createConversation`'s metadata names them first, then each `setMetadata` that has a `user_id` (one without a `user_token` names the ID alone); `user_id: null` says no one is signed in. They go with the start of the conversation, every message and every press as `user: { id, token }`, and are held in memory only: never stored on the device or with the conversation, and never logged. An ID outside that form, or a token that isn't text of at most 2,048 characters, counts as no one, with one console warning ("user_id must be letters, digits and - _ . : (at most 64), so the chat goes on without knowing who's signed in."). `createConversation`'s first argument names whose list the conversation is in, and is never sent as the customer's ID.
 
 - **The token** is a JWT your server signs as it does for the website chat: HS256 with your app key's signing key, `sub` the ID, `aud` your `vba_` key, `iat`, and `exp` at most an hour later. Keep the signing key on your server. Never put it in the app. Once it expires Blue no longer knows who's signed in: give a fresh one with `setMetadata({ user_id, user_token })`. The library never asks for one itself.
 - **What Blue trusts it for:** a look-up of the customer's own records (an order's status, say) runs only for a signed ID. A course agent makes its course for the `user_id` as sent, signed or not, with the conversation's kept `client_name`, so your app's users can name another ID for a course.
