@@ -375,6 +375,8 @@ test('storage and userSecret go unused with one warning; user_token is never sen
   const conversation = await made.createConversation(USER_A, {}, { user_id: 'C-1042', user_token: 'token-value', plan: 'gold' }, 'user-first');
   const created = fake.last!;
   assert.deepEqual(created.json.metadata, { plan: 'gold' });
+  // The start names the user too, as a send does, and never with the token.
+  assert.deepEqual(created.json.user, { id: 'C-1042' });
   const first = await send(conversation);
   assert.deepEqual(first.json.user, { id: 'C-1042' });
   await conversation.setMetadata({ user_id: 'C-2000', user_token: 'another-token' });

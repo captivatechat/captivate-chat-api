@@ -1,5 +1,6 @@
 // Import the Conversation class
 import { BlueHandle, Conversation, ConversationSocketProvider, blueStateOf, takeBlueCopy, takeListedDetails } from './Conversation';
+import { customerOf } from './blue/identity';
 import { SERVER_USER_FORM, blueKeyKind, hideFromJson, isBlueKey, keyIdOf, serverModeRefused } from './blue/keys';
 import { BlueUsers, base64url, sha256, utf8Bytes } from './blue/secrets';
 import { CorePagination, ListedConversation, copyOfListed, isRecord, keptPart, listQuery, paginationOf, tooBig } from './blue/shapes';
@@ -861,6 +862,9 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     if (isRecord(privateMetadata) && Object.keys(privateMetadata).length > 0) {
       transport.warnOnce('privateMetadata', CONSOLE_WORDS.privateMetadata);
     }
+    // The customer goes as a send's does: Sales Pilot's key starts only for a signed user and reads it
+    // from the body, and every other key ignores it. Left out when the metadata names no user_id.
+    const user = customerOf(given, (name, words) => transport.warnOnce(name, words), server);
     const secret = server ? userId : (await this.blueUsers!.secretFor(userId, true))!;
     const answer = await transport.request<{
       conversationId?: unknown;
@@ -869,7 +873,7 @@ export class CaptivateChatAPI implements ConversationSocketProvider {
     }>('POST', '/v1/chat/conversations', {
       call: 'start',
       secret,
-      body: { metadata: kept, greeting: autoConversationStart === 'bot-first' },
+      body: { metadata: kept, greeting: autoConversationStart === 'bot-first', ...(user ? { user } : {}) },
       timeoutMs: options.timeoutMs ?? this.conversationStartTimeoutMs,
     });
     const conversationId = answer?.conversationId;

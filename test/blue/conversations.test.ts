@@ -64,7 +64,8 @@ test('createConversation sends the metadata as given but user_id and user_token,
   const request = fake.last!;
   assert.equal(request.method, 'POST');
   assert.equal(request.url, `${BASE}/v1/chat/conversations`);
-  assert.deepEqual(request.json, { metadata: { plan: 'gold', conversation_title: 'Orders', nested: { a: [1, 2] } }, greeting: false });
+  // The user goes beside the metadata (7.1.2), never inside it.
+  assert.deepEqual(request.json, { metadata: { plan: 'gold', conversation_title: 'Orders', nested: { a: [1, 2] } }, greeting: false, user: { id: 'C-1042', token: 'token-value' } });
   assert.match(secretOf(request)!, /^[A-Za-z0-9_-]{43}$/);
   assert.equal(conversation.getConversationId(), ID);
   assert.equal((conversation as any).conversationId, ID);
@@ -72,7 +73,8 @@ test('createConversation sends the metadata as given but user_id and user_token,
   assert.equal(state.given.user_id, 'C-1042');
   assert.equal(state.given.user_token, 'token-value');
   assert.deepEqual((conversation as any).metadata.channelMetadata.custom, request.json.metadata);
-  for (const word of ['never sent', 'token-value', 'C-1042']) assert.ok(!String(request.body).includes(word), word);
+  assert.ok(!String(request.body).includes('never sent'));
+  assert.ok(!JSON.stringify(request.json.metadata).includes('token-value') && !JSON.stringify(request.json.metadata).includes('C-1042'));
   // The user's metadata isn't passed by reference: a later change in the app's object isn't Blue's.
   metadata.plan = 'changed';
   assert.equal(state.given.plan, 'gold');
